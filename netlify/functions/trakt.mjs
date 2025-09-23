@@ -8,7 +8,8 @@ export default async (req) => {
   // Remove o prefixo da API e da função para obter o caminho real do endpoint.
   const path = req.path.replace(/^\/api\/trakt/, '').replace(/^\/trakt/, '');
 
-  const searchParams = new URL(req.url).searchParams;
+  // É necessária uma base de URL para construir o objeto URL, mas não é usada.
+  const searchParams = new URL(req.url, 'http://localhost').searchParams;
 
   const traktUrl = `${TRAKT_BASE_URL}${path}?${searchParams.toString()}`;
 

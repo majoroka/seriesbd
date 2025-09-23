@@ -7,7 +7,8 @@ export default async (req) => {
   const path = req.path.replace(/^\/api\/tmdb/, '').replace(/^\/tmdb/, '');
   
   // Adiciona a API key e o idioma aos parâmetros de busca
-  const searchParams = new URL(req.url).searchParams;
+  // É necessária uma base de URL para construir o objeto URL, mas não é usada.
+  const searchParams = new URL(req.url, 'http://localhost').searchParams;
   searchParams.set('api_key', TMDB_API_KEY);
   searchParams.set('language', 'pt-PT');
 
