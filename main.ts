@@ -4,8 +4,9 @@ import * as DOM from './dom.js';
 import * as S from './state.js';
 import * as API from './api.js';
 import * as UI from './ui.js';
-import { debounce, el } from './utils.js';
+import { debounce, el, exportChartToPNG, exportDataToCSV } from './utils.js';
 import { db } from './db.js';
+import { registerSW } from 'virtual:pwa-register';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types.js';
 
 async function addSeriesToWatchlist(series: Series) {
@@ -175,12 +176,16 @@ async function displaySeriesDetails(seriesId: number) {
 }
 
 async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonNumber: number, episodeElement: HTMLElement) {
-    const isSeen = S.watchedState[seriesId]?.includes(episodeId);
+    // Otimização: Usar um Set para pesquisas mais rápidas (O(1) em vez de O(n)).
+    const watchedSet = new Set(S.watchedState[seriesId] || []);
+    const isSeen = watchedSet.has(episodeId);
     const wasInArchive = S.myArchive.some(s => s.id === seriesId);
 
     if (isSeen) {
         await S.unmarkEpisodesAsWatched(seriesId, [episodeId]);
         UI.markEpisodeAsUnseen(episodeElement);
+        // Acessibilidade: Atualiza o rótulo para leitores de ecrã
+        episodeElement.querySelector('.status-icon')?.setAttribute('aria-label', 'Marcar como visto');
         if (wasInArchive) {
             const series = S.getSeries(seriesId);
             if(series) await S.unarchiveSeries(series);
@@ -200,19 +205,25 @@ async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonN
             const clickedEpisodeIndex = allEpisodes.findIndex((ep: {id: number}) => ep.id === episodeId);
             if (clickedEpisodeIndex > 0) {
                 const previousEpisodes = allEpisodes.slice(0, clickedEpisodeIndex);
-                const unwatchedPrevious = previousEpisodes.filter((ep: {id: number}) => !(S.watchedState[seriesId] || []).includes(ep.id));
+                // Otimização: Usar o Set para uma filtragem mais rápida.
+                const unwatchedPrevious = previousEpisodes.filter((ep: {id: number}) => !watchedSet.has(ep.id));
                 if (unwatchedPrevious.length > 0 && confirm(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
                     episodesToMarkAsSeen.push(...unwatchedPrevious.map(ep => ep.id));
                 }
             }
         }
 
-        const isFirstWatched = (S.watchedState[seriesId]?.length || 0) === 0;
+        const isFirstWatched = watchedSet.size === 0;
         await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
 
         episodesToMarkAsSeen.forEach(idToMark => {
             const elementToMark = document.querySelector(`.episode-item[data-episode-id="${idToMark}"]`);
-            if (elementToMark) UI.markEpisodeAsSeen(elementToMark as HTMLElement);
+            if (elementToMark) {
+                const el = elementToMark as HTMLElement;
+                UI.markEpisodeAsSeen(el);
+                // Acessibilidade: Atualiza o rótulo para leitores de ecrã
+                el.querySelector('.status-icon')?.setAttribute('aria-label', 'Marcar como não visto');
+            }
         });
         
         UI.renderWatchlist();
@@ -492,6 +503,7 @@ async function initializeApp(): Promise<void> {
         UI.renderAllSeries();
         UI.renderUnseen();
         UI.applyTheme(settingsMap.get(C.THEME_STORAGE_KEY) || 'dark');
+        setupPwaUpdateNotifications();
         await updateNextAired().catch(err => console.error("Falha ao atualizar a secção 'Next Aired':", err));
         await updateGlobalProgress().catch(err => console.error("Falha ao atualizar o progresso global:", err));
         UI.updateKeyStats();
@@ -502,6 +514,21 @@ async function initializeApp(): Promise<void> {
             DOM.dashboard.innerHTML = `<div class="card"><p>Ocorreu um erro crítico ao iniciar a aplicação. Por favor, tente recarregar a página. Detalhes do erro foram registados na consola.</p></div>`;
         }
     }
+}
+
+function setupPwaUpdateNotifications() {
+  // Esta função é importada de um módulo virtual gerado pelo vite-plugin-pwa
+  // e pode não ser encontrada pelo seu editor, mas funcionará no browser.
+  const updateSW = registerSW({
+    onNeedRefresh() {
+      if (confirm('Nova versão disponível. Recarregar a aplicação?')) {
+        updateSW(true);
+      }
+    },
+    onOfflineReady() {
+      UI.showNotification('A aplicação está pronta para funcionar offline.');
+    },
+  });
 }
 
 // Event Listeners
@@ -549,6 +576,19 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.addSeriesHeaderInput.addEventListener('input', () => {
         S.resetSearchAbortController();
         debouncedSearch();
+    });
+
+    // Acessibilidade: Navegação por teclado para elementos interativos
+    DOM.dashboard.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            const target = e.target as HTMLElement;
+            // Ativa elementos interativos que não são botões/links nativos mas têm o comportamento esperado
+            const interactiveElement = target.closest<HTMLElement>('.status-icon, .star-container, .action-icon, .series-item, .add-btn, .remove-btn, .trailer-btn, .mark-season-seen-btn, .cast-show-more-btn');
+            if (interactiveElement) {
+                e.preventDefault(); // Previne o scroll da página ao usar a barra de espaço
+                interactiveElement.click(); // Dispara o evento de clique existente, reutilizando a lógica
+            }
+        }
     });
 
     // Dashboard clicks
@@ -815,6 +855,36 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.importDataBtn?.addEventListener('click', importData);
     DOM.rescanSeriesBtn?.addEventListener('click', rescanAllSeries);
     DOM.refetchDataBtn?.addEventListener('click', refetchAllMetadata);
+    
+    document.getElementById('export-stats-btn')?.addEventListener('click', () => {
+        // Exportar o gráfico de géneros para PNG
+        const genresChart = S.charts['genresChart'];
+        if (genresChart) {
+            exportChartToPNG(genresChart, 'grafico_generos.png');
+        }
+
+        // Exportar a lista de séries mais bem avaliadas para CSV
+        const ratedSeriesWithData = [...S.myWatchlist, ...S.myArchive]
+            .map(series => ({ series, rating: S.userData[series.id]?.rating }))
+            .filter((item): item is { series: Series; rating: number } => !!item.rating && item.rating > 0);
+
+        ratedSeriesWithData.sort((a, b) => b.rating - a.rating);
+
+        if (ratedSeriesWithData.length > 0) {
+            const headers = {
+                name: 'Série',
+                rating: 'A Sua Avaliação',
+                vote_average: 'Avaliação Pública'
+            };
+            const dataForCSV = ratedSeriesWithData.map(item => ({
+                name: item.series.name,
+                rating: item.rating,
+                vote_average: (item.series as any).vote_average || 'N/A'
+            }));
+            exportDataToCSV(dataForCSV, headers, 'series_mais_avaliadas.csv');
+        }
+        UI.showNotification('Exportação de estatísticas concluída!');
+    });
 
     initializeApp();
 });

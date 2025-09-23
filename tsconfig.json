@@ -11,6 +11,7 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "types": ["vitest/globals", "vite/client", "vite-plugin-pwa/client"],
     "noEmit": true,
 
     /* Linting */

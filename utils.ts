@@ -1,3 +1,5 @@
+import type { Chart } from 'chart.js';
+
 /**
  * Creates a DOM element with specified properties and children. A helper to prevent XSS.
  * @param {string} tag The HTML tag for the element.
@@ -102,6 +104,27 @@ export function getTranslatedSeasonName(originalName: string, seasonNumber: numb
 }
 
 /**
+ * Formata uma data (string ou objeto Date) para uma string localizada.
+ * @param {string | Date} date - A data a ser formatada.
+ * @param {string} [locale='pt-PT'] - O locale a ser usado para a formatação.
+ * @param {Intl.DateTimeFormatOptions} [options] - Opções de formatação.
+ * @returns {string} A data formatada, ou uma string vazia se a data for inválida.
+ */
+export function formatDate(date: string | Date, locale: string = 'pt-PT', options: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }): string {
+    if (!date) return '';
+    try {
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+        if (isNaN(dateObj.getTime())) {
+            return '';
+        }
+        return new Intl.DateTimeFormat(locale, options).format(dateObj);
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return '';
+    }
+}
+
+/**
  * Formata uma string de classificação etária para um formato mais simples.
  * @param {string} certString - A string de classificação original da API.
  * @returns {string} A string formatada.
@@ -136,7 +159,7 @@ export function formatHoursMinutes(totalMinutes: number): string {
  * @returns {string}
  */
 export function formatDuration(totalMinutes: number): string {
-    if (totalMinutes === 0) return '0min';
+    if (totalMinutes <= 0) return '0min';
     const MIN_IN_HOUR = 60;
     const MIN_IN_DAY = 24 * MIN_IN_HOUR;
     const MIN_IN_MONTH = 30 * MIN_IN_DAY;
@@ -148,14 +171,15 @@ export function formatDuration(totalMinutes: number): string {
     const days = Math.floor(remainder / MIN_IN_DAY);
     remainder %= MIN_IN_DAY;
     const hours = Math.floor(remainder / MIN_IN_HOUR);
-    const minutes = Math.round(remainder % MIN_IN_HOUR);
+    const minutes = remainder % MIN_IN_HOUR;
     const parts = [];
     if (years > 0) parts.push(`${years}a`);
     if (months > 0) parts.push(`${months}m`);
     if (days > 0) parts.push(`${days}d`);
     if (hours > 0) parts.push(`${hours}h`);
     if (minutes > 0) parts.push(`${minutes}min`);
-    return parts.slice(0, 2).join(' | ');
+    if (parts.length === 0) return '0min';
+    return parts.slice(0, 2).join(' ');
 }
 
 /**
@@ -196,6 +220,61 @@ export function animateValue(element: HTMLElement, start: number, end: number, d
         }
     }
     window.requestAnimationFrame(step);
+}
+
+/**
+ * Exports a Chart.js instance to a PNG image and triggers a download.
+ * @param {Chart} chart - The Chart.js instance.
+ * @param {string} filename - The desired filename for the downloaded image.
+ */
+export function exportChartToPNG(chart: Chart, filename: string): void {
+    if (!chart) return;
+    const url = chart.toBase64Image();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+/**
+ * Converts an array of objects to a CSV string and triggers a download.
+ * @param {Record<string, any>[]} data - The array of data objects.
+ * @param {Record<string, string>} headers - An object mapping data keys to CSV header names.
+ * @param {string} filename - The desired filename for the downloaded CSV file.
+ */
+export function exportDataToCSV(data: Record<string, any>[], headers: Record<string, string>, filename: string): void {
+    if (!data || data.length === 0) return;
+
+    const headerKeys = Object.keys(headers);
+    const headerValues = Object.values(headers);
+
+    const escapeCell = (cellValue: any): string => {
+        let cell = cellValue === null || cellValue === undefined ? '' : String(cellValue);
+        const needsQuotes = cell.includes(',') || cell.includes('\n') || cell.includes('"');
+        if (needsQuotes) {
+            cell = cell.replace(/"/g, '""'); // Escape double quotes
+            cell = `"${cell}"`; // Wrap in double quotes
+        }
+        return cell;
+    };
+
+    const csvRows = [
+        headerValues.join(','), // Header row
+        ...data.map(row => headerKeys.map(key => escapeCell(row[key])).join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 /**
