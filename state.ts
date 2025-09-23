@@ -1,7 +1,7 @@
-import { db } from './db.js';
-import * as C from './config.js';
-import { showNotification } from './ui.js';
-import { Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types.js';
+import { db } from './db';
+import * as C from './constants';
+import { showNotification } from './ui';
+import { Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
 
 // State variables
 export let myWatchlist: Series[] = [];

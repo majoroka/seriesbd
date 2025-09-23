@@ -1,7 +1,6 @@
-import { API_KEY, TRAKT_API_KEY, TRAKT_API_URL, SEASON_CACHE_DURATION } from './config.js';
-import { fetchWithRetry } from './utils.js';
-import { db } from './db.js';
-import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from './types.js';
+import { fetchWithRetry } from './utils';
+import { db } from './db';
+import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from './types';
 
 /**
  * Pesquisa por séries no TMDb com base numa query.
@@ -9,7 +8,7 @@ import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSea
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function searchSeries(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
-    const searchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${API_KEY}&language=pt-PT&query=${encodeURIComponent(query)}`;
+    const searchUrl = `/api/tmdb/search/tv?query=${encodeURIComponent(query)}`;
     const response = await fetchWithRetry(searchUrl, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -21,7 +20,7 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
-    const url = `https://api.themoviedb.org/3/tv/${seriesId}?api_key=${API_KEY}&language=pt-PT&append_to_response=videos`;
+    const url = `/api/tmdb/tv/${seriesId}?append_to_response=videos`;
     const response = await fetchWithRetry(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -33,7 +32,7 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal | null): Promise<TMDbCredits> {
-    const url = `https://api.themoviedb.org/3/tv/${seriesId}/aggregate_credits?api_key=${API_KEY}&language=pt-PT`;
+    const url = `/api/tmdb/tv/${seriesId}/aggregate_credits`;
     const response = await fetchWithRetry(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -47,16 +46,8 @@ export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal |
  */
 export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null): Promise<TraktData | null> {
     try {
-        const searchUrl = `${TRAKT_API_URL}/search/tmdb/${tmdbId}?type=show`;
-        const searchResponse = await fetchWithRetry(searchUrl, {
-            headers: {
-                'Content-Type': 'application/json',
-                'trakt-api-version': '2',
-                'trakt-api-key': TRAKT_API_KEY,
-                'Accept-Language': 'pt'
-            },
-            signal
-        });
+        const searchUrl = `/api/trakt/search/tmdb/${tmdbId}?type=show`;
+        const searchResponse = await fetchWithRetry(searchUrl, { signal });
         if (!searchResponse.ok) {
             if (searchResponse.status === 404) return null;
             throw new Error(`Trakt search API error! status: ${searchResponse.status}`);
@@ -66,11 +57,8 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
 
         if (!traktId) return null;
 
-        const showDetailsUrl = `${TRAKT_API_URL}/shows/${traktId}?extended=full`;
-        const showDetailsResponse = await fetchWithRetry(showDetailsUrl, {
-            headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_API_KEY, 'Accept-Language': 'pt' },
-            signal
-        });
+        const showDetailsUrl = `/api/trakt/shows/${traktId}?extended=full`;
+        const showDetailsResponse = await fetchWithRetry(showDetailsUrl, { signal });
         const fullShowData = showDetailsResponse.ok ? await showDetailsResponse.json() : null;
 
         const traktOverview = fullShowData?.overview;
@@ -84,11 +72,8 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
             }
         }
 
-        const ratingsUrl = `${TRAKT_API_URL}/shows/${traktId}/ratings`;
-        const ratingsResponse = await fetchWithRetry(ratingsUrl, {
-            headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_API_KEY, 'Accept-Language': 'pt' },
-            signal
-        });
+        const ratingsUrl = `/api/trakt/shows/${traktId}/ratings`;
+        const ratingsResponse = await fetchWithRetry(ratingsUrl, { signal });
         const ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
 
         return { ratings, trailerKey, traktId, overview: traktOverview, certification: fullShowData?.certification };
@@ -110,12 +95,9 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
  */
 export async function fetchTraktSeasonsData(traktId: number | undefined, signal: AbortSignal | null): Promise<TraktSeason[] | null> {
     if (!traktId) return null;
-    try {
-        const url = `${TRAKT_API_URL}/shows/${traktId}/seasons?extended=full,episodes,images`;
-        const response = await fetchWithRetry(url, {
-            headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_API_KEY, 'Accept-Language': 'pt' },
-            signal
-        });
+    try { 
+        const url = `/api/trakt/shows/${traktId}/seasons?extended=full,episodes,images`;
+        const response = await fetchWithRetry(url, { signal });
         if (!response.ok) return null;
         return await response.json();
     } catch (error) {
@@ -136,13 +118,14 @@ export async function fetchTraktSeasonsData(traktId: number | undefined, signal:
  */
 export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: number, signal: AbortSignal | null): Promise<TMDbSeason> {
     const cacheKey = [seriesId, seasonNumber];
+    const SEASON_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 dias
     const cachedSeason = await db.seasonCache.get(cacheKey);
 
     if (cachedSeason && (Date.now() - cachedSeason.cachedAt < SEASON_CACHE_DURATION)) {
         return cachedSeason.data;
     }
 
-    const url = `https://api.themoviedb.org/3/tv/${seriesId}/season/${seasonNumber}?api_key=${API_KEY}&language=pt-PT`;
+    const url = `/api/tmdb/tv/${seriesId}/season/${seasonNumber}`;
     const seasonData = await fetchWithRetry(url, { signal }).then(res => res.json());
     
     await db.seasonCache.put({

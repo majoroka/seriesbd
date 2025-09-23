@@ -1,13 +1,13 @@
 import './style.css';
-import * as C from './config.js';
-import * as DOM from './dom.js';
-import * as S from './state.js';
-import * as API from './api.js';
-import * as UI from './ui.js';
-import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils.js';
-import { db } from './db.js';
+import * as C from './constants';
+import * as DOM from './dom';
+import * as S from './state';
+import * as API from './api';
+import * as UI from './ui';
+import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
+import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
-import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types.js';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types';
 
 async function addSeriesToWatchlist(series: Series) {
     const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);

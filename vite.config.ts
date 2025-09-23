@@ -3,6 +3,22 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  server: {
+    proxy: {
+      // Redireciona pedidos de /api/tmdb para a função tmdb
+      '/api/tmdb': {
+        target: 'http://localhost:8888/.netlify/functions/tmdb',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/tmdb/, ''),
+      },
+      // Redireciona pedidos de /api/trakt para a função trakt
+      '/api/trakt': {
+        target: 'http://localhost:8888/.netlify/functions/trakt',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/trakt/, ''),
+      },
+    },
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
