@@ -4,7 +4,7 @@ import * as DOM from './dom.js';
 import * as S from './state.js';
 import * as API from './api.js';
 import * as UI from './ui.js';
-import { debounce, el, exportChartToPNG, exportDataToCSV } from './utils.js';
+import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils.js';
 import { db } from './db.js';
 import { registerSW } from 'virtual:pwa-register';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types.js';
@@ -82,7 +82,7 @@ async function updateNextAired() {
 
     if (seriesToFetch.length > 0) {
         console.log(`A atualizar detalhes para ${seriesToFetch.length} séries.`);
-        const promises = seriesToFetch.map(series =>
+        const task = (series: Series) => 
             API.fetchSeriesDetails(series.id, null).then((details: any) => {
                 series._details = {
                     status: details.status,
@@ -91,10 +91,12 @@ async function updateNextAired() {
                 series._lastUpdated = new Date().toISOString();
             }).catch(err => {
                 console.error(`Falha ao buscar detalhes para ${series.name}`, err);
-                series._lastUpdated = new Date().toISOString();
-            })
-        );
-        const results = await Promise.allSettled(promises);
+                // Mesmo em caso de erro, atualiza o timestamp para não tentar novamente de imediato
+                series._lastUpdated = new Date().toISOString(); 
+            });
+
+        // Processa em lotes para não sobrecarregar a API
+        const results = await processInBatches(seriesToFetch, 10, 1000, task);
         const updatedSeries = seriesToFetch.filter((_, index) => results[index].status === 'fulfilled');
         if (updatedSeries.length > 0) {
             await db.watchlist.bulkPut(updatedSeries.filter(s => S.myWatchlist.some(ws => ws.id === s.id)));
@@ -457,7 +459,7 @@ async function refetchAllMetadata(): Promise<void> {
     DOM.settingsMenu.classList.remove('visible');
     try {
         const allSeries = [...S.myWatchlist, ...S.myArchive];
-        const promises = allSeries.map(async (localSeries) => {
+        const task = async (localSeries: Series) => {
             try {
                 const freshData = await API.fetchSeriesDetails(localSeries.id, null);
                 const totalEpisodes = freshData.seasons?.filter(s => s.season_number !== 0).reduce((acc, s) => acc + s.episode_count, 0) || 0;
@@ -476,8 +478,10 @@ async function refetchAllMetadata(): Promise<void> {
             } catch (err) {
                 console.error(`Falha ao recarregar metadados para a série ${localSeries.name} (ID: ${localSeries.id})`, err);
             }
-        });
-        await Promise.all(promises);
+        };
+
+        await processInBatches(allSeries, 10, 1000, task);
+
         await db.watchlist.bulkPut(S.myWatchlist);
         await db.archive.bulkPut(S.myArchive);
         await initializeApp();

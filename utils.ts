@@ -304,3 +304,33 @@ export function animateDuration(element: HTMLElement, start: number, end: number
     }
     window.requestAnimationFrame(step);
 }
+
+/**
+ * Processes an array of items with an async task, in batches, to avoid rate limiting.
+ * @template T The type of items to process.
+ * @template R The type of the result from the task.
+ * @param {T[]} items The array of items to process.
+ * @param {number} batchSize The number of promises to process concurrently in each batch.
+ * @param {number} delay The delay in milliseconds between batches.
+ * @param {(item: T) => Promise<R>} task The async function that processes an item.
+ * @returns {Promise<PromiseSettledResult<R>[]>} A promise that resolves with the settled results of all tasks.
+ */
+export async function processInBatches<T, R>(
+    items: T[],
+    batchSize: number,
+    delay: number,
+    task: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+    const allResults: PromiseSettledResult<R>[] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+        const batchItems = items.slice(i, i + batchSize);
+        const batchPromises = batchItems.map(task);
+        const batchResults = await Promise.allSettled(batchPromises);
+        allResults.push(...batchResults);
+
+        if (i + batchSize < items.length) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    return allResults;
+}
