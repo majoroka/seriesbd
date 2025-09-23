@@ -1,5 +1,11 @@
 [build]
+  command = "vite build"
   functions = "netlify/functions"
+  publish = "dist"
+
+[dev]
+  command = "vite"
+  targetPort = 5173
 
 [functions]
   node_bundler = "esbuild"

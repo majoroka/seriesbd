@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "netlify dev",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
@@ -13,6 +13,7 @@
   "devDependencies": {
     "@testing-library/dom": "^10.1.0",
     "jsdom": "^24.1.0",
+    "netlify-cli": "^17.0.0",
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
     "vite-plugin-pwa": "^0.20.0",

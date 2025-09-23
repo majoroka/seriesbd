@@ -339,14 +339,6 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         el('button', { class: 'remove-btn', 'data-series-id': String(series.id), text: 'Remover' })
     ]);
 
-    itemElement.addEventListener('click', (event: MouseEvent) => {
-        if ((event.target as Element).closest('.remove-btn')) {
-            return;
-        }
-        document.dispatchEvent(new CustomEvent('display-series-details', {
-            detail: { seriesId: series.id }
-        }));
-    });
     return itemElement;
 }
 

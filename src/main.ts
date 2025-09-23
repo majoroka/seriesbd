@@ -832,10 +832,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.addEventListener('display-series-details', (e: Event) => {
-        displaySeriesDetails((e as CustomEvent).detail.seriesId);
-    });
-
     let notesSaveTimeout: number;
     DOM.dashboard?.addEventListener('input', (e) => {
         const notesTextarea = (e.target as Element).closest('.user-notes-textarea');

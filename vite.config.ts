@@ -7,15 +7,13 @@ export default defineConfig({
     proxy: {
       // Redireciona pedidos de /api/tmdb para a função tmdb
       '/api/tmdb': {
-        target: 'http://localhost:8888/.netlify/functions/tmdb',
+        target: 'http://localhost:8888',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/tmdb/, ''),
       },
       // Redireciona pedidos de /api/trakt para a função trakt
       '/api/trakt': {
-        target: 'http://localhost:8888/.netlify/functions/trakt',
+        target: 'http://localhost:8888',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/trakt/, ''),
       },
     },
   },
