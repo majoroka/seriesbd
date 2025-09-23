@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <title>Séries Dashboard</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- O CSS será importado via JavaScript (main.ts) -->
+</head>
+<body>
+    <div class="app-container">
+        <!-- ========== SIDEBAR ========== -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-tv"></i>
+                <h1>SériesDB</h1>
+            </div>
+            <nav class="main-nav">
+                <h2>Biblioteca</h2>
+                <ul>
+                    <li><a href="#" class="nav-link active" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
+                    <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> A Ver</a></li>
+                    <li><a href="#" class="nav-link" data-target="archive-section"><i class="fas fa-archive"></i> Arquivo</a></li>
+                    <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> Próximo Episódio</a></li>
+                    <li><a href="#" class="nav-link" data-target="stats-section"><i class="fas fa-chart-pie"></i> Estatísticas</a></li>
+                    <li class="separator"><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Todas</a></li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-actions">
+                    <button class="icon-button" title="Pesquisar na Biblioteca" id="open-library-search-btn"><i class="fas fa-search"></i></button>
+                    <button class="icon-button" title="Mudar Tema" id="theme-toggle-btn"><i class="fas fa-sun"></i></button>
+                    <div class="settings-menu-wrapper">
+                        <button class="icon-button" title="Definições" id="settings-btn"><i class="fas fa-cog"></i></button>
+                        <div class="settings-menu" id="settings-menu">
+                            <ul>
+                                <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Séries</button></li>
+                                <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Séries</button></li>
+                                <li class="separator"></li>
+                                <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
+                                <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p>&copy; 2025 SériesDB</p>
+            </div>
+        </aside>
+
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="add-series-header-input" placeholder="Pesquisar para adicionar série...">
+                    <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
+                </div>
+                <div class="user-stats">
+                    <span>Progresso Total</span>
+                    <span id="global-progress-percentage" class="stats-percentage">0%</span>
+                </div>
+            </header>
+
+            <div class="dashboard">
+                <!-- Next Aired Section -->
+                <section class="card next-aired" id="next-aired-section">
+                    <h2><i class="fas fa-calendar-alt"></i> Próximo Episódio</h2>
+                    <div class="episode-list">
+                        <!-- O conteúdo será preenchido dinamicamente por script.js -->
+                    </div>
+                </section>
+
+                <!-- Series View Section -->
+                <section class="card series-view" id="series-view-section" style="display: none;">
+                    <!-- O conteúdo detalhado da série será carregado aqui -->
+                </section>
+
+                <!-- Placeholder sections for other tabs -->
+                <section class="card" id="watchlist-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-star"></i> Quero Ver</h2>
+                        <div class="view-toggle" id="watchlist-view-toggle">
+                            <button class="icon-button active" data-view="list" title="Vista de Lista"><i class="fas fa-bars"></i></button>
+                            <button class="icon-button" data-view="grid" title="Vista de Mosaico"><i class="fas fa-th"></i></button>
+                        </div>
+                    </div>
+                    <div id="watchlist-container" class="series-list-container">
+                        <!-- O conteúdo da Watchlist será carregado aqui -->
+                    </div>
+                </section>
+                <section class="card" id="unseen-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-eye-slash"></i> A Ver</h2>
+                        <div class="view-toggle" id="unseen-view-toggle">
+                            <button class="icon-button active" data-view="list" title="Vista de Lista"><i class="fas fa-bars"></i></button>
+                            <button class="icon-button" data-view="grid" title="Vista de Mosaico"><i class="fas fa-th"></i></button>
+                        </div>
+                    </div>
+                    <div id="unseen-container" class="series-list-container">
+                        <!-- Conteúdo dos episódios não vistos será carregado aqui. -->
+                    </div>
+                </section>
+                <section class="card" id="archive-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-archive"></i> Arquivo</h2>
+                        <div class="view-toggle" id="archive-view-toggle">
+                            <button class="icon-button active" data-view="list" title="Vista de Lista"><i class="fas fa-bars"></i></button>
+                            <button class="icon-button" data-view="grid" title="Vista de Mosaico"><i class="fas fa-th"></i></button>
+                        </div>
+                    </div>
+                    <div id="archive-container" class="series-list-container">
+                        <!-- Conteúdo do arquivo será carregado aqui. -->
+                    </div>
+                </section>
+                <section class="card" id="all-series-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-list-ul"></i> Todas</h2>
+                        <div class="view-toggle" id="all-series-view-toggle">
+                            <button class="icon-button active" data-view="list" title="Vista de Lista"><i class="fas fa-bars"></i></button>
+                            <button class="icon-button" data-view="grid" title="Vista de Mosaico"><i class="fas fa-th"></i></button>
+                        </div>
+                    </div>
+                    <div id="all-series-container" class="series-list-container">
+                        <!-- Lista completa de todas as séries será carregada aqui. -->
+                    </div>
+                </section>
+
+                <!-- Statistics Section (Placeholder) -->
+                <section class="card" id="stats-section" style="display: none;">
+                    <h2><i class="fas fa-chart-pie"></i> Estatísticas</h2>
+                    <div class="key-stats-grid">
+                        <div class="key-stat-card watched-episodes">
+                            <h4>Episódios Vistos</h4>
+                            <p id="stat-watched-episodes">0</p>
+                        </div>
+                        <div class="key-stat-card unwatched-episodes">
+                            <h4>Episódios por Ver</h4>
+                            <p id="stat-unwatched-episodes">0</p>
+                        </div>
+                        <div class="key-stat-card watch-time">
+                            <h4>Tempo na TV</h4>
+                            <p id="stat-watch-time">0m</p>
+                        </div>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Episódios Vistos vs. Por Ver</h3>
+                            <canvas id="watched-unwatched-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Top Géneros na Biblioteca</h3>
+                            <canvas id="genres-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Séries por Ano de Lançamento</h3>
+                            <canvas id="aired-years-chart"></canvas>
+                        </div>
+                        <div class="chart-card" id="top-rated-series-card">
+                            <h3>As Minhas Séries Favoritas</h3>
+                            <div id="top-rated-series-list">
+                                <!-- O conteúdo será injetado pelo script.js -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Add Series Section (initially hidden) -->
+                <section class="card" id="add-series-section" style="display: none;">
+                    <h2><i class="fas fa-search"></i> Resultados da Pesquisa</h2>
+                    <div id="search-results">
+                        <!-- Resultados da pesquisa serão exibidos aqui -->
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- ========== MODAL FOR EPISODE DETAILS ========== -->
+    <div id="episode-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <img id="modal-episode-image" src="" alt="Imagem do episódio" loading="lazy">
+            <div class="modal-episode-info">
+                <h3 id="modal-episode-title"></h3>
+                <p id="modal-episode-synopsis"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== NOTIFICATION MODAL ========== -->
+    <div id="notification-modal" class="modal-overlay">
+        <div class="modal-content notification-modal-content">
+            <p id="notification-message"></p>
+            <button id="notification-ok-btn">OK</button>
+        </div>
+    </div>
+
+    <!-- ========== TRAILER MODAL ========== -->
+    <div id="trailer-modal" class="modal-overlay">
+        <div class="modal-content trailer-modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <div class="video-container">
+                <iframe id="trailer-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== LIBRARY SEARCH MODAL ========== -->
+    <div id="library-search-modal" class="modal-overlay">
+        <div class="modal-content library-search-modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <h2>Pesquisar na Biblioteca</h2>
+            <div class="search-bar" style="width: 100%; margin-bottom: 1.5rem;">
+                <i class="fas fa-search"></i>
+                <input type="text" id="library-search-modal-input" placeholder="Escreva o nome da série...">
+            </div>
+            <div id="library-search-modal-results">
+                <!-- Search results will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ALL RATINGS MODAL ========== -->
+    <div id="all-ratings-modal" class="modal-overlay">
+        <div class="modal-content all-ratings-modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <h2>As Minhas Avaliações</h2>
+            <div id="ratings-summary-list">
+                <!-- List of ratings (10 stars, 9 stars, etc.) will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SERIES BY RATING MODAL ========== -->
+    <div id="series-by-rating-modal" class="modal-overlay">
+        <div class="modal-content series-by-rating-modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <h2 id="series-by-rating-modal-title">Séries Avaliadas</h2>
+            <div id="series-by-rating-modal-results">
+                <!-- Scrollable list of series for a specific rating -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/main.ts"></script>
+</body>
+</html>

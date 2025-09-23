@@ -1,0 +1,820 @@
+import './style.css';
+import * as C from './config.js';
+import * as DOM from './dom.js';
+import * as S from './state.js';
+import * as API from './api.js';
+import * as UI from './ui.js';
+import { debounce, el } from './utils.js';
+import { db } from './db.js';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types.js';
+
+async function addSeriesToWatchlist(series: Series) {
+    const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
+    if (!isInLibrary) {
+        const seriesDetails = await API.fetchSeriesDetails(series.id, null);
+        const totalEpisodes = seriesDetails.seasons
+            ? seriesDetails.seasons
+                .filter((season) => season.season_number !== 0)
+                .reduce((acc, season) => acc + season.episode_count, 0)
+            : 0;
+        
+        series.total_episodes = totalEpisodes;
+        series.episode_run_time = seriesDetails.episode_run_time?.[0] || 30;
+        series.genres = seriesDetails.genres;
+        series._details = {
+            status: seriesDetails.status,
+            next_episode_to_air: seriesDetails.next_episode_to_air,
+        };
+        series._lastUpdated = new Date().toISOString();
+
+        await S.addSeries(series);
+
+        UI.renderWatchlist();
+        UI.renderUnseen();
+        await updateNextAired();
+        UI.renderAllSeries();
+        updateGlobalProgress();
+        UI.updateKeyStats();
+        console.log('Série adicionada a "Quero Ver":', series);
+    } else {
+        console.warn('A série já se encontra na biblioteca.');
+    }
+}
+
+async function removeSeriesFromLibrary(seriesId: number, element: HTMLElement | null) {
+    const seriesToRemove = S.getSeries(seriesId);
+    const seriesName = seriesToRemove ? seriesToRemove.name : `a série selecionada`;
+
+    if (confirm(`Tem a certeza que quer remover "${seriesName}" da sua biblioteca? Esta ação não pode ser desfeita.`)) {
+        const performRemovalLogic = async () => {
+            await S.removeSeries(seriesId);
+            await updateNextAired();
+            UI.renderWatchlist();
+            UI.renderArchive();
+            UI.renderAllSeries();
+            UI.renderUnseen();
+            updateGlobalProgress();
+            UI.updateKeyStats();
+            console.log(`Série ${seriesId} removida da biblioteca.`);
+        };
+
+        if (element) {
+            element.classList.add('removing');
+            element.addEventListener('transitionend', performRemovalLogic, { once: true });
+        } else {
+            await performRemovalLogic();
+        }
+    }
+}
+
+async function updateNextAired() {
+    DOM.nextAiredListContainer.innerHTML = '<p>A verificar próximos episódios...</p>';
+    let allUserSeries = [...S.myWatchlist, ...S.myArchive];
+    const now = new Date().getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const seriesToFetch = allUserSeries.filter(series => {
+        if (!series._lastUpdated) return true;
+        const lastUpdatedTime = new Date(series._lastUpdated).getTime();
+        return (now - lastUpdatedTime) > oneDay;
+    });
+
+    if (seriesToFetch.length > 0) {
+        console.log(`A atualizar detalhes para ${seriesToFetch.length} séries.`);
+        const promises = seriesToFetch.map(series =>
+            API.fetchSeriesDetails(series.id, null).then((details: any) => {
+                series._details = {
+                    status: details.status,
+                    next_episode_to_air: details.next_episode_to_air
+                };
+                series._lastUpdated = new Date().toISOString();
+            }).catch(err => {
+                console.error(`Falha ao buscar detalhes para ${series.name}`, err);
+                series._lastUpdated = new Date().toISOString();
+            })
+        );
+        const results = await Promise.allSettled(promises);
+        const updatedSeries = seriesToFetch.filter((_, index) => results[index].status === 'fulfilled');
+        if (updatedSeries.length > 0) {
+            await db.watchlist.bulkPut(updatedSeries.filter(s => S.myWatchlist.some(ws => ws.id === s.id)));
+            await db.archive.bulkPut(updatedSeries.filter(s => S.myArchive.some(as => as.id === s.id)));
+        }
+    }
+
+    const seriesToUnarchiveIds = allUserSeries
+        .filter(series => series._details?.next_episode_to_air && S.myArchive.some(s => s.id === series.id))
+        .map(series => series.id);
+
+    if (seriesToUnarchiveIds.length > 0) {
+        for (const seriesId of seriesToUnarchiveIds) {
+            const series = S.getSeries(seriesId);
+            if(series) await S.unarchiveSeries(series);
+        }
+        allUserSeries = [...S.myWatchlist, ...S.myArchive];
+    }
+
+    const upcomingEpisodes = allUserSeries
+        .map(series => series._details?.next_episode_to_air ? { seriesName: series.name, seriesPoster: series.poster_path, episode: series._details.next_episode_to_air } : null);
+
+    const filteredUpcoming = upcomingEpisodes.filter((ep): ep is NonNullable<typeof ep> => ep !== null);
+
+    filteredUpcoming.sort((a, b) => new Date(a.episode.air_date).getTime() - new Date(b.episode.air_date).getTime());
+
+    UI.renderNextAired(filteredUpcoming);
+}
+
+async function displaySeriesDetails(seriesId: number) {
+    S.resetDetailViewAbortController();
+    const signal = S.detailViewAbortController.signal;
+
+    try {
+        DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
+        UI.showSection('series-view-section');
+
+        const [seriesData, creditsData, traktSeriesData] = await Promise.all([
+            API.fetchSeriesDetails(seriesId, signal),
+            API.fetchSeriesCredits(seriesId, signal),
+            API.fetchTraktData(seriesId, signal)
+        ]);
+
+        const traktId = traktSeriesData?.traktId as number | undefined;
+        const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
+        const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
+        const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
+
+        const [seasonResults, traktSeasonsData] = await Promise.all([
+            Promise.allSettled(seasonPromises),
+            traktSeasonPromise
+        ]);
+        const allTMDbSeasonsData = seasonResults.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled').map(res => res.value);
+
+        const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
+        DOM.seriesViewSection.dataset.allEpisodes = JSON.stringify(allEpisodesForSeries.map((ep: any) => ({ id: ep.id, season_number: ep.season_number, episode_number: ep.episode_number })));
+        
+        const episodeToSeasonMap: { [key: number]: number } = {};
+        allTMDbSeasonsData.forEach(season => {
+            season.episodes.forEach((episode: Episode) => {
+                episodeToSeasonMap[episode.id] = season.season_number!;
+            });
+        });
+        DOM.seriesViewSection.dataset.episodeMap = JSON.stringify(episodeToSeasonMap);
+        
+        const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
+        DOM.seriesViewSection.dataset.seasons = JSON.stringify(seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })));
+
+        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
+
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            console.log('Fetch aborted for series details view.');
+            return;
+        }
+        console.error('Erro ao exibir detalhes da série:', error);
+        DOM.seriesViewSection.innerHTML = '<p>Não foi possível carregar os detalhes da série.</p>';
+    }
+}
+
+async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonNumber: number, episodeElement: HTMLElement) {
+    const isSeen = S.watchedState[seriesId]?.includes(episodeId);
+    const wasInArchive = S.myArchive.some(s => s.id === seriesId);
+
+    if (isSeen) {
+        await S.unmarkEpisodesAsWatched(seriesId, [episodeId]);
+        UI.markEpisodeAsUnseen(episodeElement);
+        if (wasInArchive) {
+            const series = S.getSeries(seriesId);
+            if(series) await S.unarchiveSeries(series);
+            UI.updateActiveNavLink('unseen-section');
+        } else {
+            UI.renderWatchlist();
+            UI.renderUnseen();
+            if ((S.watchedState[seriesId]?.length || 0) === 0) {
+                UI.updateActiveNavLink('watchlist-section');
+            }
+        }
+    } else {
+        const allEpisodesJSON = DOM.seriesViewSection.dataset.allEpisodes;
+        let episodesToMarkAsSeen = [episodeId];
+        if (allEpisodesJSON) {
+            const allEpisodes: {id: number}[] = JSON.parse(allEpisodesJSON);
+            const clickedEpisodeIndex = allEpisodes.findIndex((ep: {id: number}) => ep.id === episodeId);
+            if (clickedEpisodeIndex > 0) {
+                const previousEpisodes = allEpisodes.slice(0, clickedEpisodeIndex);
+                const unwatchedPrevious = previousEpisodes.filter((ep: {id: number}) => !(S.watchedState[seriesId] || []).includes(ep.id));
+                if (unwatchedPrevious.length > 0 && confirm(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
+                    episodesToMarkAsSeen.push(...unwatchedPrevious.map(ep => ep.id));
+                }
+            }
+        }
+
+        const isFirstWatched = (S.watchedState[seriesId]?.length || 0) === 0;
+        await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
+
+        episodesToMarkAsSeen.forEach(idToMark => {
+            const elementToMark = document.querySelector(`.episode-item[data-episode-id="${idToMark}"]`);
+            if (elementToMark) UI.markEpisodeAsSeen(elementToMark as HTMLElement);
+        });
+        
+        UI.renderWatchlist();
+        UI.renderUnseen();
+
+        if (isFirstWatched && episodesToMarkAsSeen.length > 0) {
+            UI.updateActiveNavLink('unseen-section');
+        }
+        
+        const movedToArchive = await checkSeriesCompletion(seriesId);
+        if (movedToArchive) {
+            UI.updateActiveNavLink('archive-section');
+        }
+    }
+
+    UI.updateOverallProgressBar(seriesId);
+    UI.updateSeasonProgressUI(seriesId, seasonNumber);
+    updateGlobalProgress();
+    UI.updateKeyStats();
+}
+
+async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
+    try {
+        const series = S.getSeries(seriesId);
+        if (!series) return false;
+
+        const watchedEpisodesCount = S.watchedState[seriesId]?.length || 0;
+        let totalEpisodes = series.total_episodes;
+
+        if (totalEpisodes === undefined || (totalEpisodes > 0 && watchedEpisodesCount >= totalEpisodes)) {
+            const freshData = await API.fetchSeriesDetails(seriesId, null);
+            const freshTotalEpisodes = freshData.seasons
+                ? freshData.seasons
+                    .filter((season) => season.season_number !== 0)
+                    .reduce((acc, season) => acc + season.episode_count, 0)
+                : 0;
+
+            if (freshTotalEpisodes !== totalEpisodes) {
+                series.total_episodes = freshTotalEpisodes;
+                totalEpisodes = freshTotalEpisodes; // Re-assign after update
+                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air, };
+                series._lastUpdated = new Date().toISOString();
+                await S.updateSeries(series);
+            }
+        }
+
+        const isComplete = totalEpisodes !== undefined && totalEpisodes > 0 && watchedEpisodesCount >= totalEpisodes;
+
+        if (isComplete) {
+            await S.archiveSeries(series);
+            UI.renderWatchlist();
+            UI.renderUnseen();
+            UI.renderArchive();
+            UI.renderAllSeries();
+            return true;
+        }
+        return false;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("Erro ao verificar a conclusão da série:", message);
+        return false;
+    }
+}
+
+async function updateGlobalProgress() {
+    const seriesInProgress = S.myWatchlist.filter(series => S.watchedState[series.id] && S.watchedState[series.id].length > 0);
+    if (seriesInProgress.length === 0) {
+        DOM.globalProgressPercentage.textContent = '0%';
+        return;
+    }
+
+    const fetchPromises = seriesInProgress
+        .filter(series => series.total_episodes === undefined)
+        .map(series => API.fetchSeriesDetails(series.id, null).then((details: any) => {
+            const count = details.seasons?.filter((season: any) => season.season_number !== 0).reduce((acc: any, season: any) => acc + season.episode_count, 0) || 0;
+            series.total_episodes = count;
+        }).catch((err: any) => {
+            console.error(`Failed to fetch details for series ${series.id} to update progress`, err);
+            series.total_episodes = 0;
+        }));
+
+    if (fetchPromises.length > 0) {
+        await Promise.all(fetchPromises);
+        const updatedSeries = seriesInProgress.filter(series => series.total_episodes !== undefined);
+        if (updatedSeries.length > 0) {
+            await db.watchlist.bulkPut(updatedSeries);
+        }
+    }
+
+    let totalEpisodes = 0;
+    let totalWatched = 0;
+    seriesInProgress.forEach(series => {
+        totalEpisodes += series.total_episodes || 0;
+        totalWatched += S.watchedState[series.id]?.length || 0;
+    });
+
+    const percentage = totalEpisodes > 0 ? Math.round((totalWatched / totalEpisodes) * 100) : 0;
+    DOM.globalProgressPercentage.textContent = `${percentage}%`;
+}
+
+function setupViewToggle(toggleElement: HTMLElement, container: HTMLElement, storageKey: string, renderFunction: () => void) {
+    if (!toggleElement) return;
+    toggleElement.addEventListener('click', async (e) => {
+        const button = (e.target as Element).closest('[data-view]');
+        if (!button) return;
+
+        const view = (button as HTMLElement).dataset.view;
+        if (view) {
+            await db.kvStore.put({ key: storageKey, value: view });
+            UI.applyViewMode(view, container, toggleElement);
+            renderFunction();
+        }
+    });
+}
+
+async function exportData(): Promise<void> {
+    DOM.settingsMenu.classList.remove('visible');
+    try {
+        const backupData = {
+            version: 2,
+            timestamp: new Date().toISOString(),
+            watchlist: S.myWatchlist,
+            archive: S.myArchive,
+            watchedState: S.watchedState,
+            userData: S.userData,
+        };
+        const jsonString = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const date = new Date().toISOString().split('T')[0];
+        const suggestedName = `seriesdb_backup_${date}.json`;
+
+        if (window.showSaveFilePicker) {
+            const handle = await window.showSaveFilePicker({ suggestedName, types: [{ description: 'Ficheiros JSON', accept: { 'application/json': ['.json'] } }] });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            UI.showNotification('Dados exportados com sucesso!');
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = suggestedName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            UI.showNotification('Download iniciado! Verifique a sua pasta de downloads.');
+        }
+    } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            console.error('Erro ao exportar dados:', error);
+            UI.showNotification('Ocorreu um erro ao exportar os dados.');
+        }
+    }
+}
+
+function importData(): void {
+    if (!confirm('Tem a certeza que quer importar os dados? Isto irá substituir todos os dados atuais.')) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event: ProgressEvent<FileReader>) => {
+            if (!event.target?.result) return;
+            try {
+                const data = JSON.parse(event.target.result as string);
+                if (!data.watchlist || !data.archive || !data.watchedState) throw new Error('Ficheiro de backup inválido ou corrompido.');
+                await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData], async () => {
+                    await db.watchlist.clear();
+                    await db.archive.clear();
+                    await db.watchedState.clear();
+                    await db.userData.clear();
+                    await db.watchlist.bulkPut(data.watchlist);
+                    await db.archive.bulkPut(data.archive);
+                    const watchedItems: WatchedStateItem[] = [];
+                    for (const seriesId in data.watchedState) {
+                        if (data.watchedState.hasOwnProperty(seriesId) && Array.isArray(data.watchedState[seriesId])) {
+                            const sId = parseInt(seriesId, 10);
+                            if (isNaN(sId)) continue;
+                            data.watchedState[seriesId].forEach((episodeId: any) => {
+                                if (episodeId !== null && episodeId !== undefined) {
+                                    const epId = parseInt(episodeId, 10);
+                                    if (!isNaN(epId)) watchedItems.push({ seriesId: sId, episodeId: epId });
+                                }
+                            });
+                        }
+                    }
+                    if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems as any);
+                    const userDataItems: UserDataItem[] = [];
+                    for (const seriesId in (data.userData || {})) {
+                        const sId = parseInt(seriesId, 10);
+                        if (!isNaN(sId)) {
+                            const { rating, notes } = data.userData[seriesId];
+                            userDataItems.push({ seriesId: sId, rating, notes });
+                        }
+                    }
+                    if (userDataItems.length > 0) await db.userData.bulkPut(userDataItems);
+                });
+                UI.showNotification('Dados importados com sucesso! A aplicação será atualizada.');
+                await initializeApp();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Erro ao importar dados:', message);
+                UI.showNotification(`Erro ao importar: ${message}`);
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+    DOM.settingsMenu.classList.remove('visible');
+}
+
+async function rescanAllSeries() {
+    UI.showNotification('A procurar por novos episódios em todas as séries...');
+    DOM.settingsMenu.classList.remove('visible');
+    try {
+        await updateNextAired();
+        UI.showNotification('Verificação concluída. As listas foram atualizadas.');
+    } catch (error) {
+        console.error('Erro durante o rescan:', error);
+        UI.showNotification('Ocorreu um erro ao procurar por atualizações.');
+    }
+}
+
+async function refetchAllMetadata(): Promise<void> {
+    if (!confirm('Isto irá recarregar todos os metadados de todas as séries da sua biblioteca a partir da API. Pode demorar algum tempo. Deseja continuar?')) return;
+    UI.showNotification('A recarregar todos os metadados... Por favor, aguarde.');
+    DOM.settingsMenu.classList.remove('visible');
+    try {
+        const allSeries = [...S.myWatchlist, ...S.myArchive];
+        const promises = allSeries.map(async (localSeries) => {
+            try {
+                const freshData = await API.fetchSeriesDetails(localSeries.id, null);
+                const totalEpisodes = freshData.seasons?.filter(s => s.season_number !== 0).reduce((acc, s) => acc + s.episode_count, 0) || 0;
+                Object.assign(localSeries, {
+                    name: freshData.name,
+                    overview: freshData.overview,
+                    poster_path: freshData.poster_path,
+                    backdrop_path: freshData.backdrop_path,
+                    first_air_date: freshData.first_air_date,
+                    genres: freshData.genres,
+                    episode_run_time: freshData.episode_run_time?.[0] || 30,
+                    total_episodes: totalEpisodes,
+                    _details: { next_episode_to_air: freshData.next_episode_to_air, status: freshData.status },
+                    _lastUpdated: new Date().toISOString()
+                });
+            } catch (err) {
+                console.error(`Falha ao recarregar metadados para a série ${localSeries.name} (ID: ${localSeries.id})`, err);
+            }
+        });
+        await Promise.all(promises);
+        await db.watchlist.bulkPut(S.myWatchlist);
+        await db.archive.bulkPut(S.myArchive);
+        await initializeApp();
+        UI.showNotification('Todos os metadados foram atualizados com sucesso.');
+    } catch (error) {
+        console.error('Erro ao recarregar todos os metadados:', error);
+        UI.showNotification('Ocorreu um erro geral durante a atualização dos metadados.');
+    }
+}
+
+async function initializeApp(): Promise<void> {
+    try {
+        if (localStorage.getItem('seriesdb.watchlist')) {
+            await S.migrateFromLocalStorage();
+        }
+        const settingsMap = await S.loadStateFromDB();
+        UI.applyViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY) || 'list', DOM.watchlistContainer, DOM.watchlistViewToggle);
+        UI.applyViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY) || 'list', DOM.unseenContainer, DOM.unseenViewToggle);
+        UI.applyViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY) || 'list', DOM.archiveContainer, DOM.archiveViewToggle);
+        UI.applyViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY) || 'list', DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+        UI.renderWatchlist();
+        UI.renderArchive();
+        UI.renderAllSeries();
+        UI.renderUnseen();
+        UI.applyTheme(settingsMap.get(C.THEME_STORAGE_KEY) || 'dark');
+        await updateNextAired().catch(err => console.error("Falha ao atualizar a secção 'Next Aired':", err));
+        await updateGlobalProgress().catch(err => console.error("Falha ao atualizar o progresso global:", err));
+        UI.updateKeyStats();
+        UI.showSection('watchlist-section');
+    } catch (error) {
+        console.error("Erro crítico durante a inicialização da aplicação:", error);
+        if (DOM.dashboard) {
+            DOM.dashboard.innerHTML = `<div class="card"><p>Ocorreu um erro crítico ao iniciar a aplicação. Por favor, tente recarregar a página. Detalhes do erro foram registados na consola.</p></div>`;
+        }
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Navigation
+    DOM.mainNavLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = (link as HTMLElement).dataset.target;
+            if (targetId) {
+                if (targetId === 'all-series-section') UI.renderAllSeries();
+                UI.showSection(targetId);
+            }
+        });
+    });
+
+    // View Toggles
+    setupViewToggle(DOM.watchlistViewToggle, DOM.watchlistContainer, C.WATCHLIST_VIEW_MODE_KEY, UI.renderWatchlist);
+    setupViewToggle(DOM.unseenViewToggle, DOM.unseenContainer, C.UNSEEN_VIEW_MODE_KEY, UI.renderUnseen);
+    setupViewToggle(DOM.archiveViewToggle, DOM.archiveContainer, C.ARCHIVE_VIEW_MODE_KEY, UI.renderArchive);
+    setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
+
+    // Header Search
+    const debouncedSearch = debounce(() => {
+        const query = DOM.addSeriesHeaderInput.value.trim();
+        if (query.length > 1) {
+            DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
+            UI.showSection('add-series-section');
+            API.searchSeries(query, S.searchAbortController.signal)
+                .then(data => {
+                    S.setCurrentSearchResults(data.results);
+                    UI.renderSearchResults(data.results);
+                })
+                .catch(error => {
+                    if (error.name !== 'AbortError') {
+                        console.error('Erro ao pesquisar séries:', error);
+                        DOM.searchResultsContainer.innerHTML = '<p>Ocorreu um erro ao realizar a pesquisa.</p>';
+                    }
+                });
+        } else if (query.length === 0) {
+            DOM.searchResultsContainer.innerHTML = '<p>Escreva na barra de pesquisa para encontrar novas séries.</p>';
+        }
+    }, 300);
+
+    DOM.addSeriesHeaderInput.addEventListener('input', () => {
+        S.resetSearchAbortController();
+        debouncedSearch();
+    });
+
+    // Dashboard clicks
+    DOM.dashboard.addEventListener('click', async (e) => {
+        const target = e.target as Element;
+        const addBtn = target.closest('.add-btn');
+        if (addBtn && !(addBtn as HTMLButtonElement).disabled) {
+            const seriesId = parseInt((addBtn as HTMLElement).dataset.seriesId!, 10);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
+            if (seriesToAdd) {
+                await addSeriesToWatchlist(seriesToAdd);
+                addBtn.classList.add('added');
+                (addBtn as HTMLElement).textContent = 'Adicionado';
+                addBtn.appendChild(el('i', { class: 'fas fa-check' }));
+                (addBtn as HTMLButtonElement).disabled = true;
+            }
+            return;
+        }
+
+        const seriesItem = target.closest('.watchlist-item, .top-rated-item');
+        if (seriesItem) {
+            displaySeriesDetails(parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10));
+            return;
+        }
+
+        const removeBtn = target.closest('.remove-btn');
+        if (removeBtn) {
+            removeSeriesFromLibrary(parseInt((removeBtn as HTMLElement).dataset.seriesId!, 10), removeBtn.closest('.watchlist-item'));
+            return;
+        }
+
+        const statusIcon = target.closest('.status-icon');
+        if (statusIcon) {
+            const episodeItem = statusIcon.closest('.episode-item');
+            if (episodeItem) {
+                const { seriesId, episodeId, seasonNumber } = (episodeItem as HTMLElement).dataset;
+                toggleEpisodeWatched(parseInt(seriesId!), parseInt(episodeId!), parseInt(seasonNumber!), episodeItem as HTMLElement);
+            }
+            return;
+        }
+
+        const showMoreCastBtn = target.closest('.cast-show-more-btn');
+        if (showMoreCastBtn) {
+            const remainingCastData = (showMoreCastBtn as HTMLElement).dataset.remainingCast;
+            if (remainingCastData) {
+                const remainingPeople: TMDbPerson[] = JSON.parse(remainingCastData);
+                const peopleList = showMoreCastBtn.closest('.v2-info-card')!.querySelector('.v2-people-list')!;
+                const fragment = document.createDocumentFragment();
+                remainingPeople.forEach((person: any) => {
+                    const personElement = UI.createPersonElement(person); // This function needs to be created or moved to UI
+                    fragment.appendChild(personElement);
+                });
+                peopleList.appendChild(fragment);
+                showMoreCastBtn.parentElement!.remove();
+            }
+            return;
+        }
+
+        const viewAllRatingsBtn = target.closest('.view-all-btn');
+        if (viewAllRatingsBtn) {
+            UI.openAllRatingsModal();
+            return;
+        }
+
+        const star = target.closest('.star-container');
+        if (star) {
+            const ratingContainer = star.closest('.star-rating');
+            const seriesId = parseInt((ratingContainer as HTMLElement).dataset.seriesId!, 10);
+            const value = parseInt((star as HTMLElement).dataset.value!, 10);
+            const currentRating = S.userData[seriesId]?.rating || 0;
+            const newRating = (value === currentRating) ? 0 : value; // Toggle off
+            await S.updateUserRating(seriesId, newRating);
+            UI.renderStars(ratingContainer as HTMLElement, newRating);
+            return;
+        }
+
+        const infoIcon = target.closest('.action-icon.fa-info-circle');
+        if (infoIcon) {
+            const episodeItem = infoIcon.closest('.episode-item');
+            if (episodeItem) {
+                const { title, overview, stillPathLarge } = (episodeItem as HTMLElement).dataset;
+                UI.openEpisodeModal(title!, overview!, stillPathLarge!);
+            }
+            return;
+        }
+
+        const refreshBtn = target.closest('#refresh-metadata-btn');
+        if (refreshBtn) {
+            const seriesId = (DOM.seriesViewSection as HTMLElement).dataset.seriesId;
+            if (seriesId) {
+                UI.showNotification('A atualizar metadados...');
+                await displaySeriesDetails(parseInt(seriesId, 10));
+            }
+            return;
+        }
+
+        const markAllBtn = target.closest('#mark-all-seen-btn');
+        if (markAllBtn) {
+            const seriesId = parseInt((DOM.seriesViewSection as HTMLElement).dataset.seriesId!, 10);
+            if (seriesId) {
+                UI.showNotification('A marcar todos os episódios como vistos...');
+
+                const allEpisodes: {id: number}[] = JSON.parse(DOM.seriesViewSection.dataset.allEpisodes || '[]');
+                const allEpisodeIds = allEpisodes.map((ep: {id: number}) => ep.id);
+
+                if (allEpisodeIds.length > 0) {
+                    await S.markEpisodesAsWatched(seriesId, allEpisodeIds);
+
+                    document.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
+                    
+                    const seasons: {season_number: number}[] = JSON.parse(DOM.seriesViewSection.dataset.seasons || '[]');
+                    seasons.forEach((season: {season_number: number}) => UI.updateSeasonProgressUI(seriesId, season.season_number));
+                    
+                    UI.updateOverallProgressBar(seriesId);
+
+                    const movedToArchive = await checkSeriesCompletion(seriesId);
+                    updateGlobalProgress();
+                    UI.updateKeyStats();
+
+                    if (movedToArchive) UI.updateActiveNavLink('archive-section');
+                    UI.showNotification('Todos os episódios foram marcados como vistos.');
+                } else {
+                    UI.showNotification('Não foram encontrados episódios para marcar.');
+                }
+            }
+            return;
+        }
+
+        const markSeasonBtn = target.closest('.mark-season-seen-btn');
+        if (markSeasonBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const seasonDetailsElement = markSeasonBtn.closest('.season-details');
+            if (seasonDetailsElement) {
+                const seriesId = parseInt((seasonDetailsElement as HTMLElement).dataset.seriesId!, 10);
+                const seasonNumber = parseInt((seasonDetailsElement as HTMLElement).dataset.seasonNumber!, 10);
+                
+                const allEpisodes = JSON.parse(DOM.seriesViewSection.dataset.allEpisodes || '[]');
+                const seasonEpisodeIds = allEpisodes.filter((ep: any) => ep.season_number === seasonNumber).map((ep: any) => ep.id);
+
+                if (seasonEpisodeIds.length === 0) return;
+
+                const isFullyWatched = markSeasonBtn.classList.contains('fully-watched');
+                const wasInArchive = S.myArchive.some(s => s.id === seriesId);
+
+                if (isFullyWatched) { // A desmarcar
+                    await S.unmarkEpisodesAsWatched(seriesId, seasonEpisodeIds);
+                    seasonDetailsElement.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsUnseen(el as HTMLElement));
+
+                    if (wasInArchive) {
+                        const series = S.getSeries(seriesId);
+                        if(series) await S.unarchiveSeries(series);
+                    }
+
+                    UI.renderWatchlist();
+                    UI.renderUnseen();
+                    UI.renderArchive();
+
+                    if ((S.watchedState[seriesId]?.length || 0) === 0) {
+                        UI.updateActiveNavLink('watchlist-section');
+                    } else if (wasInArchive) {
+                        UI.updateActiveNavLink('unseen-section');
+                    }
+                } else { // A marcar
+                    await S.markEpisodesAsWatched(seriesId, seasonEpisodeIds);
+                    seasonDetailsElement.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
+
+                    const movedToArchive = await checkSeriesCompletion(seriesId);
+                    if (movedToArchive) {
+                        UI.updateActiveNavLink('archive-section');
+                    } else {
+                        UI.renderWatchlist();
+                        UI.renderUnseen();
+                    }
+                }
+
+                UI.updateSeasonProgressUI(seriesId, seasonNumber);
+                UI.updateOverallProgressBar(seriesId);
+                updateGlobalProgress();
+                UI.updateKeyStats();
+            }
+            return;
+        }
+
+        const trailerBtn = target.closest('.trailer-btn');
+        if (trailerBtn) {
+            const videoKey = (trailerBtn as HTMLElement).dataset.videoKey;
+            if (videoKey) {
+                UI.openTrailerModal(videoKey);
+            }
+            return;
+        }
+    });
+
+    // Modals
+    DOM.modalCloseBtn?.addEventListener('click', UI.closeEpisodeModal);
+    DOM.episodeModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.episodeModal && UI.closeEpisodeModal());
+    DOM.trailerModalCloseBtn?.addEventListener('click', UI.closeTrailerModal);
+    DOM.trailerModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.trailerModal && UI.closeTrailerModal());
+    DOM.notificationOkBtn?.addEventListener('click', UI.closeNotificationModal);
+    DOM.notificationModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.notificationModal && UI.closeNotificationModal());
+    DOM.openLibrarySearchBtn?.addEventListener('click', UI.openLibrarySearchModal);
+    DOM.librarySearchModalCloseBtn?.addEventListener('click', UI.closeLibrarySearchModal);
+    DOM.librarySearchModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.librarySearchModal && UI.closeLibrarySearchModal());
+    DOM.allRatingsModalCloseBtn?.addEventListener('click', UI.closeAllRatingsModal);
+    DOM.allRatingsModal?.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === DOM.allRatingsModal) UI.closeAllRatingsModal();
+        const summaryItem = (e.target as Element).closest('.rating-summary-item');
+        if (summaryItem) {
+            const rating = parseInt((summaryItem as HTMLElement).dataset.rating!, 10);
+            UI.openSeriesByRatingModal(rating);
+        }
+    });
+
+    DOM.librarySearchModalInput?.addEventListener('input', UI.performModalLibrarySearch);
+
+    DOM.seriesByRatingModalResults?.addEventListener('click', (e) => {
+        const topRatedItem = (e.target as Element).closest('.top-rated-item');
+        if (topRatedItem) {
+            const seriesId = (topRatedItem as HTMLElement).dataset.seriesId!;
+            displaySeriesDetails(parseInt(seriesId, 10));
+            UI.closeSeriesByRatingModal();
+            UI.closeAllRatingsModal();
+        }
+    });
+
+    document.addEventListener('display-series-details', (e: Event) => {
+        displaySeriesDetails((e as CustomEvent).detail.seriesId);
+    });
+
+    let notesSaveTimeout: number;
+    DOM.dashboard?.addEventListener('input', (e) => {
+        const notesTextarea = (e.target as Element).closest('.user-notes-textarea');
+        if (notesTextarea) {
+            window.clearTimeout(notesSaveTimeout);
+            notesSaveTimeout = setTimeout(async () => {
+                const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
+                const notes = (notesTextarea as HTMLTextAreaElement).value;
+                await S.updateUserNotes(seriesId, notes);
+                console.log(`Notas para a série ${seriesId} guardadas.`);
+            }, 1500);
+        }
+    });
+    DOM.seriesByRatingModalCloseBtn?.addEventListener('click', UI.closeSeriesByRatingModal);
+    DOM.seriesByRatingModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.seriesByRatingModal && UI.closeSeriesByRatingModal());
+
+    // Settings & Theme
+    DOM.themeToggleBtn?.addEventListener('click', async () => {
+        const currentTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        await db.kvStore.put({ key: C.THEME_STORAGE_KEY, value: newTheme });
+        UI.applyTheme(newTheme);
+    });
+    DOM.settingsBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        DOM.settingsMenu.classList.toggle('visible');
+    });
+    document.addEventListener('click', (e: MouseEvent) => {
+        if (DOM.settingsMenu && DOM.settingsBtn && !DOM.settingsMenu.contains(e.target as Node) && !DOM.settingsBtn.contains(e.target as Node)) {
+            DOM.settingsMenu.classList.remove('visible');
+        }
+    });
+    DOM.exportDataBtn?.addEventListener('click', exportData);
+    DOM.importDataBtn?.addEventListener('click', importData);
+    DOM.rescanSeriesBtn?.addEventListener('click', rescanAllSeries);
+    DOM.refetchDataBtn?.addEventListener('click', refetchAllMetadata);
+
+    initializeApp();
+});
