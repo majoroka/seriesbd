@@ -46,7 +46,7 @@ async function removeSeriesFromLibrary(seriesId: number, element: HTMLElement | 
     const seriesToRemove = S.getSeries(seriesId);
     const seriesName = seriesToRemove ? seriesToRemove.name : `a série selecionada`;
 
-    if (confirm(`Tem a certeza que quer remover "${seriesName}" da sua biblioteca? Esta ação não pode ser desfeita.`)) {
+    if (await UI.showConfirmationModal(`Tem a certeza que quer remover "${seriesName}" da sua biblioteca? Esta ação não pode ser desfeita.`)) {
         const performRemovalLogic = async () => {
             await S.removeSeries(seriesId);
             await updateNextAired();
@@ -168,12 +168,14 @@ async function displaySeriesDetails(seriesId: number) {
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
 
     } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        const typedError = error as Error;
+        if (typedError.name === 'AbortError') {
             console.log('Fetch aborted for series details view.');
             return;
         }
-        console.error('Erro ao exibir detalhes da série:', error);
-        DOM.seriesViewSection.innerHTML = '<p>Não foi possível carregar os detalhes da série.</p>';
+        console.error('Erro ao exibir detalhes da série:', typedError.message);
+        DOM.seriesViewSection.innerHTML = `<p>Não foi possível carregar os detalhes da série. Tente novamente mais tarde.</p>`;
+        UI.showNotification(`Erro ao carregar série: ${typedError.message}`);
     }
 }
 
@@ -207,9 +209,8 @@ async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonN
             const clickedEpisodeIndex = allEpisodes.findIndex((ep: {id: number}) => ep.id === episodeId);
             if (clickedEpisodeIndex > 0) {
                 const previousEpisodes = allEpisodes.slice(0, clickedEpisodeIndex);
-                // Otimização: Usar o Set para uma filtragem mais rápida.
                 const unwatchedPrevious = previousEpisodes.filter((ep: {id: number}) => !watchedSet.has(ep.id));
-                if (unwatchedPrevious.length > 0 && confirm(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
+                    if (unwatchedPrevious.length > 0 && await UI.showConfirmationModal(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
                     episodesToMarkAsSeen.push(...unwatchedPrevious.map(ep => ep.id));
                 }
             }
@@ -382,8 +383,11 @@ async function exportData(): Promise<void> {
     }
 }
 
-function importData(): void {
-    if (!confirm('Tem a certeza que quer importar os dados? Isto irá substituir todos os dados atuais.')) return;
+async function importData(): Promise<void> {
+    DOM.settingsMenu.classList.remove('visible');
+    if (!await UI.showConfirmationModal('Tem a certeza que quer importar os dados? Isto irá substituir todos os dados atuais.')) {
+        return;
+    }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -438,23 +442,25 @@ function importData(): void {
         reader.readAsText(file);
     };
     input.click();
-    DOM.settingsMenu.classList.remove('visible');
 }
 
 async function rescanAllSeries() {
     UI.showNotification('A procurar por novos episódios em todas as séries...');
     DOM.settingsMenu.classList.remove('visible');
     try {
-        await updateNextAired();
+        await updateNextAired(); // Esta função já tem rate-limiting
         UI.showNotification('Verificação concluída. As listas foram atualizadas.');
     } catch (error) {
-        console.error('Erro durante o rescan:', error);
-        UI.showNotification('Ocorreu um erro ao procurar por atualizações.');
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Erro durante o rescan:', message);
+        UI.showNotification(`Ocorreu um erro ao procurar por atualizações: ${message}`);
     }
 }
 
 async function refetchAllMetadata(): Promise<void> {
-    if (!confirm('Isto irá recarregar todos os metadados de todas as séries da sua biblioteca a partir da API. Pode demorar algum tempo. Deseja continuar?')) return;
+    if (!await UI.showConfirmationModal('Isto irá recarregar todos os metadados de todas as séries da sua biblioteca a partir da API. Pode demorar algum tempo. Deseja continuar?')) {
+        return;
+    }
     UI.showNotification('A recarregar todos os metadados... Por favor, aguarde.');
     DOM.settingsMenu.classList.remove('visible');
     try {
@@ -487,8 +493,9 @@ async function refetchAllMetadata(): Promise<void> {
         await initializeApp();
         UI.showNotification('Todos os metadados foram atualizados com sucesso.');
     } catch (error) {
-        console.error('Erro ao recarregar todos os metadados:', error);
-        UI.showNotification('Ocorreu um erro geral durante a atualização dos metadados.');
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Erro ao recarregar todos os metadados:', message);
+        UI.showNotification(`Ocorreu um erro geral durante a atualização dos metadados: ${message}`);
     }
 }
 
@@ -511,7 +518,13 @@ async function initializeApp(): Promise<void> {
         await updateNextAired().catch(err => console.error("Falha ao atualizar a secção 'Next Aired':", err));
         await updateGlobalProgress().catch(err => console.error("Falha ao atualizar o progresso global:", err));
         UI.updateKeyStats();
-        UI.showSection('watchlist-section');
+
+        const sectionFromHash = location.hash.substring(1);
+        if (sectionFromHash && document.getElementById(sectionFromHash)) {
+            UI.showSection(sectionFromHash);
+        } else {
+            UI.showSection('watchlist-section');
+        }
     } catch (error) {
         console.error("Erro crítico durante a inicialização da aplicação:", error);
         if (DOM.dashboard) {
@@ -524,8 +537,8 @@ function setupPwaUpdateNotifications() {
   // Esta função é importada de um módulo virtual gerado pelo vite-plugin-pwa
   // e pode não ser encontrada pelo seu editor, mas funcionará no browser.
   const updateSW = registerSW({
-    onNeedRefresh() {
-      if (confirm('Nova versão disponível. Recarregar a aplicação?')) {
+    async onNeedRefresh() {
+      if (await UI.showConfirmationModal('Nova versão disponível. Recarregar a aplicação?')) {
         updateSW(true);
       }
     },
@@ -859,6 +872,12 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.importDataBtn?.addEventListener('click', importData);
     DOM.rescanSeriesBtn?.addEventListener('click', rescanAllSeries);
     DOM.refetchDataBtn?.addEventListener('click', refetchAllMetadata);
+
+    DOM.confirmBtn?.addEventListener('click', () => UI.closeConfirmationModal(true));
+    DOM.cancelBtn?.addEventListener('click', () => UI.closeConfirmationModal(false));
+    DOM.confirmationModal?.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === DOM.confirmationModal) UI.closeConfirmationModal(false);
+    });
     
     document.getElementById('export-stats-btn')?.addEventListener('click', () => {
         // Exportar o gráfico de géneros para PNG

@@ -16,3 +16,7 @@ pnpm-debug.log*
 
 # IDEs and editors
 .vscode/
+
+# macOS
+.DS_Store
+__MACOSX

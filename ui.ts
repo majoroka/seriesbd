@@ -13,11 +13,20 @@ declare module 'chart.js' {
     }
 }
 
+let confirmationResolve: (value: boolean) => void;
+
 // UI Update Functions
 export function showSection(targetId: string) {
     DOM.mainContentSections.forEach(section => {
         section.style.display = 'none';
     });
+
+    // Update URL hash without causing a page jump or adding to history
+    const newHash = `#${targetId}`;
+    if (history.replaceState) {
+        // This prevents the page from jumping and creating a new history entry
+        history.replaceState(null, '', newHash);
+    }
 
     const targetSection = document.getElementById(targetId);
     if (targetSection) {
@@ -154,6 +163,26 @@ export function showNotification(message: string) {
 export function closeNotificationModal() {
     DOM.notificationModal.classList.remove('visible');
     setTimeout(() => DOM.notificationModal.style.display = 'none', 300);
+}
+
+export function showConfirmationModal(message: string): Promise<boolean> {
+    DOM.confirmationMessage.textContent = message;
+    DOM.confirmationModal.style.display = 'flex';
+    setTimeout(() => DOM.confirmationModal.classList.add('visible'), 10);
+
+    return new Promise<boolean>((resolve) => {
+        confirmationResolve = resolve;
+    });
+}
+
+export function closeConfirmationModal(result: boolean) {
+    DOM.confirmationModal.classList.remove('visible');
+    setTimeout(() => {
+        DOM.confirmationModal.style.display = 'none';
+    }, 300);
+    if (confirmationResolve) {
+        confirmationResolve(result);
+    }
 }
 
 // Rendering Functions

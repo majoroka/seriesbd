@@ -941,6 +941,25 @@ details[open] > .season-summary::before {
     background-color: var(--primary-accent-hover); /* Slightly darker accent for hover */
 }
 
+.notification-modal-content .confirmation-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.search-bar-button.secondary {
+    background-color: var(--bg-card);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+.search-bar-button.secondary:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
 /* ========== STATISTICS STYLES ========== */
 .key-stats-grid {
     display: grid;

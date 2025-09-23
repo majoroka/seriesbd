@@ -48,3 +48,7 @@ export const seriesByRatingModalResults = document.getElementById('series-by-rat
 export const seriesByRatingModalCloseBtn = seriesByRatingModal.querySelector('.modal-close-btn') as HTMLButtonElement;
 export const dashboard = document.querySelector('.dashboard') as HTMLElement;
 export const modalCloseBtn = document.querySelector('#episode-modal .modal-close-btn') as HTMLButtonElement;
+export const confirmationModal = document.getElementById('confirmation-modal') as HTMLDivElement;
+export const confirmationMessage = document.getElementById('confirmation-message') as HTMLParagraphElement;
+export const confirmBtn = document.getElementById('confirm-btn') as HTMLButtonElement;
+export const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
