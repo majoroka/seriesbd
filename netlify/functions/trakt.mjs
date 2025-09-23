@@ -5,11 +5,11 @@ const TRAKT_API_VERSION = '2';
 
 export default async (req) => {
   // Extrai o caminho do URL de uma forma que funciona tanto em produção como em desenvolvimento local.
-  // Remove o prefixo da API e da função para obter o caminho real do endpoint.
-  const path = req.path.replace(/^\/api\/trakt/, '').replace(/^\/trakt/, '');
+  // Extrai a parte relevante do caminho da API, que funciona tanto localmente como em produção.
+  const path = req.path.split('/trakt')[1] || '';
 
-  // É necessária uma base de URL para construir o objeto URL, mas não é usada.
-  const searchParams = new URL(req.url, 'http://localhost').searchParams;
+  // Usa req.rawUrl para analisar corretamente os parâmetros de pesquisa no ambiente Netlify.
+  const searchParams = new URL(req.rawUrl).searchParams;
 
   const traktUrl = `${TRAKT_BASE_URL}${path}?${searchParams.toString()}`;
 
@@ -23,9 +23,11 @@ export default async (req) => {
     });
 
     if (!response.ok) {
+      // Tenta encaminhar a mensagem de erro da API original.
+      const errorBody = await response.text();
       return {
         statusCode: response.status,
-        body: response.statusText,
+        body: errorBody || response.statusText,
       };
     }
 
@@ -38,9 +40,11 @@ export default async (req) => {
       },
     };
   } catch (error) {
+    // Regista o erro real para depuração nos logs da função Netlify.
+    console.error('Erro na função trakt:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to fetch data from Trakt' }),
+      body: JSON.stringify({ error: 'Falha ao buscar dados do Trakt', details: error.message }),
     };
   }
 };
