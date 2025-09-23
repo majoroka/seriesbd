@@ -3,9 +3,9 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 export default async (req) => {
   // Extrai o caminho do URL de uma forma que funciona tanto em produção como em desenvolvimento local.
-  // O `req.path` da Netlify contém o caminho original do pedido (ex: /api/tmdb/tv/123).
-  const path = req.path.replace(/^\/api\/tmdb/, '');
-
+  // Remove o prefixo da API e da função para obter o caminho real do endpoint.
+  const path = req.path.replace(/^\/api\/tmdb/, '').replace(/^\/tmdb/, '');
+  
   // Adiciona a API key e o idioma aos parâmetros de busca
   const searchParams = new URL(req.url).searchParams;
   searchParams.set('api_key', TMDB_API_KEY);
