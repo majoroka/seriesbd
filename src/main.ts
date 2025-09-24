@@ -569,9 +569,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
 
     // Header Search
-    const debouncedSearch = debounce(() => {
+    const performSearch = () => {
         const query = DOM.addSeriesHeaderInput.value.trim();
         if (query.length > 1) {
+            S.resetSearchAbortController();
             DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
             UI.showSection('add-series-section');
             API.searchSeries(query, S.searchAbortController.signal)
@@ -580,7 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.renderSearchResults(data.results);
                 })
                 .catch(error => {
-                    if (error.name !== 'AbortError') {
+                    if (error.name === 'AbortError') {
+                        console.log('Search aborted');
+                    } else {
                         console.error('Erro ao pesquisar séries:', error);
                         DOM.searchResultsContainer.innerHTML = '<p>Ocorreu um erro ao realizar a pesquisa.</p>';
                     }
@@ -588,11 +591,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (query.length === 0) {
             DOM.searchResultsContainer.innerHTML = '<p>Escreva na barra de pesquisa para encontrar novas séries.</p>';
         }
-    }, 300);
+    };
+
+    const debouncedSearch = debounce(performSearch, 300);
 
     DOM.addSeriesHeaderInput.addEventListener('input', () => {
         S.resetSearchAbortController();
         debouncedSearch();
+    });
+
+    DOM.addSeriesHeaderButton.addEventListener('click', performSearch);
+
+    DOM.addSeriesHeaderInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            debouncedSearch.cancel(); // Cancela qualquer pesquisa debounced pendente
+            performSearch();
+        }
     });
 
     // Acessibilidade: Navegação por teclado para elementos interativos

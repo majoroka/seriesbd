@@ -2,13 +2,16 @@ import { fetchWithRetry } from './utils';
 import { db } from './db';
 import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from './types';
 
+const API_BASE_TMDB = '/api/tmdb';
+const API_BASE_TRAKT = '/api/trakt';
+
 /**
  * Pesquisa por séries no TMDb com base numa query.
  * @param {string} query - O termo de pesquisa.
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function searchSeries(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
-    const searchUrl = `/api/tmdb/search/tv?query=${encodeURIComponent(query)}`;
+    const searchUrl = `${API_BASE_TMDB}/search/tv?query=${encodeURIComponent(query)}`;
     const response = await fetchWithRetry(searchUrl, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -20,7 +23,7 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
-    const url = `/api/tmdb/tv/${seriesId}?append_to_response=videos`;
+    const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos`;
     const response = await fetchWithRetry(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -32,7 +35,7 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal | null): Promise<TMDbCredits> {
-    const url = `/api/tmdb/tv/${seriesId}/aggregate_credits`;
+    const url = `${API_BASE_TMDB}/tv/${seriesId}/aggregate_credits`;
     const response = await fetchWithRetry(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -46,7 +49,7 @@ export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal |
  */
 export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null): Promise<TraktData | null> {
     try {
-        const searchUrl = `/api/trakt/search/tmdb/${tmdbId}?type=show`;
+        const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show`;
         const searchResponse = await fetchWithRetry(searchUrl, { signal });
         if (!searchResponse.ok) {
             if (searchResponse.status === 404) return null;
@@ -57,7 +60,7 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
 
         if (!traktId) return null;
 
-        const showDetailsUrl = `/api/trakt/shows/${traktId}?extended=full`;
+        const showDetailsUrl = `${API_BASE_TRAKT}/shows/${traktId}?extended=full`;
         const showDetailsResponse = await fetchWithRetry(showDetailsUrl, { signal });
         const fullShowData = showDetailsResponse.ok ? await showDetailsResponse.json() : null;
 
@@ -72,7 +75,7 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
             }
         }
 
-        const ratingsUrl = `/api/trakt/shows/${traktId}/ratings`;
+        const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
         const ratingsResponse = await fetchWithRetry(ratingsUrl, { signal });
         const ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
 
@@ -96,7 +99,7 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
 export async function fetchTraktSeasonsData(traktId: number | undefined, signal: AbortSignal | null): Promise<TraktSeason[] | null> {
     if (!traktId) return null;
     try { 
-        const url = `/api/trakt/shows/${traktId}/seasons?extended=full,episodes,images`;
+        const url = `${API_BASE_TRAKT}/shows/${traktId}/seasons?extended=full,episodes,images`;
         const response = await fetchWithRetry(url, { signal });
         if (!response.ok) return null;
         return await response.json();
@@ -125,7 +128,7 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
         return cachedSeason.data;
     }
 
-    const url = `/api/tmdb/tv/${seriesId}/season/${seasonNumber}`;
+    const url = `${API_BASE_TMDB}/tv/${seriesId}/season/${seasonNumber}`;
     const seasonData = await fetchWithRetry(url, { signal }).then(res => res.json());
     
     await db.seasonCache.put({

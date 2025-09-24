@@ -10,15 +10,15 @@
 
     <!-- 
         Content-Security-Policy (CSP) básica para aumentar a segurança.
-        - default-src 'self': Por defeito, permite apenas conteúdo da mesma origem.
-        - script-src 'self' 'unsafe-inline': Permite scripts da mesma origem e inline (necessário para o HMR do Vite em desenvolvimento). Para produção, o ideal seria usar nonces.
+        - default-src 'self': Por defeito, permite apenas conteúdo da mesma origem (o próprio domínio).
+        - script-src 'self' 'unsafe-inline': Permite scripts da mesma origem e inline. 'unsafe-inline' é necessário para o HMR do Vite em desenvolvimento. Para produção, o ideal seria usar nonces ou hashes.
         - style-src 'self' 'unsafe-inline' ...: Permite estilos da mesma origem, inline (Vite injeta estilos), e dos CDNs de fontes e ícones.
         - img-src 'self' data: ...: Permite imagens da mesma origem, data URIs, e do CDN de imagens (TMDb).
-        - connect-src 'self' ... ws:: Permite ligações XHR/fetch para as APIs (TMDb, Trakt) e WebSockets para o HMR do Vite.
-        - frame-src: Permite iframes do YouTube para trailers.
+        - connect-src 'self' ws: wss:: Permite ligações XHR/fetch para a própria origem (incluindo o proxy /api) e ligações WebSocket (ws: e wss:) para o HMR do Vite.
+        - frame-src: Permite iframes do YouTube para os trailers.
         - font-src: Permite fontes dos CDNs (Google Fonts, Font Awesome).
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://image.tmdb.org https://via.placeholder.com; connect-src 'self'; frame-src https://www.youtube.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://image.tmdb.org https://via.placeholder.com; connect-src 'self' ws: wss:; frame-src https://www.youtube.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,9 +27,6 @@
 
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
-    <!-- Netlify Identity Widget -->
-    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
     <!-- O CSS será importado via JavaScript (main.ts) -->
 </head>
@@ -40,13 +37,6 @@
             <div class="sidebar-header">
                 <i class="fas fa-tv"></i>
                 <h1>SériesDB</h1>
-            </div>
-            <div class="search-bar sidebar-search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" id="add-series-header-input" placeholder="Adicionar série...">
-                <button id="add-series-header-button" class="search-bar-button">
-                    <i class="fas fa-plus"></i>
-                </button>
             </div>
             <nav class="main-nav">
                 <h2>Biblioteca</h2>
@@ -61,7 +51,6 @@
             </nav>
             <div class="sidebar-footer">
                 <div class="sidebar-actions">
-                    <button class="icon-button" title="Login/Registo" data-netlify-identity-button><i class="fas fa-user"></i></button>
                     <button class="icon-button" title="Pesquisar na Biblioteca" id="open-library-search-btn"><i class="fas fa-search"></i></button>
                     <button class="icon-button" title="Mudar Tema" id="theme-toggle-btn"><i class="fas fa-sun"></i></button>
                     <div class="settings-menu-wrapper">
@@ -78,6 +67,7 @@
                     </div>
                 </div>
                 <div class="sidebar-attribution">
+                    <p class="privacy-note">Os seus dados são guardados localmente no seu dispositivo.</p>
                     <p>Dados fornecidos por<br>
                         <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDb</a> &
                         <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>.
