@@ -41,6 +41,13 @@
                 <i class="fas fa-tv"></i>
                 <h1>SériesDB</h1>
             </div>
+            <div class="search-bar sidebar-search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="add-series-header-input" placeholder="Adicionar série...">
+                <button id="add-series-header-button" class="search-bar-button">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
             <nav class="main-nav">
                 <h2>Biblioteca</h2>
                 <ul>
@@ -83,6 +90,11 @@
         <!-- ========== MAIN CONTENT ========== -->
         <main class="main-content">
             <header class="main-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="add-series-header-input" placeholder="Pesquisar para adicionar série...">
+                    <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
+                </div>
                 <div class="user-stats">
                     <span>Progresso Total</span>
                     <span id="global-progress-percentage" class="stats-percentage">0%</span>
