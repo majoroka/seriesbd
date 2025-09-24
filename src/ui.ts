@@ -339,8 +339,12 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         el('button', { class: 'remove-btn', 'data-series-id': String(series.id), text: 'Remover' })
     ]);
 
-    itemElement.addEventListener("click", (q) => {
-        q.target.closest(".remove-btn") || document.dispatchEvent(new CustomEvent("display-series-details", { detail: { seriesId: series.id } }));
+    itemElement.addEventListener("click", (e) => {
+        const target = e.target;
+        if (target instanceof Element && target.closest(".remove-btn")) {
+            return; // Ação de remover é tratada no main.ts
+        }
+        document.dispatchEvent(new CustomEvent("display-series-details", { detail: { seriesId: series.id } }));
     });
     return itemElement;
 }
