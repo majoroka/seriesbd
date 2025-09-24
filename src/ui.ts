@@ -372,7 +372,14 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
         return nodes;
     });
     const additionalFacts = (() => {
-        const networksHTML = seriesData.networks?.length > 0 ? seriesData.networks.map(n => n.name).join(', ') : 'N/A';
+        const networksElements = seriesData.networks?.length > 0
+            ? seriesData.networks.flatMap((n, idx) => {
+                const elements = [];
+                if (idx > 0) elements.push(document.createTextNode(', ')); // Add comma separator
+                elements.push(el('span', { class: 'v2-network-label', text: n.name }));
+                return elements;
+            })
+            : [document.createTextNode('N/A')]; // Wrap N/A in a text node for consistency
         const studiosText = seriesData.production_companies?.length > 0 ? seriesData.production_companies.map(c => c.name).join(', ') : 'N/A';
         const countries = seriesData.production_countries?.map(c => c.name).join(', ') || 'N/A';
         const languages = seriesData.spoken_languages?.map(l => l.english_name).join(', ') || 'N/A';
@@ -381,7 +388,7 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
         else if (seriesData.status === 'Canceled') statusText = 'Cancelada';
         else if (seriesData.status === 'Returning Series') statusText = 'Em Exibição';
         const totalRuntime = formatHoursMinutes(totalRuntimeMinutes);
-        return [{ label: 'Status', value: statusText }, { label: 'Transmissão', value: networksHTML }, { label: 'Estúdios', value: studiosText }, { label: 'País', value: countries }, { label: 'Idioma Original', value: languages }, { label: 'Duração Total', value: totalRuntime }];
+        return [{ label: 'Status', value: statusText }, { label: 'Transmissão', value: networksElements }, { label: 'Estúdios', value: studiosText }, { label: 'País', value: countries }, { label: 'Idioma Original', value: languages }, { label: 'Duração Total', value: totalRuntime }];
     })();
     const totalEpisodes = seriesData.total_episodes || allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || 0), 0);
     const watchedCount = S.watchedState[seriesData.id]?.length || 0;
@@ -454,10 +461,15 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
                     ]),
                     el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview || 'Sinopse não disponível.' })]),
                     el('div', { class: 'v2-additional-facts' }, [el('div', { class: 'v2-metadata-grid' },
-                        additionalFacts.map(fact => el('div', { class: 'v2-metadata-item' }, [
-                            el('span', { text: fact.label }),
-                            el('p', { text: fact.value })
-                        ]))
+                        additionalFacts.map(fact => {
+                            const valueElement = fact.label === 'Transmissão'
+                                ? el('div', { class: 'v2-network-container' }, Array.isArray(fact.value) ? fact.value : [document.createTextNode(String(fact.value))])
+                                : el('p', { text: String(fact.value) });
+                            return el('div', { class: 'v2-metadata-item' }, [
+                                el('span', { text: fact.label }),
+                                valueElement
+                            ]);
+                        })
                     )])
                 ])
             ])

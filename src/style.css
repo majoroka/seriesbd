@@ -1957,6 +1957,26 @@ body.light-theme .network-logo {
     flex-shrink: 0;
 }
 
+/* Style for the platform name box */
+.v2-network-label {
+    border: 1px solid var(--text-secondary);
+    padding: 0.1em 0.5em; /* Padding vertical e horizontal */
+    border-radius: 4px; /* Rounded corners */
+    /* Força o estilo de fonte para ser igual ao dos outros metadados */
+    font-size: 1rem !important;
+    font-weight: normal !important;
+    line-height: 1.2; /* Altura da linha para centrar o texto verticalmente */
+    white-space: nowrap; /* Prevent wrapping */
+    display: inline-block; /* Allow padding and border to apply correctly */
+    vertical-align: middle; /* Alinha com o texto adjacente (vírgulas) */
+}
+
+.v2-network-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem; /* Espaçamento entre as caixas e as vírgulas */
+}
 /* ========== VIEW TOGGLE & GRID VIEW STYLES ========== */
 .view-toggle {
     display: flex;
