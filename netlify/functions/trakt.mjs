@@ -2,28 +2,27 @@ const TRAKT_API_KEY = process.env.TRAKT_API_KEY;
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
 
-// Handler for OPTIONS requests (CORS preflight)
-const handleOptions = (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204, // No Content
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, trakt-api-version, trakt-api-key',
-        'Access-Control-Max-Age': '86400', // 24 hours
-      },
-    });
-  }
+/**
+ * Adiciona os cabeçalhos CORS a uma resposta.
+ * @param {Response} response A resposta à qual adicionar os cabeçalhos.
+ */
+const addCorsHeaders = (response) => {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, trakt-api-version, trakt-api-key');
+  response.headers.set('Access-Control-Max-Age', '86400'); // 24 horas
+  return response;
 };
 
 export default async (req) => {
-  const optionsResponse = handleOptions(req);
-  if (optionsResponse) return optionsResponse;
+  // Handler para OPTIONS requests (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    return addCorsHeaders(new Response(null, { status: 204 })); // No Content
+  }
 
   try {
     if (!TRAKT_API_KEY) {
-      throw new Error('A chave da API do Trakt não está configurada no ambiente da Netlify.');
+      throw new Error('A chave da API do Trakt não está configurada.');
     }
 
     const url = new URL(req.url);
@@ -48,29 +47,35 @@ export default async (req) => {
         'trakt-api-key': TRAKT_API_KEY,
       },
     });
-    
-    const response = new Response(apiResponse.body, apiResponse);
 
-    // The browser will fail if we pass through the Content-Encoding header
-    // from the origin API, since the body has already been decompressed by fetch().
-    response.headers.delete('Content-Encoding');
-    response.headers.delete('Content-Length');
+    // Se a resposta da API do Trakt não for bem-sucedida, propaga o erro.
+    if (!apiResponse.ok) {
+      const errorBody = await apiResponse.text();
+      console.error(`[trakt function] Erro da API do Trakt: ${apiResponse.status}`, errorBody);
+      const errorResponse = new Response(errorBody, {
+        status: apiResponse.status,
+        statusText: apiResponse.statusText,
+        headers: apiResponse.headers,
+      });
+      return addCorsHeaders(errorResponse);
+    }
 
-    response.headers.set('Access-Control-Allow-Origin', '*');
+    // Cria uma nova resposta para evitar problemas com headers imutáveis.
+    const response = new Response(apiResponse.body, {
+      status: apiResponse.status,
+      statusText: apiResponse.statusText,
+      headers: apiResponse.headers,
+    });
 
-    return response;
+    // O browser falhará se passarmos o header Content-Encoding da API de origem,
+    // uma vez que o corpo já foi descomprimido pelo fetch().
+    response.headers.delete('content-encoding');
+    response.headers.delete('content-length');
 
+    return addCorsHeaders(response);
   } catch (error) {
     console.error('[trakt function] Erro inesperado:', error);
-    return new Response(
-      JSON.stringify({ error: 'Falha ao processar o pedido na função trakt', details: error.message }),
-      { 
-        status: 500,
-        headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-      }
-    );
+    const errorResponse = new Response(JSON.stringify({ error: 'Falha ao processar o pedido na função trakt', details: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return addCorsHeaders(errorResponse);
   }
 };

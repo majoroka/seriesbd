@@ -611,6 +611,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dashboard clicks
     DOM.dashboard.addEventListener('click', async (e) => {
         const target = e.target as Element;
+
+        const removeBtn = target.closest('.remove-btn');
+        if (removeBtn) {
+            e.stopPropagation(); // Impede que o clique "borbulhe" para o watchlist-item
+            removeSeriesFromLibrary(parseInt((removeBtn as HTMLElement).dataset.seriesId!, 10), removeBtn.closest('.watchlist-item'));
+            return;
+        }
+
         const addBtn = target.closest('.add-btn');
         if (addBtn && !(addBtn as HTMLButtonElement).disabled) {
             const seriesId = parseInt((addBtn as HTMLElement).dataset.seriesId!, 10);
@@ -628,12 +636,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const seriesItem = target.closest('.watchlist-item, .top-rated-item');
         if (seriesItem) {
             displaySeriesDetails(parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10));
-            return;
-        }
-
-        const removeBtn = target.closest('.remove-btn');
-        if (removeBtn) {
-            removeSeriesFromLibrary(parseInt((removeBtn as HTMLElement).dataset.seriesId!, 10), removeBtn.closest('.watchlist-item'));
             return;
         }
 
