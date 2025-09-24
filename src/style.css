@@ -1960,11 +1960,10 @@ body.light-theme .network-logo {
 /* Style for the platform name box */
 .v2-network-label {
     border: 1px solid var(--text-secondary);
-    padding: 0.1em 0.5em; /* Padding vertical e horizontal */
-    border-radius: 4px; /* Rounded corners */
-    /* Força o estilo de fonte para ser igual ao dos outros metadados */
-    font-size: 1rem !important;
-    font-weight: normal !important;
+    padding: 0.1em 0.5em;
+    border-radius: 4px;
+    font-size: 1rem !important; /* Força o tamanho da fonte */
+    font-weight: normal !important; /* Força o peso da fonte para não ser negrito */
     line-height: 1.2; /* Altura da linha para centrar o texto verticalmente */
     white-space: nowrap; /* Prevent wrapping */
     display: inline-block; /* Allow padding and border to apply correctly */
