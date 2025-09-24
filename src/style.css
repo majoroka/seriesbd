@@ -195,6 +195,14 @@ a {
     gap: 0.75rem;
 }
 
+/* Esconde a barra de pesquisa da barra lateral em ecrãs grandes */
+.sidebar-search-bar {
+    display: none;
+    width: 100%;
+    margin-bottom: 1.5rem;
+}
+
+
 .search-bar input {
     background: none;
     border: none;
@@ -2136,6 +2144,12 @@ body.light-theme .network-logo {
     .sidebar {
         width: 100%;
         height: auto;
+        /* Adiciona um espaçamento inferior para separar do conteúdo principal */
+        padding-bottom: 1.5rem;
+        /* Transforma a sidebar num cabeçalho fixo no topo */
+        position: sticky;
+        top: 0;
+        z-index: 100; /* Garante que fica por cima do conteúdo ao fazer scroll */
         position: static;
         padding: 1rem;
         border-right: none;
@@ -2230,6 +2244,17 @@ body.light-theme .network-logo {
         align-self: flex-end;
     }
 
+    /* Ajustes para a vista de lista em mobile */
+    .watchlist-item {
+        gap: 0.75rem; /* Reduz o espaço entre a capa e a informação */
+    }
+    .watchlist-poster-wrapper {
+        width: 60px; /* Torna a capa mais pequena */
+        height: 90px;
+    }
+    .watchlist-info p { display: none; } /* Esconde a sinopse para poupar espaço */
+
+
     /* --- V2 Series Detail View --- */
     .v2-header-custom-bg {
         padding: 1.5rem;
@@ -2279,5 +2304,11 @@ body.light-theme .network-logo {
     /* --- Statistics --- */
     .key-stats-grid {
         grid-template-columns: 1fr;
+    }
+
+    /* Ajustes para a vista de grelha em mobile */
+    .series-list-container.grid-view {
+        grid-template-columns: repeat(2, 1fr); /* Força 2 colunas */
+        gap: 1rem; /* Reduz o espaçamento */
     }
 }
