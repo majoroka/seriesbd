@@ -230,6 +230,50 @@ export function renderSearchResults(resultsList: Series[]) {
     });
 }
 
+export function renderTrending(seriesList: Series[], container: HTMLElement) {
+    if (!container) return; // Early exit if container is not valid
+
+    container.innerHTML = ''; // Limpa o conteúdo anterior
+
+    if (seriesList.length === 0) {
+        container.innerHTML = '<p class="empty-list-message">Não foi possível carregar as tendências.</p>';
+        return;
+    }
+
+    const scroller = el('div', { class: 'column_content flex scroller loaded' });
+
+    seriesList.forEach(series => {
+        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w220_and_h330_face${series.poster_path}` : 'https://via.placeholder.com/150x225.png?text=N/A';
+        const releaseDate = series.first_air_date ? new Date(series.first_air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Data desconhecida';
+        const voteAverage = Math.round((series.vote_average || 0) * 10);
+
+        const card = el('div', { class: 'trending-card', 'data-series-id': String(series.id) }, [
+            el('div', { class: 'image' }, [
+                el('div', { class: 'wrapper' }, [
+                    el('img', { loading: 'lazy', class: 'poster', src: posterPath, alt: series.name })
+                ]),
+                el('div', { class: 'consensus' }, [
+                    el('div', {
+                        class: 'user_score_chart',
+                        'data-percent': String(voteAverage),
+                    })
+                ])
+            ]),
+            el('div', { class: 'content' }, [
+                el('h2', {}, [el('a', { text: series.name })]),
+                el('p', { text: releaseDate })
+            ])
+        ]);
+
+        card.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: series.id } }));
+        });
+
+        scroller.appendChild(card);
+    });
+    container.appendChild(scroller);
+}
+
 export function renderWatchlist() {
     const viewMode = DOM.watchlistContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.watchlistContainer.innerHTML = '';
@@ -287,7 +331,20 @@ export function renderAllSeries() {
     });
 }
 
-function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false): HTMLElement {
+export function renderPopularSeries(seriesList: Series[]) {
+    const viewMode = DOM.popularContainer.classList.contains('grid-view') ? 'grid' : 'list';
+    if (seriesList.length === 0 && DOM.popularContainer.innerHTML === '') {
+        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Nenhuma série popular encontrada.</p>';
+        return;
+    }
+
+    seriesList.forEach(series => {
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true); // O último `true` indica para mostrar o círculo de rating
+        DOM.popularContainer.appendChild(seriesItemElement);
+    });
+}
+
+function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false): HTMLElement {
     const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const watchedCount = S.watchedState[series.id]?.length || 0;
@@ -298,9 +355,19 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     if (showUnwatchedBadge && unwatchedCount > 0 && viewMode === 'grid') {
         unwatchedBadge = el('div', { class: 'unwatched-badge', text: unwatchedCount });
     }
+
+    let ratingCircle = null;
+    if (showRatingCircle && viewMode === 'grid') {
+        const voteAverage = Math.round((series.vote_average || 0) * 10);
+        ratingCircle = el('div', { class: 'consensus grid-view-rating' }, [
+            el('div', { class: 'user_score_chart', 'data-percent': String(voteAverage) })
+        ]);
+    }
+
     const posterElement = el('div', { class: 'watchlist-poster-wrapper' }, [
         el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'watchlist-poster-img', loading: 'lazy' }),
-        unwatchedBadge
+        unwatchedBadge,
+        ratingCircle
     ]);
     let progressElement = null;
     if (watchedCount > 0 || S.myArchive.some(s => s.id === series.id)) {
@@ -336,7 +403,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const itemElement = el('div', { class: 'watchlist-item', 'data-series-id': String(series.id) }, [
         posterElement,
         watchlistInfo,
-        el('button', { class: 'remove-btn', 'data-series-id': String(series.id), text: 'Remover' })
+        !showRatingCircle ? el('button', { class: 'remove-btn', 'data-series-id': String(series.id), text: 'Remover' }) : null
     ]);
 
     itemElement.addEventListener("click", (e) => {
@@ -440,24 +507,34 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
                 el('div', { class: 'v2-poster-wrapper', html: progressHTML }, [el('img', { src: posterPath, alt: `Poster de ${seriesData.name}`, class: 'v2-poster' })]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
-                        el('div', { class: 'v2-title-text' }, [el('h1', {}, [`${seriesData.name} `, el('span', { class: 'release-year', text: releaseYear })])]),
+                        el('div', { class: 'v2-title-text' }, [
+                            el('h1', {}, [`${seriesData.name} `, el('span', { class: 'release-year', text: releaseYear })])
+                        ]),
                         el('div', { class: 'v2-header-actions' }, [
-                            el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
-                            el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados' }, [el('i', { class: 'fas fa-sync-alt' })])
+                            el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
+                                el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
+                                el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados' }, [el('i', { class: 'fas fa-sync-alt' })]),
+                                el('button', { id: 'v2-remove-series-btn', class: 'v2-action-btn icon-only', title: 'Remover série da biblioteca' }, [el('i', { class: 'fas fa-trash-alt' })]),
+                            ]),
+                            el('div', { id: 'discover-actions', style: 'display: none;' }, [ // Ações para séries novas
+                                el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn' }, [el('i', { class: 'fas fa-star' }), ' Quero Ver']),
+                            ]),
                         ])
                     ]),
                     el('div', { class: 'v2-facts' }, factsElements),
-                    el('div', { class: 'v2-actions' }, [
-                        el('div', { class: 'user-rating-container v2-user-rating' }, [
-                            el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
-                            el('div', { class: 'star-rating', 'data-series-id': String(seriesData.id) }, Array.from({ length: 10 }, (_, i) => {
-                                const value = i + 1;
-                                const starClass = value <= currentUserRating ? 'fas' : 'far';
-                                return el('div', { class: 'star-container', 'data-value': value }, [el('i', { class: `${starClass} fa-star star-icon` }), el('span', { class: 'star-number', text: value })]);
-                            }))
+                    el('div', { class: 'v2-actions' }, [ // Ações principais como ratings e trailer
+                        el('div', { class: 'v2-ratings-group' }, [
+                            el('div', { class: 'user-rating-container v2-user-rating' }, [
+                                el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
+                                el('div', { class: 'star-rating', 'data-series-id': String(seriesData.id) }, Array.from({ length: 10 }, (_, i) => {
+                                    const value = i + 1;
+                                    const starClass = value <= currentUserRating ? 'fas' : 'far';
+                                    return el('div', { class: 'star-container', 'data-value': value }, [el('i', { class: `${starClass} fa-star star-icon` }), el('span', { class: 'star-number', text: value })]);
+                                })),
+                            ]),
+                            publicRatingsElement,
                         ]),
-                        publicRatingsElement,
-                        el('div', { class: 'v2-action-buttons-group' }, [finalTrailerKey ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': finalTrailerKey }, [el('i', { class: 'fas fa-play' }), ' Ver Trailer']) : null])
+                        finalTrailerKey ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': finalTrailerKey }, [el('i', { class: 'fas fa-play' }), ' Ver Trailer']) : null
                     ]),
                     el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview || 'Sinopse não disponível.' })]),
                     el('div', { class: 'v2-additional-facts' }, [el('div', { class: 'v2-metadata-grid' },

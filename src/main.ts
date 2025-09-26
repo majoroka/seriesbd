@@ -7,28 +7,33 @@ import * as UI from './ui';
 import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
-import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem } from './types';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails } from './types';
 
-async function addSeriesToWatchlist(series: Series) {
+async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
     const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
     if (!isInLibrary) {
-        const seriesDetails = await API.fetchSeriesDetails(series.id, null);
-        const totalEpisodes = seriesDetails.seasons
-            ? seriesDetails.seasons
+        // Se já for TMDbSeriesDetails, usa-o, senão, busca os detalhes.
+        const details: TMDbSeriesDetails = 'seasons' in series ? series : await API.fetchSeriesDetails(series.id, null);
+
+        const totalEpisodes = details.seasons
+            ? details.seasons
                 .filter((season) => season.season_number !== 0)
                 .reduce((acc, season) => acc + season.episode_count, 0)
             : 0;
         
-        series.total_episodes = totalEpisodes;
-        series.episode_run_time = seriesDetails.episode_run_time?.[0] || 30;
-        series.genres = seriesDetails.genres;
-        series._details = {
-            status: seriesDetails.status,
-            next_episode_to_air: seriesDetails.next_episode_to_air,
+        const seriesToAdd: Series = {
+            ...series, // Copia as propriedades base (id, name, overview, etc.)
+            total_episodes: totalEpisodes,
+            episode_run_time: details.episode_run_time?.[0] || 30,
+            genres: details.genres,
+            _details: {
+                status: details.status,
+                next_episode_to_air: details.next_episode_to_air,
+            },
+            _lastUpdated: new Date().toISOString(),
         };
-        series._lastUpdated = new Date().toISOString();
 
-        await S.addSeries(series);
+        await S.addSeries(seriesToAdd);
 
         UI.renderWatchlist();
         UI.renderUnseen();
@@ -36,7 +41,7 @@ async function addSeriesToWatchlist(series: Series) {
         UI.renderAllSeries();
         updateGlobalProgress();
         UI.updateKeyStats();
-        console.log('Série adicionada a "Quero Ver":', series);
+        console.log('Série adicionada a "Quero Ver":', seriesToAdd);
     } else {
         console.warn('A série já se encontra na biblioteca.');
     }
@@ -133,13 +138,12 @@ async function displaySeriesDetails(seriesId: number) {
     try {
         DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
         UI.showSection('series-view-section');
-
+        
         const [seriesData, creditsData, traktSeriesData] = await Promise.all([
             API.fetchSeriesDetails(seriesId, signal),
             API.fetchSeriesCredits(seriesId, signal),
             API.fetchTraktData(seriesId, signal)
         ]);
-
         const traktId = traktSeriesData?.traktId as number | undefined;
         const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
         const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
@@ -166,6 +170,51 @@ async function displaySeriesDetails(seriesId: number) {
         DOM.seriesViewSection.dataset.seasons = JSON.stringify(seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })));
 
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
+
+        // AGORA que a vista está renderizada, podemos manipular o botão "Quero Ver".
+        const isAlreadyInLibrary = await S.getSeries(seriesId) !== undefined;
+        const libraryActions = document.getElementById('library-actions') as HTMLDivElement;
+        const discoverActions = document.getElementById('discover-actions') as HTMLDivElement;
+
+        if (libraryActions && discoverActions) {
+            if (isAlreadyInLibrary) {
+                // A série está na biblioteca: mostra as ações de gestão e esconde o botão de adicionar.
+                libraryActions.style.display = 'flex';
+                discoverActions.style.display = 'none';
+
+                // Adiciona o listener para o botão de remover, garantindo que não há duplicados
+                const removeBtn = libraryActions.querySelector('#v2-remove-series-btn');
+                if (removeBtn) {
+                    const newRemoveBtn = removeBtn.cloneNode(true);
+                    removeBtn.parentNode?.replaceChild(newRemoveBtn, removeBtn);
+                    newRemoveBtn.addEventListener('click', () => removeSeriesFromLibrary(seriesId, null));
+                }
+            } else {
+                // A série NÃO está na biblioteca: mostra o botão de adicionar e esconde as ações de gestão.
+                libraryActions.style.display = 'none';
+                discoverActions.style.display = 'flex';
+
+                const addToWatchlistBtn = discoverActions.querySelector('#add-to-watchlist-btn') as HTMLButtonElement;
+                
+                // Usa cloneNode para remover event listeners antigos e evitar duplicação
+                const newBtn = addToWatchlistBtn.cloneNode(true) as HTMLButtonElement;
+                addToWatchlistBtn.parentNode?.replaceChild(newBtn, addToWatchlistBtn);
+
+                newBtn.addEventListener('click', async () => {
+                    try {
+                        // Reutiliza a função addSeriesToWatchlist com os dados já carregados.
+                        await addSeriesToWatchlist(seriesData);
+                        newBtn.style.display = 'none'; // Esconde o botão após adicionar
+                        UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
+                    } catch (error) {
+                        console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
+                        UI.showNotification("Ocorreu um erro ao adicionar a série.");
+                    }
+                });
+            }
+        } else {
+            console.warn("Os contentores de ações não foram encontrados no DOM após a renderização.");
+        }
 
     } catch (error) {
         const typedError = error as Error;
@@ -522,6 +571,11 @@ async function initializeApp(): Promise<void> {
         const sectionFromHash = location.hash.substring(1);
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
+            if (sectionFromHash === 'trending-section') {
+                S.resetSearchAbortController();
+                loadTrending('day', 'trending-scroller-day');
+                loadTrending('week', 'trending-scroller-week');
+            }
         } else {
             UI.showSection('watchlist-section');
         }
@@ -548,6 +602,83 @@ function setupPwaUpdateNotifications() {
   });
 }
 
+async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = '<p>A carregar tendências...</p>';
+    try {
+        const data = await API.fetchTrending(timeWindow, S.searchAbortController.signal);
+        UI.renderTrending(data.results, container);
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            console.log(`Trending fetch aborted for ${timeWindow}`);
+        } else {
+            console.error(`Erro ao carregar tendências (${timeWindow}):`, error);
+            container.innerHTML = '<p>Ocorreu um erro ao carregar as tendências.</p>';
+        }
+    }
+}
+
+let popularSeriesPage = 1;
+async function loadPopularSeries(loadMore = false) {
+    if (!loadMore) {
+        popularSeriesPage = 1;
+        DOM.popularContainer.innerHTML = '<p>A carregar séries populares...</p>';
+        DOM.popularLoadMoreContainer.style.display = 'none';
+    }
+
+    try {        
+        const traktData = await API.fetchTraktPopularSeries(popularSeriesPage);
+        
+        if (!loadMore) {
+            DOM.popularContainer.innerHTML = '';
+        }
+
+        // 1. Filtra os resultados da Trakt para garantir que têm os dados necessários.
+        const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
+
+        // 2. Mapeia os resultados válidos para promessas que buscam detalhes no TMDb.
+        const seriesPromises = validTraktShows.map(async (item: any) => {
+            try {
+                const tmdbId = item.ids.tmdb;
+                const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
+                return {
+                    id: tmdbId,
+                    name: item.title,
+                    overview: item.overview,
+                    first_air_date: item.first_aired,
+                    vote_average: item.rating, // Usar o rating da Trakt
+                    poster_path: tmdbDetails.poster_path, // Obter o poster do TMDb
+                } as Series;
+            } catch (error) {
+                console.warn(`Não foi possível obter detalhes para a série com TMDb ID: ${item.ids.tmdb}`, error);
+                return null; // Retorna null se houver um erro para uma série específica
+            }
+        });
+
+        // 3. Aguarda todas as promessas e filtra os resultados nulos.
+        const seriesList = (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+
+        // Ordena as séries pela avaliação (decrescente)
+        const sortedSeries = seriesList.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+
+        // Na primeira carga, mostra apenas 18. Nas seguintes, mostra a página toda.
+        const seriesToRender = loadMore ? sortedSeries : sortedSeries.slice(0, 18);
+        UI.renderPopularSeries(seriesToRender);
+
+        // A API da Trakt não informa o total de páginas, então assumimos que há sempre mais se recebermos resultados
+        if (traktData.length > 0) { 
+            DOM.popularLoadMoreContainer.style.display = 'block';
+            popularSeriesPage++;
+        } else {
+            DOM.popularLoadMoreContainer.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar séries populares:', error);
+        DOM.popularContainer.innerHTML = '<p>Ocorreu um erro ao carregar as séries populares.</p>';
+    }
+}
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Navigation
@@ -556,7 +687,16 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const targetId = (link as HTMLElement).dataset.target;
             if (targetId) {
-                if (targetId === 'all-series-section') UI.renderAllSeries();
+                if (targetId === 'all-series-section') {
+                    UI.renderAllSeries();
+                } else if (targetId === 'trending-section') {
+                    S.resetSearchAbortController();
+                    loadTrending('day', 'trending-scroller-day');
+                    loadTrending('week', 'trending-scroller-week');
+                } else if (targetId === 'popular-section') {
+                    S.resetSearchAbortController();
+                    loadPopularSeries();
+                }
                 UI.showSection(targetId);
             }
         });
@@ -567,6 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.unseenViewToggle, DOM.unseenContainer, C.UNSEEN_VIEW_MODE_KEY, UI.renderUnseen);
     setupViewToggle(DOM.archiveViewToggle, DOM.archiveContainer, C.ARCHIVE_VIEW_MODE_KEY, UI.renderArchive);
     setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
+    setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => loadPopularSeries());
 
     // Header Search
     const performSearch = () => {
@@ -647,9 +788,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const seriesItem = target.closest('.watchlist-item, .top-rated-item');
+        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card');
         if (seriesItem) {
-            displaySeriesDetails(parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10));
+            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10) } }));
             return;
         }
 
@@ -816,6 +957,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    DOM.popularLoadMoreBtn?.addEventListener('click', () => {
+        loadPopularSeries(true);
+    });
+
     // Modals
     DOM.modalCloseBtn?.addEventListener('click', UI.closeEpisodeModal);
     DOM.episodeModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.episodeModal && UI.closeEpisodeModal());
@@ -841,8 +986,8 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.seriesByRatingModalResults?.addEventListener('click', (e) => {
         const topRatedItem = (e.target as Element).closest('.top-rated-item');
         if (topRatedItem) {
-            const seriesId = (topRatedItem as HTMLElement).dataset.seriesId!;
-            displaySeriesDetails(parseInt(seriesId, 10));
+            const seriesId = parseInt((topRatedItem as HTMLElement).dataset.seriesId!, 10);
+            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId } }));
             UI.closeSeriesByRatingModal();
             UI.closeAllRatingsModal();
         }
@@ -920,6 +1065,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         UI.showNotification('Exportação de estatísticas concluída!');
     });
+
+    // Listener para o evento personalizado que mostra os detalhes da série
+    document.addEventListener('display-series-details', ((e: CustomEvent) => {
+        displaySeriesDetails(e.detail.seriesId);
+    }) as EventListener);
 
     initializeApp();
 });

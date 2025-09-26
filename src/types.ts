@@ -40,6 +40,7 @@ export interface Series {
     backdrop_path: string | null;
     first_air_date: string;
     genres: Genre[];
+    vote_average?: number;
     total_episodes?: number;
     episode_run_time?: number;
     _details?: {

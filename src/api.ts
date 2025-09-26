@@ -18,6 +18,18 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
 }
 
 /**
+ * Busca as séries em tendência no TMDb.
+ * @param {'day' | 'week'} timeWindow - O período de tempo.
+ * @param {AbortSignal} signal - O sinal para abortar o pedido.
+ */
+export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSignal): Promise<{ results: Series[] }> {
+    const url = `${API_BASE_TMDB}/trending/tv/${timeWindow}`;
+    const response = await fetchWithRetry(url, { signal });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+}
+
+/**
  * Busca os detalhes completos de uma série na API.
  * @param {string} seriesId - O ID da série.
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
@@ -139,4 +151,32 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
     });
 
     return seasonData;
+}
+
+/**
+ * Busca as séries mais populares do TMDb.
+ * @param page - O número da página a ser buscada.
+ * @returns Uma promessa que resolve com os dados das séries populares.
+ */
+export async function fetchPopularSeries(page: number): Promise<{ results: Series[], page: number, total_pages: number }> {
+    const url = `${API_BASE_TMDB}/tv/popular?language=pt-PT&page=${page}`;
+    const response = await fetchWithRetry(url);
+    if (!response.ok) {
+        throw new Error('Não foi possível buscar as séries populares.');
+    }
+    return response.json();
+}
+
+/**
+ * Busca as séries mais populares da Trakt.
+ * @param page - O número da página a ser buscada.
+ * @returns Uma promessa que resolve com os dados das séries populares da Trakt.
+ */
+export async function fetchTraktPopularSeries(page: number): Promise<any[]> {
+    const url = `${API_BASE_TRAKT}/shows/popular?page=${page}&limit=30&extended=full`;
+    const response = await fetchWithRetry(url);
+    if (!response.ok) {
+        throw new Error('Não foi possível buscar as séries populares da Trakt.');
+    }
+    return response.json();
 }

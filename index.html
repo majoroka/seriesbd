@@ -6,7 +6,7 @@
     
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <title>Séries Dashboard</title>
+    <title>seriesBD</title>
 
     <!-- 
         Content-Security-Policy (CSP) básica para aumentar a segurança.
@@ -36,7 +36,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <i class="fas fa-tv"></i>
-                <h1>SériesDB</h1>
+                <h1>seriesBD</h1>
             </div>
             <nav class="main-nav">
                 <h2>Biblioteca</h2>
@@ -44,9 +44,11 @@
                     <li><a href="#" class="nav-link active" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
                     <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> A Ver</a></li>
                     <li><a href="#" class="nav-link" data-target="archive-section"><i class="fas fa-archive"></i> Arquivo</a></li>
+                    <li><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Todas</a></li>
                     <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> Próximo Episódio</a></li>
-                    <li><a href="#" class="nav-link" data-target="stats-section"><i class="fas fa-chart-pie"></i> Estatísticas</a></li>
-                    <li class="separator"><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Todas</a></li>
+                    <li class="separator"><a href="#" class="nav-link" data-target="trending-section"><i class="fas fa-fire"></i> Tendências</a></li>
+                    <li><a href="#" class="nav-link" data-target="popular-section"><i class="fas fa-poll"></i> Populares</a></li>
+                    <li class="separator"><a href="#" class="nav-link" data-target="stats-section"><i class="fas fa-chart-pie"></i> Estatísticas</a></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
@@ -73,7 +75,7 @@
                         <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>.
                     </p>
                 </div>
-                <p class="copyright">&copy; 2025 SériesDB</p>
+                <p class="copyright">redmaka &copy; 2025 SeriesBD</p>
             </div>
         </aside>
 
@@ -202,6 +204,43 @@
                     <h2><i class="fas fa-search"></i> Resultados da Pesquisa</h2>
                     <div id="search-results">
                         <!-- Resultados da pesquisa serão exibidos aqui -->
+                    </div>
+                </section>
+
+                <!-- Trending Section (Placeholder) -->
+                <section class="card" id="trending-section" style="display: none;">
+                    <details open>
+                        <summary class="section-header">
+                            <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Hoje)</span></h2>
+                        </summary>
+                        <div id="trending-scroller-day" class="media discover scroller_wrap should_fade is_fading">
+                            <!-- Conteúdo das tendências de hoje será carregado aqui -->
+                        </div>
+                    </details>
+                    <details open style="margin-top: 1.5rem;">
+                        <summary class="section-header">
+                            <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Semana)</span></h2>
+                        </summary>
+                        <div id="trending-scroller-week" class="media discover scroller_wrap should_fade is_fading">
+                            <!-- Conteúdo das tendências da semana será carregado aqui -->
+                        </div>
+                    </details>
+                </section>
+
+                <!-- Popular Section (Placeholder) -->
+                <section class="card" id="popular-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-poll"></i> Populares</h2>
+                        <div class="view-toggle" id="popular-view-toggle">
+                            <button class="icon-button active" data-view="grid" title="Vista de Mosaico"><i class="fas fa-th"></i></button>
+                            <button class="icon-button" data-view="list" title="Vista de Lista"><i class="fas fa-bars"></i></button>
+                        </div>
+                    </div>
+                    <div id="popular-container" class="series-list-container grid-view">
+                        <!-- As séries populares serão carregadas aqui -->
+                    </div>
+                    <div id="popular-load-more-container" class="load-more-container" style="display: none;">
+                        <button id="popular-load-more-btn" class="search-bar-button">Ver Mais</button>
                     </div>
                 </section>
             </div>

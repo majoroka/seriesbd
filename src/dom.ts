@@ -52,3 +52,11 @@ export const confirmationModal = document.getElementById('confirmation-modal') a
 export const confirmationMessage = document.getElementById('confirmation-message') as HTMLParagraphElement;
 export const confirmBtn = document.getElementById('confirm-btn') as HTMLButtonElement;
 export const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
+export const trendingSection = document.getElementById('trending-section') as HTMLElement;
+export const trendingSelector = document.querySelector('.trending-selector') as HTMLDivElement;
+
+// Popular Section
+export const popularContainer = document.getElementById('popular-container') as HTMLDivElement;
+export const popularLoadMoreContainer = document.getElementById('popular-load-more-container') as HTMLDivElement;
+export const popularLoadMoreBtn = document.getElementById('popular-load-more-btn') as HTMLButtonElement;
+export const popularViewToggle = document.getElementById('popular-view-toggle') as HTMLDivElement;
