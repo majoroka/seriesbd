@@ -621,9 +621,11 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
 }
 
 let popularSeriesPage = 1;
+let allPopularSeries: Series[] = []; // Guarda todas as séries carregadas para reordenar
 async function loadPopularSeries(loadMore = false) {
     if (!loadMore) {
         popularSeriesPage = 1;
+        allPopularSeries = []; // Limpa a lista ao carregar a secção de novo
         DOM.popularContainer.innerHTML = '<p>A carregar séries populares...</p>';
         DOM.popularLoadMoreContainer.style.display = 'none';
     }
@@ -632,7 +634,6 @@ async function loadPopularSeries(loadMore = false) {
         const traktData = await API.fetchTraktPopularSeries(popularSeriesPage);
         
         if (!loadMore) {
-            DOM.popularContainer.innerHTML = '';
         }
 
         // 1. Filtra os resultados da Trakt para garantir que têm os dados necessários.
@@ -642,29 +643,41 @@ async function loadPopularSeries(loadMore = false) {
         const seriesPromises = validTraktShows.map(async (item: any) => {
             try {
                 const tmdbId = item.ids.tmdb;
-                const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
+                const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null); // Tenta buscar detalhes do TMDb
                 return {
                     id: tmdbId,
                     name: item.title,
                     overview: item.overview,
                     first_air_date: item.first_aired,
                     vote_average: item.rating, // Usar o rating da Trakt
-                    poster_path: tmdbDetails.poster_path, // Obter o poster do TMDb
+                    poster_path: tmdbDetails.poster_path, // Usa o poster do TMDb se bem-sucedido
                 } as Series;
             } catch (error) {
-                console.warn(`Não foi possível obter detalhes para a série com TMDb ID: ${item.ids.tmdb}`, error);
-                return null; // Retorna null se houver um erro para uma série específica
+                console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}). A usar dados de fallback.`, error);
+                // Fallback: Se a chamada ao TMDb falhar, cria o objeto da série sem o poster_path
+                return {
+                    id: item.ids.tmdb,
+                    name: item.title,
+                    overview: item.overview,
+                    first_air_date: item.first_aired,
+                    vote_average: item.rating,
+                    poster_path: null, // Define o poster como nulo
+                } as Series;
             }
         });
 
         // 3. Aguarda todas as promessas e filtra os resultados nulos.
-        const seriesList = (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+        const newSeriesList = (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
 
-        // Ordena as séries pela avaliação (decrescente)
-        const sortedSeries = seriesList.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+        // Adiciona as novas séries à lista geral
+        allPopularSeries.push(...newSeriesList);
 
-        // Na primeira carga, mostra apenas 18. Nas seguintes, mostra a página toda.
-        const seriesToRender = loadMore ? sortedSeries : sortedSeries.slice(0, 18);
+        // Reordena a lista completa sempre que novos itens são adicionados
+        allPopularSeries.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+
+        // Limpa o contentor e renderiza a lista ordenada
+        DOM.popularContainer.innerHTML = '';
+        const seriesToRender = loadMore ? allPopularSeries : allPopularSeries.slice(0, 18);
         UI.renderPopularSeries(seriesToRender);
 
         // A API da Trakt não informa o total de páginas, então assumimos que há sempre mais se recebermos resultados
@@ -677,6 +690,43 @@ async function loadPopularSeries(loadMore = false) {
     } catch (error) {
         console.error('Erro ao carregar séries populares:', error);
         DOM.popularContainer.innerHTML = '<p>Ocorreu um erro ao carregar as séries populares.</p>';
+    }
+}
+
+let premieresSeriesPage = 1;
+async function loadPremieresSeries(loadMore = false) {
+    if (!loadMore) {
+        premieresSeriesPage = 1; // Reset page count on first load
+        DOM.premieresContainer.innerHTML = '<p>A carregar estreias...</p>';
+        DOM.premieresLoadMoreContainer.style.display = 'none';
+    }
+
+    try {
+        const data = await API.fetchNewPremieres(premieresSeriesPage);
+        
+        if (!loadMore) {
+            DOM.premieresContainer.innerHTML = '';
+        }
+
+        // Filtra as séries para excluir as que já estão na biblioteca do utilizador
+        const seriesNotInLibrary = data.results.filter(
+            (series) => !S.myWatchlist.some(s => s.id === series.id) && !S.myArchive.some(s => s.id === series.id)
+        );
+
+        // Na primeira carga, mostra apenas 18. Nas seguintes, mostra a página toda.
+        const seriesToRender = loadMore ? seriesNotInLibrary : seriesNotInLibrary.slice(0, 18);
+
+        UI.renderPremieresSeries(seriesToRender);
+
+        if (data.page < data.total_pages && seriesNotInLibrary.length > 0) {
+            DOM.premieresLoadMoreContainer.style.display = 'block';
+            premieresSeriesPage++;
+        } else {
+            DOM.premieresLoadMoreContainer.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar as estreias:', error);
+        DOM.premieresContainer.innerHTML = '<p>Ocorreu um erro ao carregar as estreias.</p>';
     }
 }
 // Event Listeners
@@ -696,6 +746,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (targetId === 'popular-section') {
                     S.resetSearchAbortController();
                     loadPopularSeries();
+                } else if (targetId === 'premieres-section') {
+                    S.resetSearchAbortController();
+                    loadPremieresSeries();
                 }
                 UI.showSection(targetId);
             }
@@ -708,6 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.archiveViewToggle, DOM.archiveContainer, C.ARCHIVE_VIEW_MODE_KEY, UI.renderArchive);
     setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
     setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => loadPopularSeries());
+    setupViewToggle(DOM.premieresViewToggle, DOM.premieresContainer, 'premieres_view_mode', () => loadPremieresSeries());
 
     // Header Search
     const performSearch = () => {
@@ -959,6 +1013,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.popularLoadMoreBtn?.addEventListener('click', () => {
         loadPopularSeries(true);
+    });
+
+    DOM.premieresLoadMoreBtn?.addEventListener('click', () => {
+        loadPremieresSeries(true);
     });
 
     // Modals

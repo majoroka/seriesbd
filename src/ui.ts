@@ -245,7 +245,8 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
     seriesList.forEach(series => {
         const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w220_and_h330_face${series.poster_path}` : 'https://via.placeholder.com/150x225.png?text=N/A';
         const releaseDate = series.first_air_date ? new Date(series.first_air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Data desconhecida';
-        const voteAverage = Math.round((series.vote_average || 0) * 10);
+        const voteAverage = (series.vote_average || 0).toFixed(1);
+        const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
 
         const card = el('div', { class: 'trending-card', 'data-series-id': String(series.id) }, [
             el('div', { class: 'image' }, [
@@ -255,12 +256,12 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
                 el('div', { class: 'consensus' }, [
                     el('div', {
                         class: 'user_score_chart',
-                        'data-percent': String(voteAverage),
+                        'data-rating': voteAverage,
                     })
                 ])
             ]),
             el('div', { class: 'content' }, [
-                el('h2', {}, [el('a', { text: series.name })]),
+                el('h2', {}, [el('a', { text: `${series.name} ${releaseYear}` })]),
                 el('p', { text: releaseDate })
             ])
         ]);
@@ -339,12 +340,25 @@ export function renderPopularSeries(seriesList: Series[]) {
     }
 
     seriesList.forEach(series => {
-        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true); // O último `true` indica para mostrar o círculo de rating
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true); // O último `true` indica que é uma secção de descoberta
         DOM.popularContainer.appendChild(seriesItemElement);
     });
 }
 
-function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false): HTMLElement {
+export function renderPremieresSeries(seriesList: Series[]) {
+    const viewMode = DOM.premieresContainer.classList.contains('grid-view') ? 'grid' : 'list';
+    if (seriesList.length === 0 && DOM.premieresContainer.innerHTML === '') {
+        DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em estreia encontrada.</p>';
+        return;
+    }
+
+    seriesList.forEach(series => {
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true); // O último `true` indica que é uma secção de descoberta
+        DOM.premieresContainer.appendChild(seriesItemElement);
+    });
+}
+
+function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false): HTMLElement {
     const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const watchedCount = S.watchedState[series.id]?.length || 0;
@@ -358,9 +372,9 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
 
     let ratingCircle = null;
     if (showRatingCircle && viewMode === 'grid') {
-        const voteAverage = Math.round((series.vote_average || 0) * 10);
+        const voteAverage = (series.vote_average || 0).toFixed(1);
         ratingCircle = el('div', { class: 'consensus grid-view-rating' }, [
-            el('div', { class: 'user_score_chart', 'data-percent': String(voteAverage) })
+            el('div', { class: 'user_score_chart', 'data-rating': voteAverage })
         ]);
     }
 
@@ -370,13 +384,20 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         ratingCircle
     ]);
     let progressElement = null;
-    if (watchedCount > 0 || S.myArchive.some(s => s.id === series.id)) {
+    if (!isDiscovery && (watchedCount > 0 || S.myArchive.some(s => s.id === series.id))) {
         let progressBarClass = '';
         if (progressPercentage >= 100) progressBarClass = 'complete';
         else if (progressPercentage > 0) progressBarClass = 'in-progress';
         progressElement = el('div', { class: 'list-item-progress' }, [
             el('div', { class: 'progress-bar-container' }, [el('div', { class: `progress-bar ${progressBarClass}`, style: `width: ${progressPercentage}%;` })]),
             el('span', { text: `${Math.round(progressPercentage)}%` })
+        ]);
+    } else if (isDiscovery && viewMode === 'list') {
+        // Para as secções de descoberta (Populares, Estreias), mostra a avaliação pública em vez do progresso
+        const publicRating = (series.vote_average || 0).toFixed(1);
+        progressElement = el('div', { class: 'public-rating-in-list' }, [
+            el('i', { class: 'fas fa-star' }),
+            el('span', { text: publicRating })
         ]);
     }
     let statusElement = null;

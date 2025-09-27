@@ -60,3 +60,9 @@ export const popularContainer = document.getElementById('popular-container') as 
 export const popularLoadMoreContainer = document.getElementById('popular-load-more-container') as HTMLDivElement;
 export const popularLoadMoreBtn = document.getElementById('popular-load-more-btn') as HTMLButtonElement;
 export const popularViewToggle = document.getElementById('popular-view-toggle') as HTMLDivElement;
+
+// Premieres Section
+export const premieresContainer = document.getElementById('premieres-container') as HTMLDivElement;
+export const premieresLoadMoreContainer = document.getElementById('premieres-load-more-container') as HTMLDivElement;
+export const premieresLoadMoreBtn = document.getElementById('premieres-load-more-btn') as HTMLButtonElement;
+export const premieresViewToggle = document.getElementById('premieres-view-toggle') as HTMLDivElement;

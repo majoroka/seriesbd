@@ -180,3 +180,22 @@ export async function fetchTraktPopularSeries(page: number): Promise<any[]> {
     }
     return response.json();
 }
+
+/**
+ * Busca as séries que estrearam recentemente no TMDb.
+ * @param page - O número da página a ser buscada.
+ * @returns Uma promessa que resolve com os dados das séries em exibição.
+ */
+export async function fetchNewPremieres(page: number): Promise<{ results: Series[], page: number, total_pages: number }> {
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+    const gteDate = oneMonthAgo.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
+    const url = `${API_BASE_TMDB}/discover/tv?language=pt-PT&page=${page}&sort_by=popularity.desc&first_air_date.gte=${gteDate}`;
+    const response = await fetchWithRetry(url);
+    if (!response.ok) {
+        throw new Error('Não foi possível buscar as séries em exibição.');
+    }
+    return response.json();
+}
