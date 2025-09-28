@@ -76,7 +76,9 @@
                         <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>.
                     </p>
                 </div>
-                <p class="copyright">redmaka &copy; 2025 SeriesBD</p>
+                <p class="copyright">
+                    redmaka &copy; <span id="copyright-year">2025</span> SeriesBD
+                </p>
             </div>
         </aside>
 
@@ -344,5 +346,8 @@
     </div>
 
     <script type="module" src="/src/main.ts"></script>
+    <script>
+        document.getElementById('copyright-year').textContent = new Date().getFullYear();
+    </script>
 </body>
 </html>

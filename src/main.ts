@@ -225,14 +225,30 @@ async function displaySeriesDetails(seriesId: number) {
                 const newAddBtn = addToWatchlistBtn.cloneNode(true) as HTMLButtonElement;
                 addToWatchlistBtn.parentNode?.replaceChild(newAddBtn, addToWatchlistBtn);
                 newAddBtn.addEventListener('click', async () => {
+                    newAddBtn.disabled = true;
                     try {
                         await addSeriesToWatchlist(seriesData);
-                        newBtn.style.display = 'none'; // Esconde o botão após adicionar
                         UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
                         await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
                     } catch (error) {
                         console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
                         UI.showNotification("Ocorreu um erro ao adicionar a série.");
+                        newAddBtn.disabled = false;
+                    }
+                });
+
+                const newAddAndMarkAllBtn = addAndMarkAllBtn.cloneNode(true) as HTMLButtonElement;
+                addAndMarkAllBtn.parentNode?.replaceChild(newAddAndMarkAllBtn, addAndMarkAllBtn);
+                newAddAndMarkAllBtn.addEventListener('click', async () => {
+                    newAddAndMarkAllBtn.disabled = true;
+                    try {
+                        await addAndMarkAllAsSeen(seriesData);
+                        UI.showNotification(`"${seriesData.name}" foi adicionada e marcada como vista.`);
+                        await displaySeriesDetails(seriesData.id);
+                    } catch (error) {
+                        console.error("Erro ao adicionar e marcar série como vista:", error);
+                        UI.showNotification("Ocorreu um erro ao executar a ação.");
+                        newAddAndMarkAllBtn.disabled = false;
                     }
                 });
             }
@@ -860,10 +876,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
             if (seriesToAdd) {
                 await addSeriesToWatchlist(seriesToAdd);
-                addBtn.classList.add('added');
-                (addBtn as HTMLElement).textContent = 'Adicionado';
-                addBtn.appendChild(el('i', { class: 'fas fa-check' }));
-                (addBtn as HTMLButtonElement).disabled = true;
+                (addSeriesQuickBtn as HTMLButtonElement).disabled = true;
+                addSeriesQuickBtn.classList.add('added');
+                addSeriesQuickBtn.textContent = 'Adicionado';
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-check';
+                addSeriesQuickBtn.appendChild(icon);
             }
             return;
         }
