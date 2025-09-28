@@ -7,7 +7,7 @@ export const config = {
 export default async function handler(request: Request) {
   const requestUrl = new URL(request.url);
   const path = requestUrl.pathname.replace('/api/trakt', '');
-  const traktApiKey = process.env.VITE_TRAKT_API_KEY;
+  const traktApiKey = process.env.TRAKT_API_KEY;
 
   if (!traktApiKey) {
     return new Response('Trakt API key is not configured.', { status: 500 });
