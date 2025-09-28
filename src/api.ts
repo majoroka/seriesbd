@@ -1,4 +1,3 @@
-import { fetchWithRetry } from './utils';
 import { db } from './db';
 import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from './types';
 
@@ -11,8 +10,8 @@ const API_BASE_TRAKT = '/api/trakt';
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function searchSeries(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
-    const searchUrl = `${API_BASE_TMDB}/search/tv?query=${encodeURIComponent(query)}`;
-    const response = await fetchWithRetry(searchUrl, { signal });
+    const searchUrl = `${API_BASE_TMDB}/search/tv?language=pt-PT&query=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
 }
@@ -23,8 +22,8 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSignal): Promise<{ results: Series[] }> {
-    const url = `${API_BASE_TMDB}/trending/tv/${timeWindow}`;
-    const response = await fetchWithRetry(url, { signal });
+    const url = `${API_BASE_TMDB}/trending/tv/${timeWindow}?language=pt-PT`;
+    const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
 }
@@ -35,8 +34,8 @@ export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSig
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
-    const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos`;
-    const response = await fetchWithRetry(url, { signal });
+    const url = `${API_BASE_TMDB}/tv/${seriesId}?language=pt-PT&append_to_response=videos`;
+    const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
 }
@@ -47,8 +46,8 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal | null): Promise<TMDbCredits> {
-    const url = `${API_BASE_TMDB}/tv/${seriesId}/aggregate_credits`;
-    const response = await fetchWithRetry(url, { signal });
+    const url = `${API_BASE_TMDB}/tv/${seriesId}/aggregate_credits?language=pt-PT`;
+    const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
 }
@@ -62,7 +61,7 @@ export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal |
 export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null): Promise<TraktData | null> {
     try {
         const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show`;
-        const searchResponse = await fetchWithRetry(searchUrl, { signal });
+        const searchResponse = await fetch(searchUrl, { signal });
         if (!searchResponse.ok) {
             if (searchResponse.status === 404) return null;
             throw new Error(`Trakt search API error! status: ${searchResponse.status}`);
@@ -73,7 +72,7 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
         if (!traktId) return null;
 
         const showDetailsUrl = `${API_BASE_TRAKT}/shows/${traktId}?extended=full`;
-        const showDetailsResponse = await fetchWithRetry(showDetailsUrl, { signal });
+        const showDetailsResponse = await fetch(showDetailsUrl, { signal });
         const fullShowData = showDetailsResponse.ok ? await showDetailsResponse.json() : null;
 
         const traktOverview = fullShowData?.overview;
@@ -88,7 +87,7 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
         }
 
         const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
-        const ratingsResponse = await fetchWithRetry(ratingsUrl, { signal });
+        const ratingsResponse = await fetch(ratingsUrl, { signal });
         const ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
 
         return { ratings, trailerKey, traktId, overview: traktOverview, certification: fullShowData?.certification };
@@ -112,7 +111,7 @@ export async function fetchTraktSeasonsData(traktId: number | undefined, signal:
     if (!traktId) return null;
     try { 
         const url = `${API_BASE_TRAKT}/shows/${traktId}/seasons?extended=full,episodes,images`;
-        const response = await fetchWithRetry(url, { signal });
+        const response = await fetch(url, { signal });
         if (!response.ok) return null;
         return await response.json();
     } catch (error) {
@@ -141,7 +140,7 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
     }
 
     const url = `${API_BASE_TMDB}/tv/${seriesId}/season/${seasonNumber}`;
-    const seasonData = await fetchWithRetry(url, { signal }).then(res => res.json());
+    const seasonData = await fetch(url, { signal }).then(res => res.json());
     
     await db.seasonCache.put({
         seriesId: seriesId,
@@ -160,7 +159,7 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
  */
 export async function fetchPopularSeries(page: number): Promise<{ results: Series[], page: number, total_pages: number }> {
     const url = `${API_BASE_TMDB}/tv/popular?language=pt-PT&page=${page}`;
-    const response = await fetchWithRetry(url);
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries populares.');
     }
@@ -174,7 +173,7 @@ export async function fetchPopularSeries(page: number): Promise<{ results: Serie
  */
 export async function fetchTraktPopularSeries(page: number): Promise<any[]> {
     const url = `${API_BASE_TRAKT}/shows/popular?page=${page}&limit=30&extended=full`;
-    const response = await fetchWithRetry(url);
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries populares da Trakt.');
     }
@@ -192,8 +191,8 @@ export async function fetchNewPremieres(page: number): Promise<{ results: Series
     oneMonthAgo.setMonth(today.getMonth() - 1);
     const gteDate = oneMonthAgo.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 
-    const url = `${API_BASE_TMDB}/discover/tv?language=pt-PT&page=${page}&sort_by=popularity.desc&first_air_date.gte=${gteDate}`;
-    const response = await fetchWithRetry(url);
+    const url = `${API_BASE_TMDB}/discover/tv?language=pt-PT&page=${page}&sort_by=popularity.desc&first_air_date.gte=${gteDate}&with_original_language=en`;
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries em exibição.');
     }
