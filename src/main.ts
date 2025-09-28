@@ -886,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card');
+        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item');
         if (seriesItem) {
             document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10) } }));
             return;
