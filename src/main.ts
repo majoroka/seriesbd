@@ -4,7 +4,7 @@ import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
 import * as UI from './ui';
-import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
+import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails } from './types';
@@ -227,25 +227,12 @@ async function displaySeriesDetails(seriesId: number) {
                 newAddBtn.addEventListener('click', async () => {
                     try {
                         await addSeriesToWatchlist(seriesData);
-                        discoverActions.style.display = 'none'; // Esconde ambos os botões
+                        newBtn.style.display = 'none'; // Esconde o botão após adicionar
                         UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
+                        await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
                     } catch (error) {
                         console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
                         UI.showNotification("Ocorreu um erro ao adicionar a série.");
-                    }
-                });
-
-                // Listener para o botão "Adicionar e Marcar como Visto"
-                const newMarkAllBtn = addAndMarkAllBtn.cloneNode(true) as HTMLButtonElement;
-                addAndMarkAllBtn.parentNode?.replaceChild(newMarkAllBtn, addAndMarkAllBtn);
-                newMarkAllBtn.addEventListener('click', async () => {
-                    try {
-                        await addAndMarkAllAsSeen(seriesData);
-                        discoverActions.style.display = 'none'; // Esconde ambos os botões
-                        UI.showNotification(`"${seriesData.name}" foi adicionada ao seu Arquivo.`);
-                    } catch (error) {
-                        console.error("Erro ao adicionar e marcar série como vista:", error);
-                        UI.showNotification("Ocorreu um erro ao processar a série.");
                     }
                 });
             }
@@ -873,28 +860,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
             if (seriesToAdd) {
                 await addSeriesToWatchlist(seriesToAdd);
-                const parentActions = addSeriesQuickBtn.parentElement;
-                if (parentActions) {
-                    parentActions.innerHTML = ''; // Limpa os botões
-                    parentActions.appendChild(el('span', { class: 'in-library-label' }, ['Adicionado ', el('i', { class: 'fas fa-check-circle' })]));
-                }
+                addBtn.classList.add('added');
+                (addBtn as HTMLElement).textContent = 'Adicionado';
+                addBtn.appendChild(el('i', { class: 'fas fa-check' }));
+                (addBtn as HTMLButtonElement).disabled = true;
             }
             return;
         }
 
-        const markAllSeenQuickBtn = target.closest('.mark-all-seen-quick-btn');
-        if (markAllSeenQuickBtn) {
-            const seriesId = parseInt((markAllSeenQuickBtn as HTMLElement).dataset.seriesId!, 10);
-            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
-            if (seriesToAdd) {
-                await addAndMarkAllAsSeen(seriesToAdd);
-                // Após a ação estar 100% completa (incluindo a atualização do estado), navega para a página de detalhes.
-                await displaySeriesDetails(seriesId);
-            }
-            return;
-        }
-
-        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item');
+        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card');
         if (seriesItem) {
             document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10) } }));
             return;
@@ -1108,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const notesTextarea = (e.target as Element).closest('.user-notes-textarea');
         if (notesTextarea) {
             window.clearTimeout(notesSaveTimeout);
-            notesSaveTimeout = setTimeout(async () => {
+            notesSaveTimeout = window.setTimeout(async () => {
                 const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
                 const notes = (notesTextarea as HTMLTextAreaElement).value;
                 await S.updateUserNotes(seriesId, notes);

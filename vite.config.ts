@@ -4,18 +4,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   server: {
-    proxy: {
-      // Redireciona pedidos de /api/tmdb para a função tmdb
-      '/api/tmdb': {
-        target: 'http://localhost:8888',
-        changeOrigin: true,
-      },
-      // Redireciona pedidos de /api/trakt para a função trakt
-      '/api/trakt': {
-        target: 'http://localhost:8888',
-        changeOrigin: true,
-      },
-    },
   },
   plugins: [
     VitePWA({
