@@ -217,14 +217,18 @@ export function renderSearchResults(resultsList: Series[]) {
         const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
         const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
-        let button = isInLibrary ? el('button', { class: 'add-btn added', disabled: 'true' }, ['Adicionado', el('i', { class: 'fas fa-check' })]) : el('button', { class: 'add-btn', 'data-series-id': String(series.id) }, ['Adicionar']);
-        const item = el('div', { class: 'search-result-item' }, [
+        
+        const actionButtons = isInLibrary 
+            ? el('div', { class: 'search-result-actions' }, [el('span', { class: 'in-library-label' }, ['Na Biblioteca ', el('i', { class: 'fas fa-check-circle' })])])
+            : el('div', { class: 'search-result-actions' }, [
+                el('button', { class: 'v2-action-btn icon-only add-series-quick-btn', 'data-series-id': String(series.id), title: 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
+                el('button', { class: 'v2-action-btn icon-only mark-all-seen-quick-btn', 'data-series-id': String(series.id), title: 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })])
+            ]);
+
+        const item = el('div', { class: 'search-result-item', 'data-series-id': String(series.id) }, [
             el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'search-result-poster', loading: 'lazy' }),
-            el('div', { class: 'search-result-info' }, [
-                el('h3', { text: `${series.name} ${releaseYear}` }),
-                el('p', { text: series.overview || 'Sinopse não disponível.' })
-            ]),
-            button
+            el('div', { class: 'search-result-info' }, [ el('h3', { text: `${series.name} ${releaseYear}` }), el('p', { text: series.overview || 'Sinopse não disponível.' }) ]),
+            actionButtons
         ]);
         DOM.searchResultsContainer.appendChild(item);
     });
@@ -537,8 +541,9 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
                                 el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados' }, [el('i', { class: 'fas fa-sync-alt' })]),
                                 el('button', { id: 'v2-remove-series-btn', class: 'v2-action-btn icon-only', title: 'Remover série da biblioteca' }, [el('i', { class: 'fas fa-trash-alt' })]),
                             ]),
-                            el('div', { id: 'discover-actions', style: 'display: none;' }, [ // Ações para séries novas
-                                el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn' }, [el('i', { class: 'fas fa-star' }), ' Quero Ver']),
+                            el('div', { id: 'discover-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries novas
+                                el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn icon-only', title: 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
+                                el('button', { id: 'add-and-mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })]),
                             ]),
                         ])
                     ]),

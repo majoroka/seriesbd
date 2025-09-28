@@ -612,6 +612,32 @@ details[open] > .season-summary::before {
     line-height: 1.4;
 }
 
+.search-result-item {
+    /* Adiciona o cursor de ponteiro para indicar que o item é clicável */
+    cursor: pointer;
+}
+
+.search-result-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    min-width: 120px; /* Garante espaço para os botões ou a etiqueta */
+    /* Impede que o clique nos botões se propague para o item pai */
+    cursor: default;
+}
+
+.in-library-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--primary-accent);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
 .add-btn {
     padding: 0; /* O padding é desnecessário com flexbox e tamanho fixo */
     border-radius: 5px;
@@ -1672,6 +1698,20 @@ body.light-theme .network-logo {
     font-size: 1rem;
     border-color: rgba(255, 255, 255, 0.6);
     background-color: rgba(40, 40, 40, 0.6);
+}
+
+/* Garante que os botões de ação na lista de pesquisa também são redondos e com o estilo correto */
+.search-result-actions .v2-action-btn.icon-only {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    justify-content: center;
+    font-size: 1rem;
+    /* Usa as cores do tema para os botões, em vez de cores fixas */
+    border-color: var(--border-color);
+    background-color: var(--bg-card);
+    color: var(--text-secondary);
 }
 
 .concentric-chart-wrapper {
