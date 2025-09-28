@@ -1,3 +1,5 @@
+// @ts-ignore
+
 // Ficheiro: api/tmdb/[...path].ts
 
 export const config = {

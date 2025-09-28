@@ -1112,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const notesTextarea = (e.target as Element).closest('.user-notes-textarea');
         if (notesTextarea) {
             window.clearTimeout(notesSaveTimeout);
-            notesSaveTimeout = setTimeout(async () => {
+            notesSaveTimeout = window.setTimeout(async () => {
                 const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
                 const notes = (notesTextarea as HTMLTextAreaElement).value;
                 await S.updateUserNotes(seriesId, notes);

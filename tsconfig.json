@@ -10,7 +10,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["vitest/globals", "vite/client", "vite-plugin-pwa/client"],
+    "types": ["vitest/globals", "vite/client", "vite-plugin-pwa/client", "node"],
     "noEmit": true,
 
     /* Linting */
@@ -19,5 +19,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "api/**/*.ts"]
 }

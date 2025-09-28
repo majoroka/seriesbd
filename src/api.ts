@@ -1,5 +1,5 @@
-import { db } from './db';
-import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from './types';
+import { db } from "./db";
+import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from "./types";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
@@ -10,7 +10,7 @@ const API_BASE_TRAKT = '/api/trakt';
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function searchSeries(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
-    const searchUrl = `${API_BASE_TMDB}/search/tv?language=pt-PT&query=${encodeURIComponent(query)}`;
+    const searchUrl = `${API_BASE_TMDB}/search/tv?query=${encodeURIComponent(query)}&language=pt-PT`;
     const response = await fetch(searchUrl, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -34,7 +34,7 @@ export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSig
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
-    const url = `${API_BASE_TMDB}/tv/${seriesId}?language=pt-PT&append_to_response=videos`;
+    const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos&language=pt-PT`;
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -149,7 +149,7 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
         cachedAt: Date.now()
     });
 
-    return seasonData;
+    return seasonData as TMDbSeason;
 }
 
 /**
