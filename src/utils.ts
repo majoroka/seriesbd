@@ -77,10 +77,10 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, ret
  * @returns {function} The new debounced function with a `cancel` method.
  */
 export function debounce<T extends (...args: any[]) => any>(func: T, delay: number): ((...args: Parameters<T>) => void) & { cancel: () => void } {
-    let timeout: number;
+    let timeout: ReturnType<typeof setTimeout>;
     const debounced = function(this: ThisParameterType<T>, ...args: Parameters<T>) {
         const context = this;
-        window.clearTimeout(timeout);
+        clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(context, args), delay);
     };
     debounced.cancel = function() {

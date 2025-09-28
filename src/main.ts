@@ -1099,7 +1099,7 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.dashboard?.addEventListener('input', (e) => {
         const notesTextarea = (e.target as Element).closest('.user-notes-textarea');
         if (notesTextarea) {
-            window.clearTimeout(notesSaveTimeout);
+            clearTimeout(notesSaveTimeout);
             notesSaveTimeout = window.setTimeout(async () => {
                 const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
                 const notes = (notesTextarea as HTMLTextAreaElement).value;
