@@ -4,7 +4,7 @@ import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
 import * as UI from './ui';
-import { debounce, el, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
+import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails } from './types';
