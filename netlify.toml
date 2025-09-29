@@ -4,12 +4,14 @@
   publish = "dist"
 
 [dev]
-  command = "vite"
-  targetPort = 5173
+  command = "vite" # Comando para iniciar o servidor de desenvolvimento
+  targetPort = 5173 # Porta onde o Vite corre
 
 [functions]
   node_bundler = "esbuild"
+  directory = "netlify/functions" # Define explicitamente o diretório das funções
 
+# Redireciona os pedidos de API para as Netlify Functions em desenvolvimento
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

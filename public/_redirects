@@ -1,0 +1,5 @@
+# Regra de proxy para a API em produção
+/api/*    /.netlify/functions/:splat    200
+
+# Regra de fallback para a SPA em produção
+/*      /index.html                     200

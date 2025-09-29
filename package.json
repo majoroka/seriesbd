@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.1.0",

@@ -87,7 +87,7 @@
             <header class="main-header">
                 <div class="search-bar">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="add-series-header-input" placeholder="Pesquisar para adicionar série...">
+                    <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série...">
                     <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
                 </div>
                 <div class="user-stats">
@@ -212,18 +212,20 @@
 
                 <!-- Trending Section (Placeholder) -->
                 <section class="card" id="trending-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Hoje)</span></h2>
+                    </div>
                     <details open>
-                        <summary class="section-header">
-                            <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Hoje)</span></h2>
-                        </summary>
+                        <summary class="visually-hidden">Toggle a visibilidade da secção de tendências de hoje</summary>
                         <div id="trending-scroller-day" class="media discover scroller_wrap should_fade is_fading">
                             <!-- Conteúdo das tendências de hoje será carregado aqui -->
                         </div>
                     </details>
-                    <details open style="margin-top: 1.5rem;">
-                        <summary class="section-header">
-                            <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Semana)</span></h2>
-                        </summary>
+                    <div class="section-header" style="margin-top: 1.5rem;">
+                        <h2><i class="fas fa-fire"></i> Tendências <span class="trending-period">(Semana)</span></h2>
+                    </div>
+                    <details open>
+                        <summary class="visually-hidden">Toggle a visibilidade da secção de tendências da semana</summary>
                         <div id="trending-scroller-week" class="media discover scroller_wrap should_fade is_fading">
                             <!-- Conteúdo das tendências da semana será carregado aqui -->
                         </div>
@@ -304,7 +306,7 @@
             <h2>Pesquisar na Biblioteca</h2>
             <div class="search-bar" style="width: 100%; margin-bottom: 1.5rem;">
                 <i class="fas fa-search"></i>
-                <input type="text" id="library-search-modal-input" placeholder="Escreva o nome da série...">
+                <input type="text" id="library-search-modal-input" name="librarySearch" placeholder="Escreva o nome da série...">
             </div>
             <div id="library-search-modal-results">
                 <!-- Search results will be injected here -->
@@ -346,8 +348,5 @@
     </div>
 
     <script type="module" src="/src/main.ts"></script>
-    <script>
-        document.getElementById('copyright-year').textContent = new Date().getFullYear();
-    </script>
 </body>
 </html>

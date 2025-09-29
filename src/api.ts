@@ -171,8 +171,8 @@ export async function fetchPopularSeries(page: number): Promise<{ results: Serie
  * @param page - O número da página a ser buscada.
  * @returns Uma promessa que resolve com os dados das séries populares da Trakt.
  */
-export async function fetchTraktPopularSeries(page: number): Promise<any[]> {
-    const url = `${API_BASE_TRAKT}/shows/popular?page=${page}&limit=30&extended=full`;
+export async function fetchTraktPopularSeries(page: number, limit: number = 50): Promise<any[]> {
+    const url = `${API_BASE_TRAKT}/shows/popular?page=${page}&limit=${limit}&extended=full`;
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries populares da Trakt.');

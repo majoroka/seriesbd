@@ -338,31 +338,32 @@ export function renderAllSeries() {
 
 export function renderPopularSeries(seriesList: Series[]) {
     const viewMode = DOM.popularContainer.classList.contains('grid-view') ? 'grid' : 'list';
-    if (seriesList.length === 0 && DOM.popularContainer.innerHTML === '') {
+
+    if (seriesList.length === 0) {
         DOM.popularContainer.innerHTML = '<p class="empty-list-message">Nenhuma série popular encontrada.</p>';
         return;
     }
 
-    seriesList.forEach(series => {
-        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true); // O último `true` indica que é uma secção de descoberta
+    seriesList.forEach((series, index) => {
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, index + 1);
         DOM.popularContainer.appendChild(seriesItemElement);
     });
 }
 
 export function renderPremieresSeries(seriesList: Series[]) {
-    const viewMode = DOM.premieresContainer.classList.contains('grid-view') ? 'grid' : 'list';
+    const viewMode = DOM.premieresContainer.classList.contains('grid-view') ? 'grid' : 'list';    
     if (seriesList.length === 0 && DOM.premieresContainer.innerHTML === '') {
         DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em estreia encontrada.</p>';
         return;
     }
 
-    seriesList.forEach(series => {
-        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true); // O último `true` indica que é uma secção de descoberta
+    seriesList.forEach((series, index) => {
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, index + 1); // O último `true` indica que é uma secção de descoberta
         DOM.premieresContainer.appendChild(seriesItemElement);
     });
 }
 
-function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false): HTMLElement {
+function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false, rank?: number): HTMLElement {
     const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const watchedCount = S.watchedState[series.id]?.length || 0;
@@ -385,8 +386,9 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const posterElement = el('div', { class: 'watchlist-poster-wrapper' }, [
         el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'watchlist-poster-img', loading: 'lazy' }),
         unwatchedBadge,
-        ratingCircle
+        ratingCircle,
     ]);
+
     let progressElement = null;
     if (!isDiscovery && (watchedCount > 0 || S.myArchive.some(s => s.id === series.id))) {
         let progressBarClass = '';
@@ -413,10 +415,18 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     }
     const overview = series.overview || 'Sinopse não disponível.';
     const overviewElement = viewMode === 'grid' ? null : el('p', { text: overview });
-    const titleText = `${series.name} ${releaseYear}`;
-    const titleInList = viewMode === 'list' ? el('h3', { text: titleText }) : null;
+
+    // Cria o elemento do título, adicionando o ranking se aplicável
+    const titleChildren: (Node | string)[] = [];
+    if (rank !== undefined && isDiscovery) {
+        titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
+    }
+    titleChildren.push(`${series.name} ${releaseYear}`);
+    const titleElement = el('h3', {}, titleChildren);
+
+    const titleInList = viewMode === 'list' ? titleElement : null;
     const statusInList = viewMode === 'list' ? statusElement : null;
-    const titleInGrid = viewMode === 'grid' ? el('h3', { text: titleText }) : null;
+    const titleInGrid = viewMode === 'grid' ? titleElement : null;
     const statusInGrid = viewMode === 'grid' ? statusElement : null;
     const watchlistInfo = el('div', { class: 'watchlist-info' }, [
         el('div', { class: 'watchlist-title-wrapper' }, [titleInList, statusInList]),
@@ -854,7 +864,17 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
     const watchedCount = stats.watchedEpisodes;
     const unwatchedCount = stats.unwatchedEpisodes;
     const colors = getChartColors();
-    const borderWidths = (unwatchedCount > 0 && unwatchedCount < watchedCount) ? [12, 1] : (watchedCount > 0 && watchedCount < unwatchedCount) ? [1, 12] : [1, 1];
+
+    // Lógica para garantir que a fatia mais pequena é sempre visível
+    const total = watchedCount + unwatchedCount;
+    const minAngle = 0.1; // Ângulo mínimo em radianos para a fatia mais pequena
+    let borderWidths = [1, 1];
+    if (total > 0) {
+        const unwatchedRatio = unwatchedCount / total;
+        if (unwatchedRatio > 0 && unwatchedRatio < minAngle / (2 * Math.PI)) {
+            borderWidths = [15, 1]; // Aumenta a borda da fatia "Por Ver"
+        }
+    }
     
     if (S.charts.watchedUnwatched) {
         S.charts.watchedUnwatched.destroy();
@@ -868,7 +888,7 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
         },
         options: {
             responsive: true,
-            cutout: '70%',
+            cutout: '60%',
             rotation: 180,
             animation: { duration: 1500 },
             plugins: {

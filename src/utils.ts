@@ -179,7 +179,7 @@ export function formatDuration(totalMinutes: number): string {
     if (hours > 0) parts.push(`${hours}h`);
     if (minutes > 0) parts.push(`${minutes}min`);
     if (parts.length === 0) return '0min';
-    return parts.slice(0, 2).join(' ');
+    return parts.slice(0, 3).join(' ');
 }
 
 /**

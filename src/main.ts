@@ -662,76 +662,95 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
     }
 }
 
-let popularSeriesPage = 1;
-let allPopularSeries: Series[] = []; // Guarda todas as séries carregadas para reordenar
+let allPopularSeries: Series[] = [];
+let popularSeriesDisplayedCount = 0;
+const POPULAR_SERIES_CHUNK_SIZE = 50;
+const POPULAR_SERIES_TOTAL_TO_FETCH = 250;
+let isLoadingPopular = false;
+
 async function loadPopularSeries(loadMore = false) {
-    if (!loadMore) {
-        popularSeriesPage = 1;
-        allPopularSeries = []; // Limpa a lista ao carregar a secção de novo
-        DOM.popularContainer.innerHTML = '<p>A carregar séries populares...</p>';
-        DOM.popularLoadMoreContainer.style.display = 'none';
+    if (isLoadingPopular) return;
+
+    if (loadMore && allPopularSeries.length > 0) {
+        popularSeriesDisplayedCount += POPULAR_SERIES_CHUNK_SIZE;
+        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
+        DOM.popularContainer.innerHTML = '';
+        UI.renderPopularSeries(seriesToRender);
+        if (popularSeriesDisplayedCount >= allPopularSeries.length) {
+            DOM.popularLoadMoreContainer.style.display = 'none';
+        } else {
+            DOM.popularLoadMoreContainer.style.display = 'block';
+        }
+        return;
     }
 
-    try {        
-        const traktData = await API.fetchTraktPopularSeries(popularSeriesPage);
-        
-        if (!loadMore) {
-        }
+    isLoadingPopular = true;
+    allPopularSeries = [];
+    popularSeriesDisplayedCount = 0;
+    DOM.popularContainer.innerHTML = '<p>A carregar as séries mais populares...</p>';
+    DOM.popularLoadMoreContainer.style.display = 'none';
 
-        // 1. Filtra os resultados da Trakt para garantir que têm os dados necessários.
+    const fetchAndProcessChunk = async (page: number, size: number): Promise<Series[]> => {
+        const traktData = await API.fetchTraktPopularSeries(page, size);
         const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
-
-        // 2. Mapeia os resultados válidos para promessas que buscam detalhes no TMDb.
         const seriesPromises = validTraktShows.map(async (item: any) => {
-            try {
-                const tmdbId = item.ids.tmdb;
-                const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null); // Tenta buscar detalhes do TMDb
-                return {
-                    id: tmdbId,
-                    name: item.title,
-                    overview: item.overview,
-                    first_air_date: item.first_aired,
-                    vote_average: item.rating, // Usar o rating da Trakt
-                    poster_path: tmdbDetails.poster_path, // Usa o poster do TMDb se bem-sucedido
-                } as Series;
-            } catch (error) {
-                console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}). A usar dados de fallback.`, error);
-                // Fallback: Se a chamada ao TMDb falhar, cria o objeto da série sem o poster_path
-                return {
-                    id: item.ids.tmdb,
-                    name: item.title,
-                    overview: item.overview,
-                    first_air_date: item.first_aired,
-                    vote_average: item.rating,
-                    poster_path: null, // Define o poster como nulo
-                } as Series;
+             try {
+                 const tmdbId = item.ids.tmdb;
+                 const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
+                 return {
+                     id: tmdbId,
+                     name: item.title,
+                     overview: item.overview,
+                     first_air_date: item.first_aired,
+                     vote_average: item.rating,
+                     poster_path: tmdbDetails.poster_path,
+                 } as Series;
+             } catch (error) {
+                 console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
+                 return null;
+             }
+         });
+        return (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+    };
+
+    const processRemainingChunks = async () => {
+        const remainingSeries: Series[] = [];
+        const pagesToFetch = Math.ceil((POPULAR_SERIES_TOTAL_TO_FETCH - POPULAR_SERIES_CHUNK_SIZE) / POPULAR_SERIES_CHUNK_SIZE);
+        for (let i = 0; i < pagesToFetch; i++) {
+            const page = i + 2; // Começa na página 2
+            const chunk = await fetchAndProcessChunk(page, POPULAR_SERIES_CHUNK_SIZE);
+            remainingSeries.push(...chunk);
+        }
+        allPopularSeries.push(...remainingSeries);
+        allPopularSeries.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+        // Re-renderiza a primeira página com a lista completa e ordenada para garantir consistência
+        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
+        DOM.popularContainer.innerHTML = '';
+        UI.renderPopularSeries(seriesToRender);
+    };
+
+    try {
+        // Carrega e renderiza o primeiro chunk rapidamente
+        const firstChunk = await fetchAndProcessChunk(1, POPULAR_SERIES_CHUNK_SIZE);
+        allPopularSeries = [...firstChunk].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+        popularSeriesDisplayedCount = POPULAR_SERIES_CHUNK_SIZE;
+        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
+        DOM.popularContainer.innerHTML = '';
+        UI.renderPopularSeries(seriesToRender);
+        if (allPopularSeries.length > 0) {
+            DOM.popularLoadMoreContainer.style.display = 'block';
+        }
+        // Carrega o resto em segundo plano
+        processRemainingChunks().finally(() => {
+            isLoadingPopular = false;
+            if (popularSeriesDisplayedCount >= allPopularSeries.length) {
+                DOM.popularLoadMoreContainer.style.display = 'none';
             }
         });
-
-        // 3. Aguarda todas as promessas e filtra os resultados nulos.
-        const newSeriesList = (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
-
-        // Adiciona as novas séries à lista geral
-        allPopularSeries.push(...newSeriesList);
-
-        // Reordena a lista completa sempre que novos itens são adicionados
-        allPopularSeries.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
-
-        // Limpa o contentor e renderiza a lista ordenada
-        DOM.popularContainer.innerHTML = '';
-        const seriesToRender = loadMore ? allPopularSeries : allPopularSeries.slice(0, 18);
-        UI.renderPopularSeries(seriesToRender);
-
-        // A API da Trakt não informa o total de páginas, então assumimos que há sempre mais se recebermos resultados
-        if (traktData.length > 0) { 
-            DOM.popularLoadMoreContainer.style.display = 'block';
-            popularSeriesPage++;
-        } else {
-            DOM.popularLoadMoreContainer.style.display = 'none';
-        }
     } catch (error) {
         console.error('Erro ao carregar séries populares:', error);
         DOM.popularContainer.innerHTML = '<p>Ocorreu um erro ao carregar as séries populares.</p>';
+        isLoadingPopular = false;
     }
 }
 
@@ -740,10 +759,10 @@ async function loadPremieresSeries(loadMore = false) {
     if (!loadMore) {
         premieresSeriesPage = 1; // Reset page count on first load
         DOM.premieresContainer.innerHTML = '<p>A carregar estreias...</p>';
-        DOM.premieresLoadMoreContainer.style.display = 'none';
+        DOM.popularLoadMoreContainer.style.display = 'none';
     }
 
-    try {
+    try {        
         const data = await API.fetchNewPremieres(premieresSeriesPage);
         
         if (!loadMore) {

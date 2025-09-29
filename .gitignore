@@ -14,11 +14,11 @@ pnpm-debug.log*
 .env
 .env*.local
 
-# IDEs and editors
+# IDEs, Editors, and OS-specific files
 .vscode/
-
-# macOS
+.idea/
 .DS_Store
 __MACOSX
+
 # Local Netlify folder
 .netlify
