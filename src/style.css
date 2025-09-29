@@ -2551,7 +2551,7 @@ body.light-theme .network-logo {
 /* Estilo para o número do ranking antes do título */
 .discovery-rank-text {
     color: var(--primary-accent);
-    font-weight: 400; /* Peso de fonte normal */
+    font-weight: 700; /* Peso de fonte negrito */
     margin-right: 0.5em;
     font-size: calc(1em + 1px); /* Aumenta ligeiramente o tamanho da fonte do ranking */
 }
