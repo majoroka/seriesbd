@@ -296,7 +296,15 @@ export function renderWatchlist() {
 export function renderUnseen() {
     const viewMode = DOM.unseenContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.unseenContainer.innerHTML = '';
-    const seriesInProgress = S.myWatchlist.filter(series => S.watchedState[series.id] && S.watchedState[series.id].length > 0);
+    const now = new Date().getTime();
+    const seriesInProgress = S.myWatchlist.filter(series => {
+        // Condição 1: A série já tem episódios vistos.
+        const hasWatchedEpisodes = S.watchedState[series.id] && S.watchedState[series.id].length > 0;
+        // Condição 2: O próximo episódio agendado já passou.
+        const nextEp = series._details?.next_episode_to_air;
+        const hasJustAired = nextEp && new Date(nextEp.air_date).getTime() < now;
+        return hasWatchedEpisodes || hasJustAired;
+    });
     if (seriesInProgress.length === 0) {
         DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em progresso.</p>';
         return;
@@ -558,17 +566,20 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
                     ]),
                     el('div', { class: 'v2-facts' }, factsElements),
                     el('div', { class: 'v2-actions' }, [ // Ações principais como ratings e trailer
-                        el('div', { class: 'v2-ratings-group' }, [
-                            el('div', { class: 'user-rating-container v2-user-rating' }, [
-                                el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
-                                el('div', { class: 'star-rating', 'data-series-id': String(seriesData.id) }, Array.from({ length: 10 }, (_, i) => {
-                                    const value = i + 1;
-                                    const starClass = value <= currentUserRating ? 'fas' : 'far';
-                                    return el('div', { class: 'star-container', 'data-value': value }, [el('i', { class: `${starClass} fa-star star-icon` }), el('span', { class: 'star-number', text: value })]);
-                                })),
-                            ]),
-                            publicRatingsElement,
-                        ]),
+                        el('div', { class: 'v2-all-ratings-wrapper' }, [
+                            el('div', { class: 'v2-ratings-group' }, [
+                                el('div', { class: 'user-rating-container v2-user-rating' }, [
+                                    el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
+                                    el('div', { class: 'star-rating', 'data-series-id': String(seriesData.id) }, Array.from({ length: 10 }, (_, i) => {
+                                        const value = i + 1;
+                                        const starClass = value <= currentUserRating ? 'fas' : 'far';
+                                        return el('div', { class: 'star-container', 'data-value': value }, [el('i', { class: `${starClass} fa-star star-icon` }), el('span', { class: 'star-number', text: value })]);
+                                    })),
+                                ]),
+                                publicRatingsElement,
+                            ])
+                        ])
+                        ,
                         finalTrailerKey ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': finalTrailerKey }, [el('i', { class: 'fas fa-play' }), ' Ver Trailer']) : null
                     ]),
                     el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview || 'Sinopse não disponível.' })]),
@@ -763,12 +774,16 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
 
 export function markEpisodeAsSeen(element: HTMLElement) {
     element.classList.add('seen');
-    (element.querySelector('.status-icon') as HTMLElement).className = 'fas fa-check-circle status-icon';
+    const statusIcon = element.querySelector('.status-icon') as HTMLElement;
+    statusIcon.className = 'fas fa-check-circle status-icon';
+    statusIcon.setAttribute('aria-label', 'Marcar como não visto');
 }
 
 export function markEpisodeAsUnseen(element: HTMLElement) {
     element.classList.remove('seen');
-    (element.querySelector('.status-icon') as HTMLElement).className = 'far fa-circle status-icon';
+    const statusIcon = element.querySelector('.status-icon') as HTMLElement;
+    statusIcon.className = 'far fa-circle status-icon';
+    statusIcon.setAttribute('aria-label', 'Marcar como visto');
 }
 
 export function updateOverallProgressBar(seriesId: number) {
@@ -834,7 +849,7 @@ export function updateKeyStats(animate = false): { totalSeries: number, activeSe
     } else {
         DOM.statWatchedEpisodes.textContent = totalWatchedEpisodes.toLocaleString('pt-PT');
         DOM.statUnwatchedEpisodes.textContent = (totalUnwatchedEpisodes > 0 ? totalUnwatchedEpisodes : 0).toLocaleString('pt-PT');
-        DOM.statWatchTime.textContent = formatDuration(totalWatchTimeMinutes);
+        DOM.statWatchTime.innerHTML = formatDuration(totalWatchTimeMinutes, true);
     }
     return { totalSeries: allUserSeries.length, activeSeries: activeSeriesCount, watchedEpisodes: totalWatchedEpisodes, unwatchedEpisodes: totalUnwatchedEpisodes > 0 ? totalUnwatchedEpisodes : 0, watchTime: totalWatchTimeMinutes };
 }
@@ -1135,4 +1150,16 @@ export function renderStars(container: HTMLElement, rating: number) {
         icon.classList.toggle('fas', starValue <= rating);
         icon.classList.toggle('far', starValue > rating);
     });
+}
+
+/**
+ * Marca um botão como "adicionado", desativando-o e mudando o seu ícone e texto.
+ * @param button O elemento do botão a ser marcado.
+ * @param text O texto a ser exibido no botão (opcional).
+ */
+export function markButtonAsAdded(button: HTMLButtonElement, text: string = 'Adicionado') {
+    button.disabled = true;
+    button.classList.add('added');
+    button.title = 'Adicionado à Biblioteca';
+    button.innerHTML = `<i class="fas fa-check"></i> ${text}`;
 }

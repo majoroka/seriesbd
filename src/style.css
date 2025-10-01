@@ -1073,6 +1073,11 @@ details[open] > .season-summary::before {
     color: var(--secondary-accent);
 }
 
+/* Colore as unidades de tempo (d, h, min) na estatística de tempo de TV */
+.key-stat-card.watch-time .time-unit {
+    color: var(--primary-accent);
+}
+
 .charts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -1628,10 +1633,8 @@ body.light-theme .network-logo {
 
 .v2-actions {
     display: flex;
+    justify-content: space-between; /* Pushes ratings and trailer apart */
     align-items: center;
-    flex-wrap: wrap; /* Permite que os grupos de ações quebrem a linha */
-    justify-content: space-between; /* Empurra o trailer para a direita */
-    flex-wrap: wrap; /* Permite quebrar a linha em ecrãs pequenos */
     gap: 1.5rem;
     margin-bottom: 1.5rem;
 }
@@ -2367,6 +2370,21 @@ body.light-theme .network-logo {
 
     .v2-actions {
         gap: 1.5rem;
+    }
+}
+
+/* Ecrãs de Tablet na Horizontal (ex: iPad, iPad Pro Landscape) */
+@media (min-width: 992px) and (max-width: 1366px) and (orientation: landscape) {
+    .v2-actions {
+        justify-content: flex-start; /* Overwrite space-between for tablets */
+    }
+    .v2-all-ratings-wrapper {
+        display: flex;
+    }
+    .v2-ratings-group {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
     }
 }
 

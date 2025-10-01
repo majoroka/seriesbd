@@ -1,13 +1,13 @@
 import './style.css';
 import * as C from './constants';
 import * as DOM from './dom';
-import * as S from './state';
 import * as API from './api';
 import * as UI from './ui';
+import * as S from './state';
 import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
-import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails } from './types';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 
 async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
     const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
@@ -104,17 +104,17 @@ async function updateNextAired() {
     const oneDay = 24 * 60 * 60 * 1000;
 
     const seriesToFetch = allUserSeries.filter(series => {
-        if (!series._lastUpdated) return true;
+        if (!series._lastUpdated || series._details?.status === 'Ended') return false; // Não busca atualizações para séries terminadas
         const lastUpdatedTime = new Date(series._lastUpdated).getTime();
         return (now - lastUpdatedTime) > oneDay;
     });
 
     if (seriesToFetch.length > 0) {
         console.log(`A atualizar detalhes para ${seriesToFetch.length} séries.`);
-        const task = (series: Series) => 
+        const task = (series: Series) =>
             API.fetchSeriesDetails(series.id, null).then((details: any) => {
                 series._details = {
-                    status: details.status,
+                    status: details.status, // Atualiza o status
                     next_episode_to_air: details.next_episode_to_air
                 };
                 series._lastUpdated = new Date().toISOString();
@@ -125,7 +125,7 @@ async function updateNextAired() {
             });
 
         // Processa em lotes para não sobrecarregar a API
-        const results = await processInBatches(seriesToFetch, 10, 1000, task);
+        const results = await processInBatches(seriesToFetch, 5, 1000, task);
         const updatedSeries = seriesToFetch.filter((_, index) => results[index].status === 'fulfilled');
         if (updatedSeries.length > 0) {
             await db.watchlist.bulkPut(updatedSeries.filter(s => S.myWatchlist.some(ws => ws.id === s.id)));
@@ -134,7 +134,9 @@ async function updateNextAired() {
     }
 
     const seriesToUnarchiveIds = allUserSeries
-        .filter(series => series._details?.next_episode_to_air && S.myArchive.some(s => s.id === series.id))
+        .filter(series =>
+            series._details?.next_episode_to_air && S.myArchive.some(s => s.id === series.id)
+        )
         .map(series => series.id);
 
     if (seriesToUnarchiveIds.length > 0) {
@@ -145,8 +147,37 @@ async function updateNextAired() {
         allUserSeries = [...S.myWatchlist, ...S.myArchive];
     }
 
+    // Verifica se algum dos episódios que estavam agendados já foi para o ar
+    const justAiredSeriesIds = allUserSeries
+        .filter(series => {
+            const nextEp = series._details?.next_episode_to_air;
+            return nextEp && new Date(nextEp.air_date).getTime() < now;
+        })
+        .map(series => series.id);
+
+    if (justAiredSeriesIds.length > 0) {
+        console.log(`A atualizar metadados para ${justAiredSeriesIds.length} séries com episódios recém-lançados.`);
+        const refreshTask = async (seriesId: number) => {
+            const series = S.getSeries(seriesId);
+            if (series) {
+                const freshData = await API.fetchSeriesDetails(seriesId, null);
+                series.total_episodes = freshData.seasons?.filter(s => s.season_number !== 0).reduce((acc, s) => acc + s.episode_count, 0) || 0;
+                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air };
+                series._lastUpdated = new Date().toISOString();
+                await S.updateSeries(series);
+            }
+        };
+        await processInBatches(justAiredSeriesIds, 5, 1000, refreshTask);
+        UI.renderUnseen(); // Re-renderiza a lista "A Ver" para incluir as séries atualizadas
+    }
+
     const upcomingEpisodes = allUserSeries
-        .map(series => series._details?.next_episode_to_air ? { seriesName: series.name, seriesPoster: series.poster_path, episode: series._details.next_episode_to_air } : null);
+        .map(series => {
+            if (series._details?.next_episode_to_air) {
+                return { seriesName: series.name, seriesPoster: series.poster_path, episode: series._details.next_episode_to_air };
+            }
+            return null;
+        });
 
     const filteredUpcoming = upcomingEpisodes.filter((ep): ep is NonNullable<typeof ep> => ep !== null);
 
@@ -154,6 +185,37 @@ async function updateNextAired() {
 
     UI.renderNextAired(filteredUpcoming);
 }
+
+/**
+ * Configura os botões de ação na vista de detalhes da série (adicionar/remover).
+ * @param seriesData - Os detalhes da série.
+ */
+async function setupDetailViewActions(seriesData: TMDbSeriesDetails) {
+    const isAlreadyInLibrary = await S.getSeries(seriesData.id) !== undefined;
+    const libraryActions = document.getElementById('library-actions') as HTMLDivElement;
+    const discoverActions = document.getElementById('discover-actions') as HTMLDivElement;
+
+    if (!libraryActions || !discoverActions) {
+        console.warn("Os contentores de ações não foram encontrados no DOM.");
+        return;
+    }
+
+    libraryActions.style.display = isAlreadyInLibrary ? 'flex' : 'none';
+    discoverActions.style.display = isAlreadyInLibrary ? 'none' : 'flex';
+
+    if (isAlreadyInLibrary) {
+        const removeBtn = libraryActions.querySelector<HTMLButtonElement>('#v2-remove-series-btn');
+        removeBtn?.addEventListener('click', () => removeSeriesFromLibrary(seriesData.id, null), { once: true });
+    } else {
+        const addToWatchlistBtn = discoverActions.querySelector<HTMLButtonElement>('#add-to-watchlist-btn');
+        const addAndMarkAllBtn = discoverActions.querySelector<HTMLButtonElement>('#add-and-mark-all-seen-btn');
+
+        addToWatchlistBtn?.addEventListener('click', () => handleAddSeries(seriesData, addToWatchlistBtn), { once: true });
+        addAndMarkAllBtn?.addEventListener('click', () => handleAddAndMarkAllSeen(seriesData, addAndMarkAllBtn), { once: true });
+    }
+}
+
+
 
 async function displaySeriesDetails(seriesId: number) {
     S.resetDetailViewAbortController();
@@ -195,66 +257,7 @@ async function displaySeriesDetails(seriesId: number) {
 
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
 
-        // AGORA que a vista está renderizada, podemos manipular o botão "Quero Ver".
-        const isAlreadyInLibrary = await S.getSeries(seriesId) !== undefined;
-        const libraryActions = document.getElementById('library-actions') as HTMLDivElement;
-        const discoverActions = document.getElementById('discover-actions') as HTMLDivElement;
-
-        if (libraryActions && discoverActions) {
-            if (isAlreadyInLibrary) {
-                // A série está na biblioteca: mostra as ações de gestão e esconde o botão de adicionar.
-                libraryActions.style.display = 'flex';
-                discoverActions.style.display = 'none';
-
-                // Adiciona o listener para o botão de remover, garantindo que não há duplicados
-                const removeBtn = libraryActions.querySelector('#v2-remove-series-btn');
-                if (removeBtn) {
-                    const newRemoveBtn = removeBtn.cloneNode(true);
-                    removeBtn.parentNode?.replaceChild(newRemoveBtn, removeBtn);
-                    newRemoveBtn.addEventListener('click', () => removeSeriesFromLibrary(seriesId, null));
-                }
-            } else {
-                // A série NÃO está na biblioteca: mostra o botão de adicionar e esconde as ações de gestão.
-                libraryActions.style.display = 'none';
-                discoverActions.style.display = 'flex';
-
-                const addToWatchlistBtn = discoverActions.querySelector('#add-to-watchlist-btn') as HTMLButtonElement;
-                const addAndMarkAllBtn = discoverActions.querySelector('#add-and-mark-all-seen-btn') as HTMLButtonElement;
-                
-                // Listener para o botão "Adicionar"
-                const newAddBtn = addToWatchlistBtn.cloneNode(true) as HTMLButtonElement;
-                addToWatchlistBtn.parentNode?.replaceChild(newAddBtn, addToWatchlistBtn);
-                newAddBtn.addEventListener('click', async () => {
-                    newAddBtn.disabled = true;
-                    try {
-                        await addSeriesToWatchlist(seriesData);
-                        UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
-                        await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
-                    } catch (error) {
-                        console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
-                        UI.showNotification("Ocorreu um erro ao adicionar a série.");
-                        newAddBtn.disabled = false;
-                    }
-                });
-
-                const newAddAndMarkAllBtn = addAndMarkAllBtn.cloneNode(true) as HTMLButtonElement;
-                addAndMarkAllBtn.parentNode?.replaceChild(newAddAndMarkAllBtn, addAndMarkAllBtn);
-                newAddAndMarkAllBtn.addEventListener('click', async () => {
-                    newAddAndMarkAllBtn.disabled = true;
-                    try {
-                        await addAndMarkAllAsSeen(seriesData);
-                        UI.showNotification(`"${seriesData.name}" foi adicionada e marcada como vista.`);
-                        await displaySeriesDetails(seriesData.id);
-                    } catch (error) {
-                        console.error("Erro ao adicionar e marcar série como vista:", error);
-                        UI.showNotification("Ocorreu um erro ao executar a ação.");
-                        newAddAndMarkAllBtn.disabled = false;
-                    }
-                });
-            }
-        } else {
-            console.warn("Os contentores de ações não foram encontrados no DOM após a renderização.");
-        }
+        await setupDetailViewActions(seriesData);
 
     } catch (error) {
         const typedError = error as Error;
@@ -268,6 +271,94 @@ async function displaySeriesDetails(seriesId: number) {
     }
 }
 
+async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
+    if (button) button.disabled = true;
+    try {
+        await addSeriesToWatchlist(seriesData);
+        UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
+        await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
+    } catch (error) {
+        console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
+        UI.showNotification("Ocorreu um erro ao adicionar a série.");
+        if (button) button.disabled = false;
+    }
+}
+
+async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
+    if (button) button.disabled = true;
+    try {
+        await addAndMarkAllAsSeen(seriesData);
+        UI.showNotification(`"${seriesData.name}" foi adicionada e marcada como vista.`);
+        await displaySeriesDetails(seriesData.id);
+    } catch (error) {
+        console.error("Erro ao adicionar e marcar série como vista:", error);
+        UI.showNotification("Ocorreu um erro ao executar a ação.");
+        if (button) button.disabled = false;
+    }
+}
+
+async function handleQuickAdd(series: Series, button: HTMLButtonElement) {
+    await addSeriesToWatchlist(series);
+    UI.markButtonAsAdded(button, 'Adicionado');
+}
+
+/**
+ * Lida com a ação de marcar um episódio como visto.
+ * @param seriesId - ID da série.
+ * @param episodeId - ID do episódio.
+ * @param episodeElement - O elemento HTML do episódio.
+ */
+async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<void> {
+    const watchedSet = new Set(S.watchedState[seriesId] || []);
+    const allEpisodesJSON = DOM.seriesViewSection.dataset.allEpisodes;
+    let episodesToMarkAsSeen = [episodeId];
+
+    if (allEpisodesJSON) {
+        const allEpisodes: { id: number }[] = JSON.parse(allEpisodesJSON);
+        const clickedEpisodeIndex = allEpisodes.findIndex(ep => ep.id === episodeId);
+
+        if (clickedEpisodeIndex > 0) {
+            const previousEpisodes = allEpisodes.slice(0, clickedEpisodeIndex);
+            const unwatchedPrevious = previousEpisodes.filter(ep => !watchedSet.has(ep.id));
+            if (unwatchedPrevious.length > 0 && await UI.showConfirmationModal(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
+                episodesToMarkAsSeen.push(...unwatchedPrevious.map(ep => ep.id));
+            }
+        }
+    }
+
+    const isFirstWatched = watchedSet.size === 0;
+    await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
+
+    episodesToMarkAsSeen.forEach(idToMark => {
+        const elementToMark = document.querySelector<HTMLElement>(`.episode-item[data-episode-id="${idToMark}"]`);
+        if (elementToMark) {
+            UI.markEpisodeAsSeen(elementToMark);
+        }
+    });
+
+    UI.renderWatchlist();
+    UI.renderUnseen();
+
+    if (isFirstWatched && episodesToMarkAsSeen.length > 0) {
+        UI.updateActiveNavLink('unseen-section');
+    }
+
+    const movedToArchive = await checkSeriesCompletion(seriesId);
+    if (movedToArchive) {
+        UI.updateActiveNavLink('archive-section');
+    }
+}
+
+/**
+ * Lida com a ação de desmarcar um episódio como visto.
+ * @param seriesId - ID da série.
+ * @param episodeId - ID do episódio.
+ * @param episodeElement - O elemento HTML do episódio.
+ */
+async function handleUnmarkAsSeen(seriesId: number, episodeId: number): Promise<void> {
+    await S.unmarkEpisodesAsWatched(seriesId, [episodeId]);
+}
+
 async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonNumber: number, episodeElement: HTMLElement) {
     // Otimização: Usar um Set para pesquisas mais rápidas (O(1) em vez de O(n)).
     const watchedSet = new Set(S.watchedState[seriesId] || []);
@@ -275,62 +366,20 @@ async function toggleEpisodeWatched(seriesId: number, episodeId: number, seasonN
     const wasInArchive = S.myArchive.some(s => s.id === seriesId);
 
     if (isSeen) {
-        await S.unmarkEpisodesAsWatched(seriesId, [episodeId]);
+        await handleUnmarkAsSeen(seriesId, episodeId);
         UI.markEpisodeAsUnseen(episodeElement);
-        // Acessibilidade: Atualiza o rótulo para leitores de ecrã
-        episodeElement.querySelector('.status-icon')?.setAttribute('aria-label', 'Marcar como visto');
         if (wasInArchive) {
             const series = S.getSeries(seriesId);
             if(series) await S.unarchiveSeries(series);
-            UI.renderArchive(); // Re-renderiza o arquivo para remover a série
-            UI.renderUnseen(); // Re-renderiza a lista "A Ver" para adicionar a série
+            UI.renderArchive();
+            UI.renderUnseen();
             UI.updateActiveNavLink('unseen-section');
         } else {
             UI.renderWatchlist();
             UI.renderUnseen();
-            if ((S.watchedState[seriesId]?.length || 0) === 0) {
-                UI.updateActiveNavLink('watchlist-section');
-            }
         }
     } else {
-        const allEpisodesJSON = DOM.seriesViewSection.dataset.allEpisodes;
-        let episodesToMarkAsSeen = [episodeId];
-        if (allEpisodesJSON) {
-            const allEpisodes: {id: number}[] = JSON.parse(allEpisodesJSON);
-            const clickedEpisodeIndex = allEpisodes.findIndex((ep: {id: number}) => ep.id === episodeId);
-            if (clickedEpisodeIndex > 0) {
-                const previousEpisodes = allEpisodes.slice(0, clickedEpisodeIndex);
-                const unwatchedPrevious = previousEpisodes.filter((ep: {id: number}) => !watchedSet.has(ep.id));
-                    if (unwatchedPrevious.length > 0 && await UI.showConfirmationModal(`Existem ${unwatchedPrevious.length} episódios anteriores por ver. Deseja marcá-los também como vistos?`)) {
-                    episodesToMarkAsSeen.push(...unwatchedPrevious.map(ep => ep.id));
-                }
-            }
-        }
-
-        const isFirstWatched = watchedSet.size === 0;
-        await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
-
-        episodesToMarkAsSeen.forEach(idToMark => {
-            const elementToMark = document.querySelector(`.episode-item[data-episode-id="${idToMark}"]`);
-            if (elementToMark) {
-                const el = elementToMark as HTMLElement;
-                UI.markEpisodeAsSeen(el);
-                // Acessibilidade: Atualiza o rótulo para leitores de ecrã
-                el.querySelector('.status-icon')?.setAttribute('aria-label', 'Marcar como não visto');
-            }
-        });
-        
-        UI.renderWatchlist();
-        UI.renderUnseen();
-
-        if (isFirstWatched && episodesToMarkAsSeen.length > 0) {
-            UI.updateActiveNavLink('unseen-section');
-        }
-        
-        const movedToArchive = await checkSeriesCompletion(seriesId);
-        if (movedToArchive) {
-            UI.updateActiveNavLink('archive-section');
-        }
+        await handleMarkAsSeen(seriesId, episodeId);
     }
 
     UI.updateOverallProgressBar(seriesId);
@@ -372,7 +421,7 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
             UI.renderUnseen();
             UI.renderArchive();
             UI.renderAllSeries();
-            return true;
+            return true; // Indica que a série foi movida para o arquivo.
         }
         return false;
     } catch (error) {
@@ -443,7 +492,7 @@ async function exportData(): Promise<void> {
             archive: S.myArchive,
             watchedState: S.watchedState,
             userData: S.userData,
-        };
+        } as any;
         const jsonString = JSON.stringify(backupData, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
         const date = new Date().toISOString().split('T')[0];
@@ -496,7 +545,7 @@ async function importData(): Promise<void> {
                     await db.archive.clear();
                     await db.watchedState.clear();
                     await db.userData.clear();
-                    await db.watchlist.bulkPut(data.watchlist);
+                    await db.watchlist.bulkPut(data.watchlist as Series[]);
                     await db.archive.bulkPut(data.archive);
                     const watchedItems: WatchedStateItem[] = [];
                     for (const seriesId in data.watchedState) {
@@ -511,7 +560,7 @@ async function importData(): Promise<void> {
                             });
                         }
                     }
-                    if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems as any);
+                    if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems);
                     const userDataItems: UserDataItem[] = [];
                     for (const seriesId in (data.userData || {})) {
                         const sId = parseInt(seriesId, 10);
@@ -595,11 +644,13 @@ async function initializeApp(): Promise<void> {
         if (localStorage.getItem('seriesdb.watchlist')) {
             await S.migrateFromLocalStorage();
         }
-        const settingsMap = await S.loadStateFromDB();
-        UI.applyViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY) || 'list', DOM.watchlistContainer, DOM.watchlistViewToggle);
-        UI.applyViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY) || 'list', DOM.unseenContainer, DOM.unseenViewToggle);
-        UI.applyViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY) || 'list', DOM.archiveContainer, DOM.archiveViewToggle);
-        UI.applyViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY) || 'list', DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+        const settings = await db.kvStore.toArray();
+        const settingsMap = new Map(settings.map((i: KVStoreItem) => [i.key, i.value]));
+        await S.loadStateFromDB();
+        UI.applyViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY) ?? 'list', DOM.watchlistContainer, DOM.watchlistViewToggle);
+        UI.applyViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY) ?? 'list', DOM.unseenContainer, DOM.unseenViewToggle);
+        UI.applyViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY) ?? 'list', DOM.archiveContainer, DOM.archiveViewToggle);
+        UI.applyViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY) ?? 'list', DOM.allSeriesContainer, DOM.allSeriesViewToggle);
         UI.renderWatchlist();
         UI.renderArchive();
         UI.renderAllSeries();
@@ -894,12 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesId = parseInt((addSeriesQuickBtn as HTMLElement).dataset.seriesId!, 10);
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
             if (seriesToAdd) {
-                await addSeriesToWatchlist(seriesToAdd);
-                const button = addSeriesQuickBtn as HTMLButtonElement;
-                button.disabled = true;
-                button.classList.add('added');
-                button.title = 'Adicionado à Biblioteca';
-                button.innerHTML = '<i class="fas fa-check"></i>'; // Substitui o ícone '+' por um 'check'
+                await handleQuickAdd(seriesToAdd, addSeriesQuickBtn as HTMLButtonElement);
             }
             return;
         }

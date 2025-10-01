@@ -158,12 +158,16 @@ export function formatHoursMinutes(totalMinutes: number): string {
  * @param {number} totalMinutes 
  * @returns {string}
  */
-export function formatDuration(totalMinutes: number): string {
-    if (totalMinutes <= 0) return '0min';
+export function formatDuration(totalMinutes: number, asHTML: boolean = false): string {
+    if (totalMinutes <= 0) {
+        return asHTML ? `0<span class="time-unit">min</span>` : '0min';
+    }
+
     const MIN_IN_HOUR = 60;
     const MIN_IN_DAY = 24 * MIN_IN_HOUR;
     const MIN_IN_MONTH = 30 * MIN_IN_DAY;
     const MIN_IN_YEAR = 365 * MIN_IN_DAY;
+
     const years = Math.floor(totalMinutes / MIN_IN_YEAR);
     let remainder = totalMinutes % MIN_IN_YEAR;
     const months = Math.floor(remainder / MIN_IN_MONTH);
@@ -172,13 +176,14 @@ export function formatDuration(totalMinutes: number): string {
     remainder %= MIN_IN_DAY;
     const hours = Math.floor(remainder / MIN_IN_HOUR);
     const minutes = remainder % MIN_IN_HOUR;
+
     const parts = [];
-    if (years > 0) parts.push(`${years}a`);
-    if (months > 0) parts.push(`${months}m`);
-    if (days > 0) parts.push(`${days}d`);
-    if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0) parts.push(`${minutes}min`);
-    if (parts.length === 0) return '0min';
+    if (years > 0) parts.push(asHTML ? `${years}<span class="time-unit">a</span>` : `${years}a`);
+    if (months > 0) parts.push(asHTML ? `${months}<span class="time-unit">m</span>` : `${months}m`);
+    if (days > 0) parts.push(asHTML ? `${days}<span class="time-unit">d</span>` : `${days}d`);
+    if (hours > 0) parts.push(asHTML ? `${hours}<span class="time-unit">h</span>` : `${hours}h`);
+    if (minutes > 0) parts.push(asHTML ? `${minutes}<span class="time-unit">min</span>` : `${minutes}min`);
+    if (parts.length === 0) return asHTML ? `0<span class="time-unit">min</span>` : '0min';
     return parts.slice(0, 3).join(' ');
 }
 
@@ -286,7 +291,7 @@ export function exportDataToCSV(data: Record<string, any>[], headers: Record<str
  */
 export function animateDuration(element: HTMLElement, start: number, end: number, duration: number) {
     if (end === start) {
-        element.textContent = formatDuration(end);
+        element.innerHTML = formatDuration(end, true);
         return;
     }
     const range = end - start;
@@ -295,11 +300,11 @@ export function animateDuration(element: HTMLElement, start: number, end: number
         if (!startTime) startTime = timestamp;
         const progress = Math.min((timestamp - (startTime as number)) / duration, 1);
         const currentValue = Math.floor(progress * range + start);
-        element.textContent = formatDuration(currentValue);
+        element.innerHTML = formatDuration(currentValue, true);
         if (progress < 1) {
             window.requestAnimationFrame(step);
         } else {
-            element.textContent = formatDuration(end);
+            element.innerHTML = formatDuration(end, true);
         }
     }
     window.requestAnimationFrame(step);
