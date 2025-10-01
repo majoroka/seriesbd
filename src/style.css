@@ -2295,7 +2295,7 @@ body.light-theme .network-logo {
 /* Em ecrãs pequenos, na vista de grelha, o título fica em minúsculas */
 @media (max-width: 768px) {
     .grid-view .watchlist-info h3 {
-        text-transform: lowercase;
+        text-transform: capitalize;
     }
 
     /* Reduz o tamanho da fonte do título em todas as vistas de lista em mobile */
@@ -2458,6 +2458,53 @@ body.light-theme .network-logo {
         flex-direction: column;
         align-items: stretch;
         gap: 1rem;
+    }
+
+    /* Ajusta a barra de pesquisa para mobile */
+    .search-bar {
+        width: 100%; /* Ocupa a largura toda */
+    }
+
+    /* Transforma o botão de pesquisa num ícone de lupa */
+    .search-bar .search-bar-button {
+        width: 40px; /* Largura fixa */
+        height: 40px; /* Altura fixa */
+        padding: 0; /* Remove o padding */
+        font-size: 0; /* Esconde o texto "Pesquisar" */
+        position: relative; /* Contexto para o ícone */
+    }
+
+    .search-bar .search-bar-button::before {
+        content: '\f002'; /* Código do ícone de lupa do Font Awesome */
+        font-family: 'Font Awesome 5 Free';
+        font-weight: 900;
+        font-size: 1rem; /* Tamanho do ícone */
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    /* Ajusta os resultados da pesquisa para mobile */
+    .search-result-item {
+        flex-direction: column; /* Layout vertical */
+        align-items: center; /* Centra os itens */
+        text-align: center;
+    }
+
+    .search-result-info p {
+        display: none; /* Esconde a sinopse */
+    }
+
+    .search-result-info h3 {
+        margin-bottom: 0.5rem; /* Adiciona espaço entre o título e os botões */
+    }
+
+    /* Garante que os botões do modal de confirmação têm espaço para o texto em mobile */
+    .confirmation-buttons button {
+        flex-grow: 1; /* Permite que os botões cresçam para ocupar o espaço disponível */
+        flex-basis: 0; /* Garante que o crescimento é distribuído de forma igual */
+        padding: 0.75rem 1rem; /* Ajusta o padding para um visual mais compacto */
     }
 
     /* Na VISTA DE GRELHA em mobile, os itens são cartões verticais */
