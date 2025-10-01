@@ -895,12 +895,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
             if (seriesToAdd) {
                 await addSeriesToWatchlist(seriesToAdd);
-                (addSeriesQuickBtn as HTMLButtonElement).disabled = true;
-                addSeriesQuickBtn.classList.add('added');
-                addSeriesQuickBtn.textContent = 'Adicionado';
-                const icon = document.createElement('i');
-                icon.className = 'fas fa-check';
-                addSeriesQuickBtn.appendChild(icon);
+                const button = addSeriesQuickBtn as HTMLButtonElement;
+                button.disabled = true;
+                button.classList.add('added');
+                button.title = 'Adicionado à Biblioteca';
+                button.innerHTML = '<i class="fas fa-check"></i>'; // Substitui o ícone '+' por um 'check'
             }
             return;
         }

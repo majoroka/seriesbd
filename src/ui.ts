@@ -438,7 +438,6 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const itemElement = el('div', { class: 'watchlist-item', 'data-series-id': String(series.id) }, [
         posterElement,
         watchlistInfo,
-        !showRatingCircle ? el('button', { class: 'remove-btn', 'data-series-id': String(series.id), text: 'Remover' }) : null
     ]);
 
     itemElement.addEventListener("click", (e) => {
@@ -547,13 +546,13 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
                         ]),
                         el('div', { class: 'v2-header-actions' }, [
                             el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
-                                el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
-                                el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados' }, [el('i', { class: 'fas fa-sync-alt' })]),
-                                el('button', { id: 'v2-remove-series-btn', class: 'v2-action-btn icon-only', title: 'Remover série da biblioteca' }, [el('i', { class: 'fas fa-trash-alt' })]),
+                                el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos', 'aria-label': 'Marcar todos os episódios como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
+                                el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados', 'aria-label': 'Atualizar Metadados da Série' }, [el('i', { class: 'fas fa-sync-alt' })]),
+                                el('button', { id: 'v2-remove-series-btn', class: 'v2-action-btn icon-only', title: 'Remover série da biblioteca', 'aria-label': 'Remover série da biblioteca' }, [el('i', { class: 'fas fa-trash-alt' })]),
                             ]),
                             el('div', { id: 'discover-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries novas
-                                el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn icon-only', title: 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
-                                el('button', { id: 'add-and-mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })]),
+                                el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn icon-only', title: 'Adicionar à Biblioteca', 'aria-label': 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
+                                el('button', { id: 'add-and-mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Adicionar e Marcar Tudo Como Visto', 'aria-label': 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })]),
                             ]),
                         ])
                     ]),
@@ -864,6 +863,7 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
     const watchedCount = stats.watchedEpisodes;
     const unwatchedCount = stats.unwatchedEpisodes;
     const colors = getChartColors();
+    const isMobile = window.innerWidth <= 768;
 
     // Lógica para garantir que a fatia mais pequena é sempre visível
     const total = watchedCount + unwatchedCount;
@@ -888,6 +888,7 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
         },
         options: {
             responsive: true,
+            maintainAspectRatio: !isMobile, // Só desativa em mobile
             cutout: '60%',
             rotation: 180,
             animation: { duration: 1500 },
@@ -949,6 +950,7 @@ function renderGenresChart() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
+    const isMobile = window.innerWidth <= 768;
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const genreCounts: { [key: string]: number } = {};
     allSeries.forEach(series => {
@@ -969,7 +971,7 @@ function renderGenresChart() {
         S.charts.genresChart = new Chart(ctx, {
         type: 'bar',
         data: { labels, datasets: [{ label: 'Nº de Séries', data, backgroundColor: colors.primaryAccentTransparent, borderColor: colors.primaryAccent, borderWidth: 1 }] },
-        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } }, y: { ticks: { color: colors.textColor }, grid: { display: false } } } } as any
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } }, y: { ticks: { color: colors.textColor }, grid: { display: false } } } } as any
     });
     }
 }
@@ -979,6 +981,7 @@ function renderAiredYearsChart() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
+    const isMobile = window.innerWidth <= 768;
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
@@ -998,7 +1001,7 @@ function renderAiredYearsChart() {
         S.charts.airedYears = new Chart(ctx, {
         type: 'line',
         data: { labels, datasets: [{ label: 'Nº de Séries', data, fill: true, backgroundColor: colors.primaryAccentLine, borderColor: colors.primaryAccent, tension: 0.3 }] },
-        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: colors.textColor }, grid: { color: colors.gridColor } }, y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } } } } as any
+        options: { responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: colors.textColor }, grid: { color: colors.gridColor } }, y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } } } } as any
     });
     }
 }

@@ -698,6 +698,7 @@ details[open] > .season-summary::before {
     align-items: flex-start;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    position: relative; /* Contexto para o posicionamento absoluto dos filhos */
 }
 
 .rating-summary-item {
@@ -852,25 +853,6 @@ details[open] > .season-summary::before {
     font-size: 0.9rem;
     color: var(--text-secondary);
     line-height: 1.4;
-}
-
-.remove-btn {
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
-    border: 1px solid var(--danger-color); /* Red for remove/danger */
-    background-color: transparent;
-    color: var(--danger-color);
-    font-family: var(--font-main);
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
-    align-self: center;
-}
-
-.remove-btn:hover {
-    background-color: var(--danger-color);
-    color: var(--text-on-accent);
 }
 
 /* Estilo para a avaliação pública na vista em lista (substitui a barra de progresso) */
@@ -1592,6 +1574,7 @@ body.light-theme .network-logo {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    flex-wrap: wrap; /* Permite que os botões quebrem a linha em ecrãs mais pequenos */
     gap: 1.5rem;
     margin-bottom: 1rem;
 }
@@ -1646,6 +1629,7 @@ body.light-theme .network-logo {
 .v2-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap; /* Permite que os grupos de ações quebrem a linha */
     justify-content: space-between; /* Empurra o trailer para a direita */
     flex-wrap: wrap; /* Permite quebrar a linha em ecrãs pequenos */
     gap: 1.5rem;
@@ -2308,6 +2292,17 @@ body.light-theme .network-logo {
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
 }
+/* Em ecrãs pequenos, na vista de grelha, o título fica em minúsculas */
+@media (max-width: 768px) {
+    .grid-view .watchlist-info h3 {
+        text-transform: lowercase;
+    }
+
+    /* Reduz o tamanho da fonte do título em todas as vistas de lista em mobile */
+    .watchlist-item h3 {
+        font-size: 0.9rem;
+    }
+}
 
 /* Remove bottom margin from title in grid view to reduce gap */
 .grid-view .watchlist-title-wrapper {
@@ -2352,6 +2347,12 @@ body.light-theme .network-logo {
         gap: 2rem;
     }
 
+    /* Reduz o poster para dar mais espaço ao texto em tablets */
+    .v2-poster {
+        width: 220px;
+        height: 330px;
+    }
+
     .v2-poster {
         width: 250px;
         height: 375px;
@@ -2387,6 +2388,10 @@ body.light-theme .network-logo {
         z-index: 100; /* Garante que fica por cima do conteúdo ao fazer scroll */
         position: static;
         padding: 1rem;
+        /* Garante que a sidebar não encolhe, mantendo o conteúdo principal com espaço para scroll */
+        flex-shrink: 0;
+        /* Remove a altura fixa para permitir que o conteúdo principal determine a altura da página */
+        height: auto;
         border-right: none;
         border-bottom: 1px solid var(--border-color);
     }
@@ -2454,39 +2459,30 @@ body.light-theme .network-logo {
         align-items: stretch;
         gap: 1rem;
     }
-    .search-bar {
-        width: 100%;
-    }
 
-    /* --- List Items (Watchlist, Search, etc.) --- */
-    .search-result-item,
-    .watchlist-item {
+    /* Na VISTA DE GRELHA em mobile, os itens são cartões verticais */
+    .grid-view .watchlist-item {
         flex-direction: column;
-        align-items: flex-start;
+        padding: 0;
+        background-color: transparent;
+        border: none;
+        gap: 0.5rem;
+        text-align: center;
     }
-    .search-result-poster,
-    .watchlist-poster-wrapper {
+    .grid-view .watchlist-item .watchlist-poster-wrapper {
         width: 100%;
-        height: auto;
-        max-width: 250px;
-        align-self: center;
-    }
-    .watchlist-poster-img {
-        aspect-ratio: 2 / 3;
-    }
-    .add-btn,
-    .remove-btn {
-        align-self: flex-end;
     }
 
-    /* Ajustes para a vista de lista em mobile */
-    .watchlist-item {
-        gap: 0.75rem; /* Reduz o espaço entre a capa e a informação */
+    /* Na VISTA DE LISTA em mobile, os itens são linhas horizontais */
+    .series-list-container:not(.grid-view) .watchlist-item {
+        flex-direction: row;
+        gap: 1rem;
     }
-    .watchlist-poster-wrapper {
-        width: 60px; /* Torna a capa mais pequena */
-        height: 90px;
+    .series-list-container:not(.grid-view) .watchlist-poster-wrapper {
+        width: 80px;
+        height: 120px;
     }
+
     .watchlist-info p { display: none; } /* Esconde a sinopse para poupar espaço */
 
 
@@ -2494,13 +2490,38 @@ body.light-theme .network-logo {
     .v2-header-custom-bg {
         padding: 1.5rem;
     }
-    .v2-poster {
-        width: 180px;
-        height: 270px;
+    .v2-header-content {
+        /* Layout vertical com poster no topo e info em baixo */
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1.5rem; /* Aumenta o espaço entre poster e texto */
     }
-    .v2-title h1 { font-size: 1.8rem; }
-    .v2-title .release-year { font-size: 1.5rem; }
-    .v2-actions { flex-direction: column; align-items: center; }
+    .v2-poster {
+        /* Reduz o poster para um tamanho mais adequado ao mobile */
+        width: 160px;
+        height: 240px;
+    }
+    .v2-details-wrapper {
+        width: 100%; /* Garante que o wrapper ocupa toda a largura */
+    }
+    .v2-title {
+        justify-content: center; /* Centra o título e os botões */
+    }
+    .v2-title h1 { font-size: 1.6rem; } /* Reduz o tamanho do título */
+    .v2-title .release-year { font-size: 1.4rem; }
+    .v2-facts {
+        justify-content: center; /* Centra os factos (data, género, etc.) */
+    }
+    .v2-ratings-group {
+        flex-direction: column; /* Empilha as avaliações verticalmente */
+        align-items: center; /* Centra o grupo de avaliações */
+        gap: 1.5rem; /* Ajusta o espaçamento vertical */
+    }
+    .v2-user-rating {
+        flex-direction: column; /* Coloca o texto por cima das estrelas */
+        gap: 0.75rem; /* Ajusta o espaço entre o texto e as estrelas */
+    }
     .v2-body-content { padding: 1.5rem; }
 
     /* --- Seasons & Episodes List --- */
@@ -2540,12 +2561,36 @@ body.light-theme .network-logo {
     .key-stats-grid {
         grid-template-columns: 1fr;
     }
+    .charts-grid {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        gap: 1rem;
+    }
+    .chart-card {
+        padding: 1rem;
+        /* Limita a altura do cartão para forçar o gráfico a ser mais compacto */
+        position: relative; /* Garante que o canvas do gráfico se ajusta ao cartão */
+        height: 320px;
+    }
+    /* Força o canvas do gráfico a ocupar o espaço do seu contentor, ignorando os estilos inline */
+    .chart-card canvas {
+        /* Força o canvas a ter o tamanho do seu contentor, sobrepondo os estilos da biblioteca de gráficos */
+        width: 100% !important;
+        height: 100% !important;
+        box-sizing: border-box !important; /* Garante que o padding não afeta o tamanho final */
+    }
+    .chart-card h3 {
+        margin-bottom: 1rem;
+    }
 
     /* Ajustes para a vista de grelha em mobile */
+    /* Em mobile, a VISTA DE GRELHA tem 2 colunas */
     .series-list-container.grid-view {
-        grid-template-columns: repeat(2, 1fr); /* Força 2 colunas */
+        display: grid; /* Força o layout de grelha em mobile */
+        grid-template-columns: repeat(2, 1fr); /* Garante 2 colunas */
         gap: 1rem; /* Reduz o espaçamento */
     }
+
 }
 
 /* Estilo para o número do ranking antes do título */
