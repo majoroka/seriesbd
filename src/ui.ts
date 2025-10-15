@@ -713,9 +713,12 @@ function createSeasonElement(seriesData: Series, seasonData: TMDbSeason, traktEp
     const markSeasonIconClass = isSeasonComplete ? 'fas fa-check-square' : 'far fa-square';
     const markSeasonBtnTitle = isSeasonComplete ? 'Desmarcar Temporada' : 'Marcar Temporada Como Vista';
     const translatedSeasonName = getTranslatedSeasonName(seasonData.name, seasonData.season_number!);
-    const detailsElement = el('details', { class: 'season-details', 'data-series-id': seriesData.id, 'data-season-number': seasonData.season_number, 'data-episode-count': totalSeasonEpisodes }, [
-        el('summary', { class: 'season-summary' }, [
-            el('span', { class: 'season-name', text: translatedSeasonName }),
+    const seasonNumber = seasonData.season_number ?? 0;
+    const seasonNameFull = el('span', { class: 'season-name-full', text: translatedSeasonName });
+    const seasonNameShort = el('span', { class: 'season-name-short', text: `T${seasonNumber}` });
+    const detailsElement = el('details', { class: 'season-details', 'data-series-id': seriesData.id, 'data-season-number': seasonNumber, 'data-episode-count': totalSeasonEpisodes }, [
+        el('summary', { class: 'season-summary', 'data-season-number': seasonNumber, 'aria-label': translatedSeasonName }, [
+            el('span', { class: 'season-name' }, [seasonNameFull, seasonNameShort]),
             el('div', { class: 'season-actions-wrapper' }, [
                 el('button', { class: `icon-button mark-season-seen-btn ${markSeasonBtnClass}`, title: markSeasonBtnTitle }, [el('i', { class: markSeasonIconClass })]),
                 el('div', { class: 'season-progress-wrapper' }, [
@@ -1161,5 +1164,7 @@ export function markButtonAsAdded(button: HTMLButtonElement, text: string = 'Adi
     button.disabled = true;
     button.classList.add('added');
     button.title = 'Adicionado à Biblioteca';
-    button.innerHTML = `<i class="fas fa-check"></i> ${text}`;
+    button.setAttribute('aria-label', 'Adicionado à Biblioteca');
+    const isIconOnly = button.classList.contains('icon-only');
+    button.innerHTML = isIconOnly ? '<i class="fas fa-check"></i>' : `<i class="fas fa-check"></i> ${text}`;
 }
