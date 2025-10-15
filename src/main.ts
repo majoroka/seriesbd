@@ -875,6 +875,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => loadPopularSeries());
     setupViewToggle(DOM.premieresViewToggle, DOM.premieresContainer, 'premieres_view_mode', () => loadPremieresSeries());
 
+    DOM.allSeriesGenreFilter?.addEventListener('change', (event) => {
+        const { value } = event.target as HTMLSelectElement;
+        S.setAllSeriesGenreFilter(value);
+        UI.renderAllSeries();
+    });
+
     // Header Search
     const performSearch = () => {
         const query = DOM.addSeriesHeaderInput.value.trim();

@@ -43,6 +43,11 @@ body.light-theme {
     --chart-grid-color: rgba(0, 0, 0, 0.1);
 }
 
+body.light-theme .genre-filter select {
+    background-color: var(--bg-light);
+    color: var(--text-secondary);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -68,6 +73,18 @@ a {
 .app-container {
     display: flex;
     min-height: 100vh;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* ========== SIDEBAR ========== */
@@ -272,6 +289,64 @@ a {
 
 .section-header h2 {
     margin-bottom: 0;
+}
+
+.section-header-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.genre-filter {
+    position: relative;
+}
+
+.genre-filter select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-family: var(--font-main);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.45rem 2.5rem 0.45rem 0.9rem;
+    min-width: 180px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.genre-filter select:hover,
+.genre-filter select:focus {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    outline: none;
+}
+
+.genre-filter::after {
+    content: '\f107';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    right: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.genre-filter:hover::after,
+.genre-filter:focus-within::after {
+    color: var(--primary-accent);
+}
+
+.genre-filter select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* Estilos para o acordeão da secção de tendências */
@@ -1169,6 +1244,7 @@ details[open] > .season-summary::before {
     flex-direction: column;
     background-color: var(--bg-card);
     padding: 1.5rem;
+    overflow: hidden;
 }
 
 .all-ratings-modal-content h2 {
@@ -1181,6 +1257,7 @@ details[open] > .season-summary::before {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-height: calc(80vh - 6rem);
 }
 
 .top-rated-item {
@@ -1538,6 +1615,7 @@ body.light-theme .network-logo {
     flex-direction: column;
     background-color: var(--bg-card);
     padding: 1.5rem;
+    overflow: hidden;
 }
 
 .series-by-rating-modal-content h2 {
@@ -1551,6 +1629,10 @@ body.light-theme .network-logo {
 
 #series-by-rating-modal-results {
     gap: 0.75rem; /* Match other lists */
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: calc(80vh - 6rem);
 }
 
 /* ========== V2 SERIES DETAIL VIEW (TEST) ========== */
@@ -2581,6 +2663,30 @@ body.light-theme .network-logo {
         padding: 1rem;
     }
 
+    #all-series-section .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    #all-series-section .section-header-controls {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    #all-series-section .genre-filter {
+        width: 100%;
+    }
+
+    #all-series-section .genre-filter select {
+        width: 100%;
+    }
+
+    #all-series-section .view-toggle {
+        align-self: center;
+    }
+
     /* --- Header --- */
     .main-header {
         flex-direction: column;
@@ -2772,16 +2878,12 @@ body.light-theme .network-logo {
     }
     .chart-card {
         padding: 1rem;
-        /* Limita a altura do cartão para forçar o gráfico a ser mais compacto */
-        position: relative; /* Garante que o canvas do gráfico se ajusta ao cartão */
-        height: 320px;
+        position: relative;
+        min-height: 320px;
     }
-    /* Força o canvas do gráfico a ocupar o espaço do seu contentor, ignorando os estilos inline */
     .chart-card canvas {
-        /* Força o canvas a ter o tamanho do seu contentor, sobrepondo os estilos da biblioteca de gráficos */
         width: 100% !important;
-        height: 100% !important;
-        box-sizing: border-box !important; /* Garante que o padding não afeta o tamanho final */
+        box-sizing: border-box !important;
     }
     .chart-card h3 {
         margin-bottom: 1rem;

@@ -1,4 +1,4 @@
-import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertification, animateValue, animateDuration, formatDuration } from './utils';
+import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertification, animateValue, animateDuration, formatDuration, translateGenreName } from './utils';
 import * as DOM from './dom';
 import * as S from './state';
 import Chart, { ChartType } from 'chart.js/auto';
@@ -329,16 +329,69 @@ export function renderArchive() {
     });
 }
 
+function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
+    if (!DOM.allSeriesGenreFilter) return;
+    const select = DOM.allSeriesGenreFilter;
+    const uniqueGenres = new Map<number, string>();
+    allSeries.forEach(series => {
+        (series.genres || []).forEach(genre => {
+            if (genre && typeof genre.id === 'number') {
+                uniqueGenres.set(genre.id, genre.name);
+            }
+        });
+    });
+
+    const sortedGenres = Array.from(uniqueGenres.entries()).sort((a, b) =>
+        a[1].localeCompare(b[1], 'pt-PT', { sensitivity: 'base' })
+    );
+
+    const newOptions = [
+        ['all', 'Todos os Géneros'] as [string, string],
+        ...sortedGenres.map(([id, name]) => [String(id), translateGenreName(name)] as [string, string])
+    ];
+    const currentSignature = Array.from(select.options).map(option => `${option.value}:${option.textContent}`).join('|');
+    const newSignature = newOptions.map(([value, label]) => `${value}:${label}`).join('|');
+
+    if (currentSignature !== newSignature) {
+        select.innerHTML = '';
+        newOptions.forEach(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.appendChild(option);
+        });
+    }
+
+    const desiredValue = S.allSeriesGenreFilter;
+    const hasDesired = newOptions.some(([value]) => value === desiredValue);
+    select.value = hasDesired ? desiredValue : 'all';
+    if (!hasDesired && desiredValue !== 'all') {
+        S.setAllSeriesGenreFilter('all');
+    }
+    select.disabled = sortedGenres.length === 0;
+}
+
 export function renderAllSeries() {
     const viewMode = DOM.allSeriesContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.allSeriesContainer.innerHTML = '';
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     allSeries.sort((a, b) => a.name.localeCompare(b.name));
-    if (allSeries.length === 0) {
-        DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série na sua biblioteca. Adicione séries através da pesquisa.</p>';
+    updateAllSeriesGenreFilterOptions(allSeries);
+    const selectedGenreId = S.allSeriesGenreFilter;
+    const filteredSeries = selectedGenreId === 'all'
+        ? allSeries
+        : allSeries.filter(series => (series.genres || []).some(genre => genre.id === Number(selectedGenreId)));
+
+    if (filteredSeries.length === 0) {
+        if (allSeries.length === 0) {
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série na sua biblioteca. Adicione séries através da pesquisa.</p>';
+        } else {
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série encontrada para o género selecionado.</p>';
+        }
         return;
     }
-    allSeries.forEach(series => {
+
+    filteredSeries.forEach(series => {
         const seriesItemElement = createSeriesItemElement(series, true, viewMode, false);
         DOM.allSeriesContainer.appendChild(seriesItemElement);
     });
@@ -970,27 +1023,66 @@ function renderGenresChart() {
     const colors = getChartColors();
     const isMobile = window.innerWidth <= 768;
     const allSeries = [...S.myWatchlist, ...S.myArchive];
-    const genreCounts: { [key: string]: number } = {};
+    const genreCounts: Record<string, number> = {};
     allSeries.forEach(series => {
-        if (Array.isArray(series.genres)) {
-            series.genres.forEach((genre: Genre) => {
-                genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
-            });
-        }
+        if (!Array.isArray(series.genres)) return;
+        series.genres.forEach((genre: Genre) => {
+            const translatedName = translateGenreName(genre.name) || genre.name;
+            if (!translatedName) return;
+            genreCounts[translatedName] = (genreCounts[translatedName] || 0) + 1;
+        });
     });
-    const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a).slice(0, 7);
-    const labels = sortedGenres.map(entry => entry[0]);
-    const data = sortedGenres.map(entry => entry[1]);
+    const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a);
+    const labels = sortedGenres.map(([name]) => name);
+    const data = sortedGenres.map(([, count]) => count);
+    const backgroundColors = labels.map((_, index) =>
+        index % 2 === 0 ? colors.primaryAccentTransparent : colors.secondaryAccentTransparent
+    );
+    const borderColors = labels.map((_, index) =>
+        index % 2 === 0 ? colors.primaryAccent : colors.secondaryAccent
+    );
     
     if (S.charts.genresChart) {
         S.charts.genresChart.destroy();
     }
     if (ctx) {
         S.charts.genresChart = new Chart(ctx, {
-        type: 'bar',
-        data: { labels, datasets: [{ label: 'Nº de Séries', data, backgroundColor: colors.primaryAccentTransparent, borderColor: colors.primaryAccent, borderWidth: 1 }] },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } }, y: { ticks: { color: colors.textColor }, grid: { display: false } } } } as any
-    });
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Nº de Séries',
+                    data,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1,
+                    hoverBackgroundColor: backgroundColors,
+                    hoverBorderColor: borderColors
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: !isMobile,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { color: colors.textColor, precision: 0 },
+                        grid: { color: colors.gridColor }
+                    },
+                    y: {
+                        ticks: {
+                            color: colors.textColor,
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0
+                        },
+                        grid: { display: false }
+                    }
+                }
+            } as any
+        });
     }
 }
 

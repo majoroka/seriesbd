@@ -18,6 +18,7 @@ export const watchlistViewToggle = document.getElementById('watchlist-view-toggl
 export const unseenViewToggle = document.getElementById('unseen-view-toggle') as HTMLDivElement;
 export const allSeriesContainer = document.getElementById('all-series-container') as HTMLDivElement;
 export const allSeriesViewToggle = document.getElementById('all-series-view-toggle') as HTMLDivElement;
+export const allSeriesGenreFilter = document.getElementById('all-series-genre-filter') as HTMLSelectElement;
 export const seriesViewSection = document.getElementById('series-view-section') as HTMLElement;
 export const episodeModal = document.getElementById('episode-modal') as HTMLDivElement;
 export const modalImage = document.getElementById('modal-episode-image') as HTMLImageElement;

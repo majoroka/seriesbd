@@ -150,9 +150,17 @@
                 <section class="card" id="all-series-section" style="display: none;">
                     <div class="section-header">
                         <h2><i class="fas fa-list-ul"></i> Todas</h2>
-                        <div class="view-toggle" id="all-series-view-toggle">
-                            <button class="icon-button active" data-view="list" aria-label="Mudar para vista de lista"><i class="fas fa-bars"></i></button>
-                            <button class="icon-button" data-view="grid" aria-label="Mudar para vista de mosaico"><i class="fas fa-th"></i></button>
+                        <div class="section-header-controls">
+                            <div class="genre-filter">
+                                <label for="all-series-genre-filter" class="visually-hidden">Filtrar por género</label>
+                                <select id="all-series-genre-filter" aria-label="Filtrar séries por género">
+                                    <option value="all">Todos os Géneros</option>
+                                </select>
+                            </div>
+                            <div class="view-toggle" id="all-series-view-toggle">
+                                <button class="icon-button active" data-view="list" aria-label="Mudar para vista de lista"><i class="fas fa-bars"></i></button>
+                                <button class="icon-button" data-view="grid" aria-label="Mudar para vista de mosaico"><i class="fas fa-th"></i></button>
+                            </div>
                         </div>
                     </div>
                     <div id="all-series-container" class="series-list-container">

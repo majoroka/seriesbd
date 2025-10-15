@@ -12,6 +12,7 @@ export let watchedState: WatchedState = {};
 export let userData: UserData = {};
 export let detailViewAbortController = new AbortController();
 export let searchAbortController = new AbortController();
+export let allSeriesGenreFilter = 'all';
 
 // State update functions
 export function setMyWatchlist(data: Series[]) { myWatchlist = data; }
@@ -21,6 +22,7 @@ export function setUserData(data: UserData) { userData = data; }
 export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data; }
 export function setCharts(data: { [key: string]: any }) { charts = data; }
 export function getSeries(seriesId: number): Series | undefined { return [...myWatchlist, ...myArchive].find(s => s.id === seriesId); }
+export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
 
 export function resetDetailViewAbortController() {
     detailViewAbortController.abort();

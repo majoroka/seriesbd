@@ -103,6 +103,47 @@ export function getTranslatedSeasonName(originalName: string, seasonNumber: numb
     return originalName;
 }
 
+const GENRE_TRANSLATIONS: Record<string, string> = {
+    'action & adventure': 'Ação e Aventura',
+    'action': 'Ação',
+    'adventure': 'Aventura',
+    'animation': 'Animação',
+    'comedy': 'Comédia',
+    'crime': 'Crime',
+    'documentary': 'Documentário',
+    'drama': 'Drama',
+    'family': 'Família',
+    'kids': 'Infantil',
+    'mystery': 'Mistério',
+    'news': 'Notícias',
+    'reality': 'Reality',
+    'sci-fi & fantasy': 'Ficção Científica e Fantasia',
+    'science fiction': 'Ficção Científica',
+    'fantasy': 'Fantasia',
+    'soap': 'Novela',
+    'talk': 'Talk Show',
+    'talk show': 'Talk Show',
+    'war & politics': 'Guerra e Política',
+    'war': 'Guerra',
+    'western': 'Faroeste',
+    'romance': 'Romance',
+    'music': 'Música',
+    'history': 'História',
+    'thriller': 'Thriller',
+    'horror': 'Terror'
+};
+
+/**
+ * Traduz um nome de género do TMDb para português sempre que possível.
+ * @param name Nome original do género.
+ * @returns Nome traduzido ou o original se não existir tradução.
+ */
+export function translateGenreName(name: string | null | undefined): string {
+    if (!name) return '';
+    const lower = name.toLowerCase();
+    return GENRE_TRANSLATIONS[lower] ?? name;
+}
+
 /**
  * Formata uma data (string ou objeto Date) para uma string localizada.
  * @param {string | Date} date - A data a ser formatada.
