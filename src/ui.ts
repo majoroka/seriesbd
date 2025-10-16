@@ -214,7 +214,7 @@ export function renderSearchResults(resultsList: Series[]) {
         return;
     }
     resultsList.forEach(series => {
-        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
+        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
         const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
         
@@ -425,7 +425,7 @@ export function renderPremieresSeries(seriesList: Series[]) {
 }
 
 function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false, rank?: number): HTMLElement {
-    const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
+    const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const watchedCount = S.watchedState[series.id]?.length || 0;
     const totalEpisodes = series.total_episodes || 0;
