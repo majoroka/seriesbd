@@ -935,6 +935,10 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
     const unwatchedCount = stats.unwatchedEpisodes;
     const colors = getChartColors();
     const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+        // Em mobile, a altura é controlada pelo CSS.
+    }
 
     // Lógica para garantir que a fatia mais pequena é sempre visível
     const total = watchedCount + unwatchedCount;
@@ -959,7 +963,8 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
         },
         options: {
             responsive: true,
-            maintainAspectRatio: !isMobile, // Só desativa em mobile
+            maintainAspectRatio: !isMobile,
+            aspectRatio: isMobile ? 1 : 2, // Força um círculo perfeito em mobile, mantém o rácio de desktop
             cutout: '60%',
             rotation: 180,
             animation: { duration: 1500 },
@@ -985,14 +990,14 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
                 const centerY = height / 2;
                 const animatedValue = chart.options.plugins?.doughnutCenterText?.animatedValue ?? 0;
                 const totalSeriesText = String(Math.floor(animatedValue));
-                chartCtx.font = `700 3rem ${getComputedStyle(document.body).getPropertyValue('--font-mono').trim()}`;
+                chartCtx.font = `700 1.8rem ${getComputedStyle(document.body).getPropertyValue('--font-mono').trim()}`;
                 chartCtx.textAlign = 'center';
                 chartCtx.textBaseline = 'middle';
                 chartCtx.fillStyle = colors.textPrimaryColor;
-                chartCtx.fillText(totalSeriesText, centerX, centerY - 10);
-                chartCtx.font = `600 0.9rem ${getComputedStyle(document.body).getPropertyValue('--font-main').trim()}`;
+                chartCtx.fillText(totalSeriesText, centerX, centerY - 12);
+                chartCtx.font = `600 0.7rem ${getComputedStyle(document.body).getPropertyValue('--font-main').trim()}`;
                 chartCtx.fillStyle = colors.textColor;
-                chartCtx.fillText('Séries Ativas', centerX, centerY + 20);
+                chartCtx.fillText('Séries Ativas', centerX, centerY + 12);
             }
         }]
     });
@@ -1021,7 +1026,6 @@ function renderGenresChart() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
-    const isMobile = window.innerWidth <= 768;
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const genreCounts: Record<string, number> = {};
     allSeries.forEach(series => {
@@ -1035,6 +1039,16 @@ function renderGenresChart() {
     const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a);
     const labels = sortedGenres.map(([name]) => name);
     const data = sortedGenres.map(([, count]) => count);
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+        // Em mobile, calcula uma altura dinâmica para o canvas para que todas as barras caibam.
+        // O CSS irá controlar o scroll se o canvas ficar muito alto.
+        const dynamicHeight = Math.max(250, labels.length * 32 + 60); // 32px por barra + padding
+        canvas.style.height = `${dynamicHeight}px`;
+    } else {
+        canvas.style.height = '';
+    }
     const backgroundColors = labels.map((_, index) =>
         index % 2 === 0 ? colors.primaryAccentTransparent : colors.secondaryAccentTransparent
     );
@@ -1092,6 +1106,10 @@ function renderAiredYearsChart() {
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
     const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+        // Em mobile, a altura é controlada pelo CSS.
+    }
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
@@ -1110,8 +1128,33 @@ function renderAiredYearsChart() {
     if (ctx) {
         S.charts.airedYears = new Chart(ctx, {
         type: 'line',
-        data: { labels, datasets: [{ label: 'Nº de Séries', data, fill: true, backgroundColor: colors.primaryAccentLine, borderColor: colors.primaryAccent, tension: 0.3 }] },
-        options: { responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: colors.textColor }, grid: { color: colors.gridColor } }, y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } } } } as any
+        data: { 
+            labels, 
+            datasets: [{ 
+                label: 'Nº de Séries',
+                data,
+                fill: true,
+                backgroundColor: colors.primaryAccentLine,
+                borderColor: colors.primaryAccent,
+                tension: isMobile ? 0 : 0.3 // Remove a curvatura em mobile para garantir que a linha é desenhada
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: !isMobile,
+            plugins: { legend: { display: false } },
+            scales: { 
+                x: {
+                    ticks: { 
+                        color: colors.textColor, 
+                        autoSkip: isMobile ? false : true,
+                        font: { size: isMobile ? 9 : 12 } // Reduz o tamanho da fonte em mobile
+                    },
+                    grid: { color: colors.gridColor }
+                },
+                y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } } 
+            } 
+        } as any
     });
     }
 }

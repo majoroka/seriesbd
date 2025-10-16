@@ -2870,8 +2870,10 @@ body.light-theme .network-logo {
     /* --- Statistics --- */
     .key-stats-grid {
         grid-template-columns: 1fr;
+        grid-template-columns: 1fr;
     }
     .charts-grid {
+        grid-template-columns: minmax(0, 1fr); /* Garante que a grelha se adapta a larguras inferiores a 350px */
         margin-top: 1.5rem;
         padding-top: 1.5rem;
         gap: 1rem;
@@ -2879,12 +2881,33 @@ body.light-theme .network-logo {
     .chart-card {
         padding: 1rem;
         position: relative;
-        min-height: 320px;
     }
     .chart-card canvas {
         width: 100% !important;
         box-sizing: border-box !important;
     }
+
+    /* Garante que os gráficos e a lista de favoritos não transbordem horizontalmente */
+    .chart-card canvas,
+    #top-rated-series-list {
+        max-width: 100%; /* Garante que o canvas não transborda do seu contentor */
+    }
+    /* Define alturas fixas para os canvas em mobile para um layout consistente */
+    #watched-unwatched-chart {
+        height: 250px !important;
+    }
+
+    /* Para o gráfico de géneros, limita a altura do card e torna o canvas rolável */
+    #genres-chart {
+        max-height: 350px;
+        overflow-y: auto;
+    }
+
+    /* Define uma altura fixa para o gráfico de anos em mobile */
+    #aired-years-chart {
+        height: 250px !important;
+    }
+
     .chart-card h3 {
         margin-bottom: 1rem;
     }
