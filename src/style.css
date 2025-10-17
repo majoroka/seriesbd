@@ -1774,7 +1774,8 @@ body.light-theme .network-logo {
     border: 1px solid rgba(255, 255, 255, 0.8);
     background-color: transparent;
     color: #fff;
-    font-weight: 700;
+    font-weight: 600; /* Reduz o peso da fonte para semi-bold */
+    font-size: 0.9rem; /* Reduz ligeiramente o tamanho da fonte */
     cursor: pointer;
     transition: all 0.2s ease;
 }
