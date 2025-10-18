@@ -808,10 +808,13 @@ async function loadPopularSeries(loadMore = false) {
 let premieresSeriesPage = 1;
 async function loadPremieresSeries(loadMore = false) {
     if (!loadMore) {
-        premieresSeriesPage = 1; // Reset page count on first load
+        premieresSeriesPage = 1;
         DOM.premieresContainer.innerHTML = '<p>A carregar estreias...</p>';
-        DOM.popularLoadMoreContainer.style.display = 'none';
+        DOM.premieresLoadMoreContainer.style.display = 'none';
     }
+
+    // Calcula o rank inicial para o novo lote de séries
+    const startingRank = loadMore ? DOM.premieresContainer.childElementCount + 1 : 1;
 
     try {        
         const data = await API.fetchNewPremieres(premieresSeriesPage);
@@ -828,7 +831,7 @@ async function loadPremieresSeries(loadMore = false) {
         // Na primeira carga, mostra apenas 18. Nas seguintes, mostra a página toda.
         const seriesToRender = loadMore ? seriesNotInLibrary : seriesNotInLibrary.slice(0, 18);
 
-        UI.renderPremieresSeries(seriesToRender);
+        UI.renderPremieresSeries(seriesToRender, startingRank);
 
         if (data.page < data.total_pages && seriesNotInLibrary.length > 0) {
             DOM.premieresLoadMoreContainer.style.display = 'block';

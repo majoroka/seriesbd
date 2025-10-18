@@ -411,7 +411,7 @@ export function renderPopularSeries(seriesList: Series[]) {
     });
 }
 
-export function renderPremieresSeries(seriesList: Series[]) {
+export function renderPremieresSeries(seriesList: Series[], startingRank: number = 1) {
     const viewMode = DOM.premieresContainer.classList.contains('grid-view') ? 'grid' : 'list';    
     if (seriesList.length === 0 && DOM.premieresContainer.innerHTML === '') {
         DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em estreia encontrada.</p>';
@@ -419,7 +419,8 @@ export function renderPremieresSeries(seriesList: Series[]) {
     }
 
     seriesList.forEach((series, index) => {
-        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, index + 1); // O último `true` indica que é uma secção de descoberta
+        const rank = startingRank + index;
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, rank);
         DOM.premieresContainer.appendChild(seriesItemElement);
     });
 }
