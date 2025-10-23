@@ -296,14 +296,10 @@ export function renderWatchlist() {
 export function renderUnseen() {
     const viewMode = DOM.unseenContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.unseenContainer.innerHTML = '';
-    const now = new Date().getTime();
     const seriesInProgress = S.myWatchlist.filter(series => {
-        // Condição 1: A série já tem episódios vistos.
+        // Uma série está "A Ver" se, e apenas se, tiver pelo menos um episódio visto.
         const hasWatchedEpisodes = S.watchedState[series.id] && S.watchedState[series.id].length > 0;
-        // Condição 2: O próximo episódio agendado já passou.
-        const nextEp = series._details?.next_episode_to_air;
-        const hasJustAired = nextEp && new Date(nextEp.air_date).getTime() < now;
-        return hasWatchedEpisodes || hasJustAired;
+        return hasWatchedEpisodes;
     });
     if (seriesInProgress.length === 0) {
         DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em progresso.</p>';
@@ -431,9 +427,13 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const watchedCount = S.watchedState[series.id]?.length || 0;
     const totalEpisodes = series.total_episodes || 0;
     const progressPercentage = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
+    const isSeriesInProgress = watchedCount > 0 && progressPercentage < 100;
+
     const unwatchedCount = totalEpisodes > 0 ? totalEpisodes - watchedCount : 0;
     let unwatchedBadge = null;
-    if (showUnwatchedBadge && unwatchedCount > 0 && viewMode === 'grid') {
+    // Mostra o badge se a flag `showUnwatchedBadge` estiver ativa (secção "A Ver")
+    // OU se a série estiver em progresso (para a secção "Todas").
+    if ((showUnwatchedBadge || isSeriesInProgress) && unwatchedCount > 0 && viewMode === 'grid') {
         unwatchedBadge = el('div', { class: 'unwatched-badge', text: unwatchedCount });
     }
 

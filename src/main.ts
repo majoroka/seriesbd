@@ -168,7 +168,6 @@ async function updateNextAired() {
             }
         };
         await processInBatches(justAiredSeriesIds, 5, 1000, refreshTask);
-        UI.renderUnseen(); // Re-renderiza a lista "A Ver" para incluir as séries atualizadas
     }
 
     const upcomingEpisodes = allUserSeries
