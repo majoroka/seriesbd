@@ -1653,7 +1653,7 @@ body.light-theme .network-logo {
 
 .v2-header-custom-bg {
     /* This creates the dark overlay with a gradient. The color is fixed to ensure text readability on any backdrop. */
-    background-image: linear-gradient(to right, rgba(25, 25, 25, 0.98) 150px, rgba(25, 25, 25, 0.8) 100%);
+    background-image: linear-gradient(to right, rgba(25, 25, 25, 0.90) 150px, rgba(25, 25, 25, 0.8) 100%);
     padding: 2.5rem;
 }
 
