@@ -30,6 +30,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Responsável por toda a renderização da interface: listas, cards, modais, gráficos, animações e acessibilidade.
 - Centraliza a criação de elementos (`el`), manipula classes e contém lógica de interação (p.ex. marcar episódio visto, abrir trailer).
 - Produz e gere instâncias Chart.js com opções de renderização adaptativas para mobile e suporta exportação a PNG/CSV via utilitários.
+- Implementa duas vistas de detalhes de série: a original e uma nova **vista V2** mais imersiva com backdrop dinâmico.
 - Emite eventos personalizados (`display-series-details`) para desacoplar interações do fluxo em `main.ts`.
 
 ### `src/state.ts`
@@ -145,6 +146,6 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 - **Erros TMDb/Trakt:** atualmente apenas logados; pode-se introduzir retry/backoff específico ou fila de operações offline.
 - **Responsividade:** a folha `style.css` cobre breakpoints principais, com especial atenção à grelha de estatísticas que agora se adapta a ecrãs verticais estreitos. Seria útil introduzir testes visuais ou Storybook.
-- **Desempenho:** `renderSeriesDetails` cria toda a árvore DOM a cada interação; virtualizar episódios pode melhorar carga em séries muito longas.
 - **Internacionalização:** UI e dados estão em `pt-PT`; preparar camada de tradução facilitaria expansão.
 - **Sincronização multi-dispositivo:** hoje é apenas local; uma API backend seria necessária para cloud sync (ver Roadmap).
+- **Desempenho na Vista de Detalhes:** A função `renderSeriesDetails` cria toda a árvore DOM dos episódios a cada interação. Em séries com muitas temporadas, a virtualização da lista (renderizar apenas os episódios visíveis) poderia melhorar significativamente o desempenho.

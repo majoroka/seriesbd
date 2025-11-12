@@ -2,15 +2,18 @@
 
 Aplicação web para organizar e acompanhar séries de televisão usando dados do TMDb e da Trakt. Permite gerir uma biblioteca pessoal, marcar episódios como vistos, acompanhar estreias e tendências e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
-## Funcionalidades principais
+- ## Funcionalidades principais
 
-- Gestão da biblioteca em quatro vistas: `Quero Ver`, `A Ver`, `Arquivo` e `Todas`.
-- Integração com as APIs TMDb (detalhes, imagens) e Trakt (tendências, ratings, temporadas) através de funções Netlify que protegem as chaves.
-- Modo detalhes com temporadas, episódios, trailers, notas pessoais e avaliação do utilizador.
-- Capas das séries com maior resolução (`w185`) para uma melhor qualidade visual, mantendo o carregamento otimizado.
-- Painel de estatísticas com gráficos Chart.js, exportação de CSV e imagem e indicadores de tempo total de visualização.
-- Sincronização local com IndexedDB (Dexie), migração automática a partir de `localStorage` e suporte offline com `vite-plugin-pwa`.
-- Ferramentas de importação/exportação de dados, pesquisa rápida e modo grelha/lista persistente por secção.
+- **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
+- **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente.
+- **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações (TMDb, IMDb), trailers e gestão de progresso.
+- **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), populares e próximas estreias.
+- **Estatísticas Detalhadas**: Visualize o tempo total assistido, número de episódios vistos e analise os seus hábitos com gráficos de géneros, anos de lançamento e muito mais.
+- **Classificação e Notas**: Avalie as suas séries de 1 a 10 estrelas e adicione notas pessoais.
+- **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
+- **Temas Claro e Escuro**: Escolha o seu tema preferido para uma experiência de visualização mais confortável.
+- **Importação e Exportação**: Faça backup e restaure a sua biblioteca a qualquer momento.
+- **Seguro**: As chaves de API são protegidas através de funções serverless na Netlify, nunca sendo expostas no browser.
 
 ## Stack tecnológica
 

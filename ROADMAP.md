@@ -7,6 +7,13 @@
 - Integração com TMDb/Trakt via funções Netlify e cache de temporadas.
 - Estatísticas com gráficos e exportações, import/export completo da base local.
 
+## ✅ Recém-adicionado
+
+- **Vista de Detalhes V2**: Implementada uma nova UI imersiva para a página de detalhes da série, com backdrop dinâmico e layout melhorado.
+- **Vista em Grelha**: Adicionada a opção de visualizar as listas de séries em formato de grelha, focada nos posters.
+- **Secção de Tendências**: Introduzidos carrosséis na dashboard para mostrar as séries em tendência diária e semanal.
+- **Melhorias de Responsividade**: Otimizado o layout para ecrãs de diferentes tamanhos, incluindo a nova vista de detalhes e a grelha de estatísticas.
+
 ## Curto prazo (próximos sprints)
 
 1. **Qualidade e testes**
