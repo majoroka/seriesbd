@@ -13,6 +13,14 @@ export let userData: UserData = {};
 export let detailViewAbortController = new AbortController();
 export let searchAbortController = new AbortController();
 export let allSeriesGenreFilter = 'all';
+export type DetailEpisodeMeta = { id: number; season_number: number; episode_number: number; };
+export type DetailSeasonMeta = { season_number: number; episode_count: number; };
+export type DetailViewData = {
+    allEpisodes: DetailEpisodeMeta[];
+    episodeMap: Record<number, number>;
+    seasons: DetailSeasonMeta[];
+};
+export let detailViewData: DetailViewData = { allEpisodes: [], episodeMap: {}, seasons: [] };
 
 // State update functions
 export function setMyWatchlist(data: Series[]) { myWatchlist = data; }
@@ -23,10 +31,14 @@ export function setCurrentSearchResults(data: Series[]) { currentSearchResults =
 export function setCharts(data: { [key: string]: any }) { charts = data; }
 export function getSeries(seriesId: number): Series | undefined { return [...myWatchlist, ...myArchive].find(s => s.id === seriesId); }
 export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
+export function setDetailViewData(data: DetailViewData) { detailViewData = data; }
+export function getDetailViewData(): DetailViewData { return detailViewData; }
+export function resetDetailViewData() { detailViewData = { allEpisodes: [], episodeMap: {}, seasons: [] }; }
 
 export function resetDetailViewAbortController() {
     detailViewAbortController.abort();
     detailViewAbortController = new AbortController();
+    resetDetailViewData();
 }
 
 export function resetSearchAbortController() {
@@ -174,7 +186,7 @@ export async function migrateFromLocalStorage() {
                 if (isNaN(sId)) continue;
                 oldWatchedState[seriesId].forEach((episodeId: number) => {
                     if (episodeId !== null && episodeId !== undefined) {
-                        const epId = episodeId;
+                        const epId = parseInt(String(episodeId), 10);
                         if (!isNaN(epId)) watchedItems.push({ seriesId: sId, episodeId: epId } as WatchedStateItem);
                     }
                 });

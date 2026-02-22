@@ -43,8 +43,12 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, ret
 
             const response = await fetch(url, options);
 
-            // Retry on server errors (5xx), but not on client errors (4xx)
-            if (response.status >= 500 && response.status < 600) {
+            // Retry on transient errors (5xx, timeout and rate-limit), but not on generic client errors (4xx)
+            if (
+                (response.status >= 500 && response.status < 600) ||
+                response.status === 408 ||
+                response.status === 429
+            ) {
                 throw new Error(`Server error: ${response.status}`);
             }
 

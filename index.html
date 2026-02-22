@@ -278,8 +278,8 @@
     </div>
 
     <!-- ========== MODAL FOR EPISODE DETAILS ========== -->
-    <div id="episode-modal" class="modal-overlay">
-        <div class="modal-content">
+    <div id="episode-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-episode-title" aria-describedby="modal-episode-synopsis" aria-hidden="true">
+        <div class="modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
             <img id="modal-episode-image" src="" alt="Imagem do episódio" loading="lazy">
             <div class="modal-episode-info">
@@ -290,16 +290,17 @@
     </div>
 
     <!-- ========== NOTIFICATION MODAL ========== -->
-    <div id="notification-modal" class="modal-overlay">
-        <div class="modal-content notification-modal-content">
+    <div id="notification-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Notificação" aria-describedby="notification-message" aria-hidden="true">
+        <div class="modal-content notification-modal-content" tabindex="-1">
             <p id="notification-message"></p>
             <button id="notification-ok-btn">OK</button>
         </div>
     </div>
 
     <!-- ========== TRAILER MODAL ========== -->
-    <div id="trailer-modal" class="modal-overlay">
-        <div class="modal-content trailer-modal-content">
+    <div id="trailer-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="trailer-modal-title" aria-hidden="true">
+        <div class="modal-content trailer-modal-content" tabindex="-1">
+            <h2 id="trailer-modal-title" class="visually-hidden">Trailer</h2>
             <button class="modal-close-btn">&times;</button>
             <div class="video-container">
                 <iframe id="trailer-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
@@ -308,10 +309,10 @@
     </div>
 
     <!-- ========== LIBRARY SEARCH MODAL ========== -->
-    <div id="library-search-modal" class="modal-overlay">
-        <div class="modal-content library-search-modal-content">
+    <div id="library-search-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="library-search-modal-title" aria-hidden="true">
+        <div class="modal-content library-search-modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
-            <h2>Pesquisar na Biblioteca</h2>
+            <h2 id="library-search-modal-title">Pesquisar na Biblioteca</h2>
             <div class="search-bar" style="width: 100%; margin-bottom: 1.5rem;">
                 <i class="fas fa-search"></i>
                 <input type="text" id="library-search-modal-input" name="librarySearch" placeholder="Escreva o nome da série...">
@@ -323,10 +324,10 @@
     </div>
 
     <!-- ========== ALL RATINGS MODAL ========== -->
-    <div id="all-ratings-modal" class="modal-overlay">
-        <div class="modal-content all-ratings-modal-content">
+    <div id="all-ratings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="all-ratings-modal-title" aria-hidden="true">
+        <div class="modal-content all-ratings-modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
-            <h2>As Minhas Avaliações</h2>
+            <h2 id="all-ratings-modal-title">As Minhas Avaliações</h2>
             <div id="ratings-summary-list">
                 <!-- List of ratings (10 stars, 9 stars, etc.) will be injected here -->
             </div>
@@ -334,8 +335,8 @@
     </div>
 
     <!-- ========== SERIES BY RATING MODAL ========== -->
-    <div id="series-by-rating-modal" class="modal-overlay">
-        <div class="modal-content series-by-rating-modal-content">
+    <div id="series-by-rating-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="series-by-rating-modal-title" aria-hidden="true">
+        <div class="modal-content series-by-rating-modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
             <h2 id="series-by-rating-modal-title">Séries Avaliadas</h2>
             <div id="series-by-rating-modal-results">
@@ -345,8 +346,8 @@
     </div>
 
     <!-- ========== CONFIRMATION MODAL ========== -->
-    <div id="confirmation-modal" class="modal-overlay">
-        <div class="modal-content notification-modal-content">
+    <div id="confirmation-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirmação" aria-describedby="confirmation-message" aria-hidden="true">
+        <div class="modal-content notification-modal-content" tabindex="-1">
             <p id="confirmation-message"></p>
             <div class="confirmation-buttons">
                 <button id="confirm-btn" class="search-bar-button">Confirmar</button>

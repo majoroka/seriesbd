@@ -274,18 +274,25 @@ async function displaySeriesDetails(seriesId: number) {
         const allTMDbSeasonsData = seasonResults.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled').map(res => res.value);
 
         const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
-        DOM.seriesViewSection.dataset.allEpisodes = JSON.stringify(allEpisodesForSeries.map((ep: any) => ({ id: ep.id, season_number: ep.season_number, episode_number: ep.episode_number })));
-        
+        const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
+            id: ep.id,
+            season_number: ep.season_number,
+            episode_number: ep.episode_number,
+        }));
+
         const episodeToSeasonMap: { [key: number]: number } = {};
         allTMDbSeasonsData.forEach(season => {
             season.episodes.forEach((episode: Episode) => {
                 episodeToSeasonMap[episode.id] = season.season_number!;
             });
         });
-        DOM.seriesViewSection.dataset.episodeMap = JSON.stringify(episodeToSeasonMap);
-        
+
         const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
-        DOM.seriesViewSection.dataset.seasons = JSON.stringify(seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })));
+        S.setDetailViewData({
+            allEpisodes: allEpisodesMeta,
+            episodeMap: episodeToSeasonMap,
+            seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
+        });
 
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
 
@@ -347,11 +354,10 @@ async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonEl
  */
 async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<void> {
     const watchedSet = new Set(S.watchedState[seriesId] || []);
-    const allEpisodesJSON = DOM.seriesViewSection.dataset.allEpisodes;
+    const allEpisodes = S.getDetailViewData().allEpisodes;
     let episodesToMarkAsSeen = [episodeId];
 
-    if (allEpisodesJSON) {
-        const allEpisodes: { id: number }[] = JSON.parse(allEpisodesJSON);
+    if (allEpisodes.length > 0) {
         const clickedEpisodeIndex = allEpisodes.findIndex(ep => ep.id === episodeId);
 
         if (clickedEpisodeIndex > 0) {
@@ -991,6 +997,8 @@ async function loadPremieresSeries(loadMore = false) {
 }
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    UI.initModalAccessibility();
+
     // Navigation
     DOM.mainNavLinks.forEach(link => {
         link.addEventListener('click', (e) => {
@@ -1198,16 +1206,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (seriesId) {
                 UI.showNotification('A marcar todos os episódios como vistos...');
 
-                const allEpisodes: {id: number}[] = JSON.parse(DOM.seriesViewSection.dataset.allEpisodes || '[]');
-                const allEpisodeIds = allEpisodes.map((ep: {id: number}) => ep.id);
+                const { allEpisodes, seasons } = S.getDetailViewData();
+                const allEpisodeIds = allEpisodes.map(ep => ep.id);
 
                 if (allEpisodeIds.length > 0) {
                     await S.markEpisodesAsWatched(seriesId, allEpisodeIds);
 
                     document.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
                     
-                    const seasons: {season_number: number}[] = JSON.parse(DOM.seriesViewSection.dataset.seasons || '[]');
-                    seasons.forEach((season: {season_number: number}) => UI.updateSeasonProgressUI(seriesId, season.season_number));
+                    seasons.forEach(season => UI.updateSeasonProgressUI(seriesId, season.season_number));
                     
                     UI.updateOverallProgressBar(seriesId);
 
@@ -1233,8 +1240,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seriesId = parseInt((seasonDetailsElement as HTMLElement).dataset.seriesId!, 10);
                 const seasonNumber = parseInt((seasonDetailsElement as HTMLElement).dataset.seasonNumber!, 10);
                 
-                const allEpisodes = JSON.parse(DOM.seriesViewSection.dataset.allEpisodes || '[]');
-                const seasonEpisodeIds = allEpisodes.filter((ep: any) => ep.season_number === seasonNumber).map((ep: any) => ep.id);
+                const allEpisodes = S.getDetailViewData().allEpisodes;
+                const seasonEpisodeIds = allEpisodes
+                    .filter(ep => ep.season_number === seasonNumber)
+                    .map(ep => ep.id);
 
                 if (seasonEpisodeIds.length === 0) return;
 

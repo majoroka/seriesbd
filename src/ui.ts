@@ -13,7 +13,10 @@ declare module 'chart.js' {
     }
 }
 
-let confirmationResolve: (value: boolean) => void;
+let confirmationResolve: ((value: boolean) => void) | null = null;
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[] = [];
+let modalA11yInitialized = false;
 
 // UI Update Functions
 export function showSection(targetId: string) {
@@ -83,92 +86,210 @@ export function applyTheme(theme: string) {
     }
 }
 
+function focusModal(overlay: HTMLDivElement, preferredFocus?: HTMLElement | null) {
+    const content = overlay.querySelector<HTMLElement>('.modal-content');
+    const focusableElements = Array.from(
+        (content || overlay).querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    ).filter(el => el.offsetParent !== null || el.getClientRects().length > 0);
+
+    const target = preferredFocus && (preferredFocus.offsetParent !== null || preferredFocus.getClientRects().length > 0)
+        ? preferredFocus
+        : (focusableElements[0] || content);
+
+    target?.focus();
+}
+
+function showModal(overlay: HTMLDivElement, preferredFocus?: HTMLElement | null) {
+    const currentFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const existingIndex = modalStack.findIndex(item => item.overlay === overlay);
+    if (existingIndex !== -1) modalStack.splice(existingIndex, 1);
+    modalStack.push({ overlay, returnFocus: currentFocus });
+
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        overlay.classList.add('visible');
+        focusModal(overlay, preferredFocus);
+    }, 10);
+}
+
+function hideModal(overlay: HTMLDivElement, afterHide?: () => void) {
+    const stackIndex = modalStack.findIndex(item => item.overlay === overlay);
+    const wasTopModal = stackIndex === modalStack.length - 1;
+    const stackItem = stackIndex >= 0 ? modalStack[stackIndex] : null;
+
+    overlay.classList.remove('visible');
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        overlay.setAttribute('aria-hidden', 'true');
+        if (stackIndex >= 0) {
+            modalStack.splice(stackIndex, 1);
+        }
+        afterHide?.();
+
+        if (!wasTopModal) return;
+        if (stackItem?.returnFocus && document.contains(stackItem.returnFocus)) {
+            stackItem.returnFocus.focus();
+            return;
+        }
+        const newTopModal = modalStack[modalStack.length - 1];
+        if (newTopModal) {
+            focusModal(newTopModal.overlay);
+        }
+    }, 300);
+}
+
+function closeTopModal() {
+    const topModal = modalStack[modalStack.length - 1]?.overlay;
+    if (!topModal) return;
+    switch (topModal.id) {
+        case 'episode-modal':
+            closeEpisodeModal();
+            break;
+        case 'trailer-modal':
+            closeTrailerModal();
+            break;
+        case 'library-search-modal':
+            closeLibrarySearchModal();
+            break;
+        case 'all-ratings-modal':
+            closeAllRatingsModal();
+            break;
+        case 'series-by-rating-modal':
+            closeSeriesByRatingModal();
+            break;
+        case 'notification-modal':
+            closeNotificationModal();
+            break;
+        case 'confirmation-modal':
+            closeConfirmationModal(false);
+            break;
+        default:
+            break;
+    }
+}
+
+function trapFocusWithinModal(event: KeyboardEvent, overlay: HTMLDivElement) {
+    const content = overlay.querySelector<HTMLElement>('.modal-content');
+    const focusableElements = Array.from(
+        (content || overlay).querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    ).filter(el => el.offsetParent !== null || el.getClientRects().length > 0);
+
+    if (focusableElements.length === 0) {
+        event.preventDefault();
+        content?.focus();
+        return;
+    }
+
+    const first = focusableElements[0];
+    const last = focusableElements[focusableElements.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    const isInsideModal = !!active && overlay.contains(active);
+
+    if (event.shiftKey) {
+        if (!isInsideModal || active === first) {
+            event.preventDefault();
+            last.focus();
+        }
+        return;
+    }
+
+    if (!isInsideModal || active === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
+export function initModalAccessibility() {
+    if (modalA11yInitialized) return;
+    modalA11yInitialized = true;
+
+    document.addEventListener('keydown', (event: KeyboardEvent) => {
+        const topModal = modalStack[modalStack.length - 1]?.overlay;
+        if (!topModal) return;
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeTopModal();
+            return;
+        }
+
+        if (event.key === 'Tab') {
+            trapFocusWithinModal(event, topModal);
+        }
+    });
+}
+
 // Modal Functions
 export function openEpisodeModal(title: string, overview: string, imageUrl: string) {
     DOM.modalTitle.textContent = title;
     DOM.modalSynopsis.textContent = overview;
     DOM.modalImage.src = imageUrl;
-    DOM.episodeModal.style.display = 'flex';
-    setTimeout(() => DOM.episodeModal.classList.add('visible'), 10);
+    showModal(DOM.episodeModal, DOM.modalCloseBtn);
 }
 
 export function closeEpisodeModal() {
-    DOM.episodeModal.classList.remove('visible');
-    setTimeout(() => {
+    hideModal(DOM.episodeModal, () => {
         DOM.episodeModal.style.display = 'none';
         DOM.modalImage.src = '';
         DOM.modalTitle.textContent = '';
         DOM.modalSynopsis.textContent = '';
-    }, 300);
+    });
 }
 
 export function openTrailerModal(videoKey: string) {
     DOM.trailerIframe.src = `https://www.youtube.com/embed/${videoKey}?autoplay=1&rel=0`;
-    DOM.trailerModal.style.display = 'flex';
-    setTimeout(() => DOM.trailerModal.classList.add('visible'), 10);
+    showModal(DOM.trailerModal, DOM.trailerModalCloseBtn);
 }
 
 export function closeTrailerModal() {
-    DOM.trailerModal.classList.remove('visible');
-    setTimeout(() => {
+    hideModal(DOM.trailerModal, () => {
         DOM.trailerModal.style.display = 'none';
         DOM.trailerIframe.src = '';
-    }, 300);
+    });
 }
 
 export function openLibrarySearchModal() {
     DOM.librarySearchModalInput.value = '';
     DOM.librarySearchModalResults.innerHTML = '<p>Comece a escrever para pesquisar na sua biblioteca.</p>';
-    DOM.librarySearchModal.style.display = 'flex';
-    setTimeout(() => {
-        DOM.librarySearchModal.classList.add('visible');
-        DOM.librarySearchModalInput.focus();
-    }, 10);
+    showModal(DOM.librarySearchModal, DOM.librarySearchModalInput);
 }
 
 export function closeLibrarySearchModal() {
-    DOM.librarySearchModal.classList.remove('visible');
-    setTimeout(() => DOM.librarySearchModal.style.display = 'none', 300);
+    hideModal(DOM.librarySearchModal);
 }
 
 export function openAllRatingsModal() {
     renderRatingsSummary();
-    DOM.allRatingsModal.style.display = 'flex';
-    setTimeout(() => DOM.allRatingsModal.classList.add('visible'), 10);
+    showModal(DOM.allRatingsModal, DOM.allRatingsModalCloseBtn);
 }
 
 export function closeAllRatingsModal() {
-    DOM.allRatingsModal.classList.remove('visible');
-    setTimeout(() => DOM.allRatingsModal.style.display = 'none', 300);
+    hideModal(DOM.allRatingsModal);
 }
 
 export function openSeriesByRatingModal(rating: number) {
     DOM.seriesByRatingModalTitle.textContent = `Séries com ${rating} Estrela${rating > 1 ? 's' : ''}`;
     renderRatedSeriesByRating(rating);
-    DOM.seriesByRatingModal.style.display = 'flex';
-    setTimeout(() => DOM.seriesByRatingModal.classList.add('visible'), 10);
+    showModal(DOM.seriesByRatingModal, DOM.seriesByRatingModalCloseBtn);
 }
 
 export function closeSeriesByRatingModal() {
-    DOM.seriesByRatingModal.classList.remove('visible');
-    setTimeout(() => DOM.seriesByRatingModal.style.display = 'none', 300);
+    hideModal(DOM.seriesByRatingModal);
 }
 
 export function showNotification(message: string) {
     DOM.notificationMessage.textContent = message;
-    DOM.notificationModal.style.display = 'flex';
-    setTimeout(() => DOM.notificationModal.classList.add('visible'), 10);
+    showModal(DOM.notificationModal, DOM.notificationOkBtn);
 }
 
 export function closeNotificationModal() {
-    DOM.notificationModal.classList.remove('visible');
-    setTimeout(() => DOM.notificationModal.style.display = 'none', 300);
+    hideModal(DOM.notificationModal);
 }
 
 export function showConfirmationModal(message: string): Promise<boolean> {
     DOM.confirmationMessage.textContent = message;
-    DOM.confirmationModal.style.display = 'flex';
-    setTimeout(() => DOM.confirmationModal.classList.add('visible'), 10);
+    showModal(DOM.confirmationModal, DOM.confirmBtn);
 
     return new Promise<boolean>((resolve) => {
         confirmationResolve = resolve;
@@ -176,12 +297,10 @@ export function showConfirmationModal(message: string): Promise<boolean> {
 }
 
 export function closeConfirmationModal(result: boolean) {
-    DOM.confirmationModal.classList.remove('visible');
-    setTimeout(() => {
-        DOM.confirmationModal.style.display = 'none';
-    }, 300);
+    hideModal(DOM.confirmationModal);
     if (confirmationResolve) {
         confirmationResolve(result);
+        confirmationResolve = null;
     }
 }
 
@@ -642,16 +761,6 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
     detailSection.appendChild(headerElement);
     detailSection.dataset.seriesId = String(seriesData.id);
 
-    const episodeMap: { [key: number]: number } = {};
-    allTMDbSeasonsData.forEach(season => {
-        if (season.episodes) {
-            season.episodes.forEach(episode => {
-                episodeMap[episode.id] = season.season_number!;
-            });
-        }
-    });
-    detailSection.dataset.episodeMap = JSON.stringify(episodeMap);
-
     const bodyContentContainer = el('div', { class: 'v2-body-content' });
     const peopleElement = (() => {
         const creators = seriesData.created_by || [];
@@ -848,7 +957,7 @@ export function updateSeasonProgressUI(seriesId: number, seasonNumber: number) {
     if (!seasonDetailsElement) return;
     const totalSeasonEpisodes = parseInt((seasonDetailsElement as HTMLElement).dataset.episodeCount!, 10);
     if (isNaN(totalSeasonEpisodes) || totalSeasonEpisodes === 0) return;
-    const episodeMap: { [key: number]: number } = JSON.parse(DOM.seriesViewSection.dataset.episodeMap || '{}');
+    const episodeMap = S.getDetailViewData().episodeMap;
     const watchedSeriesEpisodes = S.watchedState[seriesId] || [];
     const watchedSeasonEpisodesCount = watchedSeriesEpisodes.filter(epId => episodeMap[epId] === seasonNumber).length;
     const progress = (watchedSeasonEpisodesCount / totalSeasonEpisodes) * 100;
