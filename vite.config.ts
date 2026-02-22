@@ -8,7 +8,7 @@ const DEV_CSP = [
   "object-src 'none'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-  "img-src 'self' data: https://image.tmdb.org https://via.placeholder.com",
+  "img-src 'self' data: https://image.tmdb.org https://via.placeholder.com https://walter.trakt.tv https://*.trakt.tv",
   "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*",
   "frame-src https://www.youtube.com",
   "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
