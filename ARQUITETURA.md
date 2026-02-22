@@ -144,7 +144,10 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ## Observabilidade e UX
 
-- Logging via `console` durante migração, atualização de metadados e operações críticas (facilita debug em produção).
+- Frontend (`main.ts`) regista falhas por secção dinâmica com contexto mínimo (`section`, `endpoint`, `status`) e mantém snapshot em `sessionStorage` (`seriesdb.observability.v1`).
+- Frontend guarda métricas básicas por secção (execuções, falhas, lentidão e duração média) para diagnóstico rápido em runtime.
+- Netlify Functions (`tmdb.mjs`, `trakt.mjs`) emitem logs estruturados com `requestId`, `endpoint`, `status` e latência upstream.
+- As respostas proxy incluem headers de troubleshooting: `x-request-id`, `x-upstream-status`, `x-upstream-latency-ms`.
 - Modais de confirmação/erro (`UI.showNotification`, `showConfirmationModal`) mantêm feedback consistente.
 - Animações (`animateValue`, `animateDuration`) melhoram percepção de progresso sem sacrificar desempenho.
 

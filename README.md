@@ -140,4 +140,7 @@ npm run test
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
+- Observabilidade mínima ativa:
+  - frontend regista falhas por secção dinâmica com contexto (`secção`, `endpoint`, `status`) e snapshot em `sessionStorage` (`seriesdb.observability.v1`);
+  - funções Netlify devolvem `x-request-id`, `x-upstream-status` e `x-upstream-latency-ms` para troubleshooting.
 - Em offline, funcionalidades dependentes de `/api/*` (pesquisa remota, tendências/populares/estreias, ratings públicos) podem ficar indisponíveis até voltar a ligação.

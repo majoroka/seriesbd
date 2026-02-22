@@ -9,6 +9,148 @@ import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 
+const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
+const SLOW_SECTION_THRESHOLD_MS = 1500;
+type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
+type FailureMetric = {
+    failCount: number;
+    lastFailureAt: string;
+    lastEndpoint: string;
+    lastStatus: number | 'unknown';
+    lastMessage: string;
+};
+type PerformanceMetric = {
+    runs: number;
+    failures: number;
+    slowRuns: number;
+    avgDurationMs: number;
+    lastDurationMs: number;
+    lastRunAt: string;
+};
+
+const sectionFailureMetrics: Record<string, FailureMetric> = {};
+const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+function getErrorStatus(error: unknown): number | null {
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+        const status = Number((error as { status?: unknown }).status);
+        if (!Number.isNaN(status) && status > 0) return status;
+    }
+    const message = getErrorMessage(error);
+    const statusMatch = message.match(/status:\s*(\d{3})/i);
+    if (!statusMatch) return null;
+    const parsed = Number(statusMatch[1]);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function persistObservabilitySnapshot() {
+    const snapshot = {
+        updatedAt: new Date().toISOString(),
+        failures: sectionFailureMetrics,
+        performance: sectionPerformanceMetrics,
+    };
+    try {
+        sessionStorage.setItem(OBSERVABILITY_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (error) {
+        console.warn('[obs][client] Não foi possível persistir snapshot de observabilidade.', error);
+    }
+    (window as unknown as { __seriesdbObservability?: unknown }).__seriesdbObservability = snapshot;
+}
+
+function recordSectionPerformance(section: ObservabilitySection, durationMs: number, success: boolean) {
+    const current = sectionPerformanceMetrics[section] || {
+        runs: 0,
+        failures: 0,
+        slowRuns: 0,
+        avgDurationMs: 0,
+        lastDurationMs: 0,
+        lastRunAt: '',
+    };
+
+    const runs = current.runs + 1;
+    const failures = current.failures + (success ? 0 : 1);
+    const slowRuns = current.slowRuns + (durationMs >= SLOW_SECTION_THRESHOLD_MS ? 1 : 0);
+    const avgDurationMs = Number((((current.avgDurationMs * current.runs) + durationMs) / runs).toFixed(1));
+
+    sectionPerformanceMetrics[section] = {
+        runs,
+        failures,
+        slowRuns,
+        avgDurationMs,
+        lastDurationMs: Number(durationMs.toFixed(1)),
+        lastRunAt: new Date().toISOString(),
+    };
+
+    if (durationMs >= SLOW_SECTION_THRESHOLD_MS) {
+        console.warn('[obs][client] Secção lenta detetada', {
+            section,
+            durationMs: Number(durationMs.toFixed(1)),
+            thresholdMs: SLOW_SECTION_THRESHOLD_MS,
+            success,
+        });
+    }
+}
+
+function recordSectionFailure(
+    section: ObservabilitySection,
+    endpoint: string,
+    error: unknown,
+    extra: Record<string, unknown> = {}
+) {
+    const status = getErrorStatus(error);
+    const message = getErrorMessage(error);
+    const nowIso = new Date().toISOString();
+    const previous = sectionFailureMetrics[section];
+
+    sectionFailureMetrics[section] = {
+        failCount: (previous?.failCount || 0) + 1,
+        lastFailureAt: nowIso,
+        lastEndpoint: endpoint,
+        lastStatus: status ?? 'unknown',
+        lastMessage: message,
+    };
+
+    console.error('[obs][client] Falha de secção', {
+        section,
+        endpoint,
+        status: status ?? 'unknown',
+        message,
+        online: navigator.onLine,
+        ...extra,
+    });
+}
+
+async function runObservedSection<T>(
+    section: ObservabilitySection,
+    endpoint: string,
+    request: () => Promise<T>,
+    extra: Record<string, unknown> = {}
+): Promise<T> {
+    const startedAt = performance.now();
+    let success = false;
+    try {
+        const result = await request();
+        success = true;
+        return result;
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            success = true;
+            throw error;
+        }
+        recordSectionFailure(section, endpoint, error, extra);
+        throw error;
+    } finally {
+        const durationMs = performance.now() - startedAt;
+        recordSectionPerformance(section, durationMs, success);
+        persistObservabilitySnapshot();
+    }
+}
+
 async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
     const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
     if (!isInLibrary) {
@@ -226,10 +368,15 @@ async function displaySeriesDetails(seriesId: number) {
         DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
         UI.showSection('series-view-section');
         
-        const [seriesData, creditsData] = await Promise.all([
-            API.fetchSeriesDetails(seriesId, signal),
-            API.fetchSeriesCredits(seriesId, signal)
-        ]);
+        const [seriesData, creditsData] = await runObservedSection(
+            'series-details',
+            `/api/tmdb/tv/${seriesId}`,
+            () => Promise.all([
+                API.fetchSeriesDetails(seriesId, signal),
+                API.fetchSeriesCredits(seriesId, signal)
+            ]),
+            { seriesId }
+        );
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
         const fallbackOriginalTitle = seriesData.original_name && seriesData.original_name !== seriesData.name
             ? seriesData.original_name
@@ -249,7 +396,12 @@ async function displaySeriesDetails(seriesId: number) {
             && seriesData.videos.results.some(video => video.site === 'YouTube');
         if (!traktSeriesData?.trailerKey && !hasYouTubeVideo) {
             try {
-                const fallbackVideos = await API.fetchSeriesVideos(seriesId, signal, 'en-US');
+                const fallbackVideos = await runObservedSection(
+                    'series-details',
+                    `/api/tmdb/tv/${seriesId}/videos?language=en-US`,
+                    () => API.fetchSeriesVideos(seriesId, signal, 'en-US'),
+                    { seriesId, fallbackLanguage: 'en-US' }
+                );
                 if (Array.isArray(fallbackVideos?.results) && fallbackVideos.results.length > 0) {
                     const currentVideos = seriesData.videos?.results || [];
                     const mergedVideos = [...currentVideos, ...fallbackVideos.results].filter((video, index, arr) =>
@@ -304,6 +456,13 @@ async function displaySeriesDetails(seriesId: number) {
             console.log('Fetch aborted for series details view.');
             return;
         }
+        recordSectionFailure(
+            'series-details',
+            `/series-view/${seriesId}`,
+            typedError,
+            { phase: 'render' }
+        );
+        persistObservabilitySnapshot();
         console.error('Erro ao exibir detalhes da série:', typedError.message);
         DOM.seriesViewSection.innerHTML = `<p>Não foi possível carregar os detalhes da série. Tente novamente mais tarde.</p>`;
         UI.showNotification(`Erro ao carregar série: ${typedError.message}`);
@@ -730,8 +889,16 @@ async function initializeApp(): Promise<void> {
         UI.renderUnseen();
         UI.applyTheme(settingsMap.get(C.THEME_STORAGE_KEY) || 'dark');
         setupPwaUpdateNotifications();
-        await updateNextAired().catch(err => console.error("Falha ao atualizar a secção 'Next Aired':", err));
-        await updateGlobalProgress().catch(err => console.error("Falha ao atualizar o progresso global:", err));
+        await updateNextAired().catch(err => {
+            recordSectionFailure('initialize', '/initialize/update-next-aired', err, { phase: 'initialize' });
+            persistObservabilitySnapshot();
+            console.error("Falha ao atualizar a secção 'Next Aired':", err);
+        });
+        await updateGlobalProgress().catch(err => {
+            recordSectionFailure('initialize', '/initialize/update-global-progress', err, { phase: 'initialize' });
+            persistObservabilitySnapshot();
+            console.error("Falha ao atualizar o progresso global:", err);
+        });
         UI.updateKeyStats();
 
         const sectionFromHash = location.hash.substring(1);
@@ -746,6 +913,8 @@ async function initializeApp(): Promise<void> {
             UI.showSection('watchlist-section');
         }
     } catch (error) {
+        recordSectionFailure('initialize', '/initialize/app', error, { phase: 'initialize' });
+        persistObservabilitySnapshot();
         console.error("Erro crítico durante a inicialização da aplicação:", error);
         if (DOM.dashboard) {
             DOM.dashboard.innerHTML = `<div class="card"><p>Ocorreu um erro crítico ao iniciar a aplicação. Por favor, tente recarregar a página. Detalhes do erro foram registados na consola.</p></div>`;
@@ -799,12 +968,25 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
 
     container.innerHTML = '<p>A carregar tendências...</p>';
     try {
-        const data = await API.fetchTrending(timeWindow, S.searchAbortController.signal);
+        const section: ObservabilitySection = timeWindow === 'day' ? 'trending-day' : 'trending-week';
+        const data = await runObservedSection(
+            section,
+            `/api/tmdb/trending/tv/${timeWindow}`,
+            () => API.fetchTrending(timeWindow, S.searchAbortController.signal),
+            { containerId, timeWindow }
+        );
         UI.renderTrending(data.results, container);
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
             console.log(`Trending fetch aborted for ${timeWindow}`);
         } else {
+            recordSectionFailure(
+                timeWindow === 'day' ? 'trending-day' : 'trending-week',
+                `/trending/${timeWindow}/render`,
+                error,
+                { containerId }
+            );
+            persistObservabilitySnapshot();
             console.error(`Erro ao carregar tendências (${timeWindow}):`, error);
             renderRemoteErrorWithRetry(
                 container,
@@ -851,7 +1033,12 @@ async function loadPopularSeries(loadMore = false) {
 
     const fetchAndProcessChunk = async (page: number, size: number): Promise<Series[]> => {
         try {
-            const traktData = await API.fetchTraktPopularSeries(page, size);
+            const traktData = await runObservedSection(
+                'popular',
+                '/api/trakt/shows/popular',
+                () => API.fetchTraktPopularSeries(page, size),
+                { page, size, source: 'trakt' }
+            );
             const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
             const seriesPromises = validTraktShows.map(async (item: any) => {
                  try {
@@ -874,7 +1061,12 @@ async function loadPopularSeries(loadMore = false) {
         } catch (error) {
             // Fallback: se Trakt falhar (ex.: rate limit/chave ausente), usa a lista popular do TMDb.
             console.warn('Falha ao carregar populares da Trakt. A usar fallback do TMDb.', error);
-            const tmdbData = await API.fetchPopularSeries(page);
+            const tmdbData = await runObservedSection(
+                'popular',
+                '/api/tmdb/tv/popular',
+                () => API.fetchPopularSeries(page),
+                { page, size, source: 'tmdb-fallback' }
+            );
             return tmdbData.results;
         }
     };
@@ -914,6 +1106,8 @@ async function loadPopularSeries(loadMore = false) {
             }
         });
     } catch (error) {
+        recordSectionFailure('popular', '/popular/render', error);
+        persistObservabilitySnapshot();
         console.error('Erro ao carregar séries populares:', error);
         renderRemoteErrorWithRetry(
             DOM.popularContainer,
@@ -949,7 +1143,12 @@ async function loadPremieresSeries(loadMore = false) {
     const startingRank = loadMore ? DOM.premieresContainer.childElementCount + 1 : 1;
 
     try {        
-        const data = await API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal);
+        const data = await runObservedSection(
+            'premieres',
+            '/api/tmdb/discover/tv',
+            () => API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal),
+            { page: premieresSeriesPage, loadMore }
+        );
         
         if (!loadMore) {
             DOM.premieresContainer.innerHTML = '';
@@ -978,6 +1177,8 @@ async function loadPremieresSeries(loadMore = false) {
             console.log('Premieres fetch aborted');
             return;
         }
+        recordSectionFailure('premieres', '/premieres/render', error, { loadMore });
+        persistObservabilitySnapshot();
         console.error('Erro ao carregar as estreias:', error);
         renderRemoteErrorWithRetry(
             DOM.premieresContainer,
@@ -1044,7 +1245,12 @@ document.addEventListener('DOMContentLoaded', () => {
             S.resetSearchAbortController();
             DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
             UI.showSection('add-series-section');
-            API.searchSeries(query, S.searchAbortController.signal)
+            runObservedSection(
+                'search',
+                '/api/tmdb/search/tv',
+                () => API.searchSeries(query, S.searchAbortController.signal),
+                { queryLength: query.length }
+            )
                 .then(data => {
                     S.setCurrentSearchResults(data.results);
                     UI.renderSearchResults(data.results);

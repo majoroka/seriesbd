@@ -2,6 +2,22 @@ const TRAKT_API_KEY = process.env.TRAKT_API_KEY;
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
 const TRAKT_USER_AGENT = process.env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://seriesbd.netlify.app)';
+const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
+
+const createRequestId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `trakt_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+};
+
+const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
+
+const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
+  response.headers.set('x-request-id', requestId);
+  response.headers.set('x-upstream-status', String(upstreamStatus));
+  response.headers.set('x-upstream-latency-ms', String(durationMs));
+  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
+  return response;
+};
 
 /**
  * Adiciona os cabeçalhos CORS a uma resposta.
@@ -12,6 +28,7 @@ const addCorsHeaders = (response) => {
   response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, trakt-api-version, trakt-api-key');
   response.headers.set('Access-Control-Max-Age', '86400'); // 24 horas
+  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
   return response;
 };
 
@@ -28,9 +45,14 @@ const sanitizeOriginHeaders = (sourceHeaders) => {
 };
 
 export default async (req) => {
+  const requestId = createRequestId();
+  const startedAt = Date.now();
+
   // Handler para OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
-    return addCorsHeaders(new Response(null, { status: 204 })); // No Content
+    const optionsResponse = addCorsHeaders(new Response(null, { status: 204 })); // No Content
+    optionsResponse.headers.set('x-request-id', requestId);
+    return optionsResponse;
   }
 
   try {
@@ -51,7 +73,12 @@ export default async (req) => {
     const searchParams = url.searchParams;
     const traktUrl = `${TRAKT_BASE_URL}${endpointPath}?${searchParams.toString()}`;
 
-    console.log(`[trakt function] Proxying request to: ${traktUrl}`);
+    console.log('[trakt function] Proxy request', {
+      requestId,
+      method: req.method,
+      endpoint: endpointPath,
+      target: traktUrl,
+    });
 
     const apiResponse = await fetch(traktUrl, {
       headers: {
@@ -62,6 +89,7 @@ export default async (req) => {
         'User-Agent': TRAKT_USER_AGENT,
       },
     });
+    const durationMs = Date.now() - startedAt;
 
     const contentType = apiResponse.headers.get('content-type') || '';
     if (contentType.includes('text/html')) {
@@ -69,8 +97,10 @@ export default async (req) => {
       const cloudflareBlocked = /cloudflare|you have been blocked|attention required/i.test(htmlBody);
       if (cloudflareBlocked) {
         console.error('[trakt function] Cloudflare block detected while calling Trakt.', {
+          requestId,
           status: apiResponse.status,
-          url: traktUrl,
+          endpoint: endpointPath,
+          durationMs,
         });
         const blockedResponse = new Response(
           JSON.stringify({
@@ -79,8 +109,19 @@ export default async (req) => {
           }),
           { status: 502, headers: { 'Content-Type': 'application/json' } }
         );
+        addProxyHeaders(blockedResponse, {
+          requestId,
+          upstreamStatus: apiResponse.status,
+          durationMs,
+        });
         return addCorsHeaders(blockedResponse);
       }
+      console.error('[trakt function] Unexpected HTML response from upstream.', {
+        requestId,
+        status: apiResponse.status,
+        endpoint: endpointPath,
+        durationMs,
+      });
       const unexpectedHtmlResponse = new Response(
         JSON.stringify({
           error: 'Unexpected HTML response from Trakt',
@@ -88,17 +129,33 @@ export default async (req) => {
         }),
         { status: 502, headers: { 'Content-Type': 'application/json' } }
       );
+      addProxyHeaders(unexpectedHtmlResponse, {
+        requestId,
+        upstreamStatus: apiResponse.status,
+        durationMs,
+      });
       return addCorsHeaders(unexpectedHtmlResponse);
     }
 
     // Se a resposta da API do Trakt não for bem-sucedida, propaga o erro.
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
-      console.error(`[trakt function] Erro da API do Trakt: ${apiResponse.status}`, errorBody);
+      console.error('[trakt function] Upstream error', {
+        requestId,
+        endpoint: endpointPath,
+        status: apiResponse.status,
+        durationMs,
+        bodyPreview: errorBody.slice(0, 300),
+      });
       const errorResponse = new Response(errorBody, {
         status: apiResponse.status,
         statusText: apiResponse.statusText,
         headers: sanitizeOriginHeaders(apiResponse.headers),
+      });
+      addProxyHeaders(errorResponse, {
+        requestId,
+        upstreamStatus: apiResponse.status,
+        durationMs,
       });
       return addCorsHeaders(errorResponse);
     }
@@ -109,11 +166,31 @@ export default async (req) => {
       statusText: apiResponse.statusText,
       headers: sanitizeOriginHeaders(apiResponse.headers),
     });
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: apiResponse.status,
+      durationMs,
+    });
 
     return addCorsHeaders(response);
   } catch (error) {
-    console.error('[trakt function] Erro inesperado:', error);
-    const errorResponse = new Response(JSON.stringify({ error: 'Falha ao processar o pedido na função trakt', details: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    const durationMs = Date.now() - startedAt;
+    const message = getErrorMessage(error);
+    console.error('[trakt function] Unexpected error', {
+      requestId,
+      method: req.method,
+      durationMs,
+      error: message,
+    });
+    const errorResponse = new Response(
+      JSON.stringify({ error: 'Falha ao processar o pedido na função trakt', details: message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+    addProxyHeaders(errorResponse, {
+      requestId,
+      upstreamStatus: 500,
+      durationMs,
+    });
     return addCorsHeaders(errorResponse);
   }
 };
