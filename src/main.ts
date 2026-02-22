@@ -748,26 +748,33 @@ async function loadPopularSeries(loadMore = false) {
     DOM.popularLoadMoreContainer.style.display = 'none';
 
     const fetchAndProcessChunk = async (page: number, size: number): Promise<Series[]> => {
-        const traktData = await API.fetchTraktPopularSeries(page, size);
-        const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
-        const seriesPromises = validTraktShows.map(async (item: any) => {
-             try {
-                 const tmdbId = item.ids.tmdb;
-                 const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
-                 return {
-                     id: tmdbId,
-                     name: item.title,
-                     overview: item.overview,
-                     first_air_date: item.first_aired,
-                     vote_average: item.rating,
-                     poster_path: tmdbDetails.poster_path,
-                 } as Series;
-             } catch (error) {
-                 console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
-                 return null;
-             }
-         });
-        return (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+        try {
+            const traktData = await API.fetchTraktPopularSeries(page, size);
+            const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
+            const seriesPromises = validTraktShows.map(async (item: any) => {
+                 try {
+                     const tmdbId = item.ids.tmdb;
+                     const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
+                     return {
+                         id: tmdbId,
+                         name: item.title,
+                         overview: item.overview,
+                         first_air_date: item.first_aired,
+                         vote_average: item.rating,
+                         poster_path: tmdbDetails.poster_path,
+                     } as Series;
+                 } catch (error) {
+                     console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
+                     return null;
+                 }
+             });
+            return (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+        } catch (error) {
+            // Fallback: se Trakt falhar (ex.: rate limit/chave ausente), usa a lista popular do TMDb.
+            console.warn('Falha ao carregar populares da Trakt. A usar fallback do TMDb.', error);
+            const tmdbData = await API.fetchPopularSeries(page);
+            return tmdbData.results;
+        }
     };
 
     const processRemainingChunks = async () => {
