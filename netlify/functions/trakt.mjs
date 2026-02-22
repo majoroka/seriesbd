@@ -1,6 +1,7 @@
 const TRAKT_API_KEY = process.env.TRAKT_API_KEY;
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
+const TRAKT_USER_AGENT = process.env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://seriesbd.netlify.app)';
 
 /**
  * Adiciona os cabeçalhos CORS a uma resposta.
@@ -42,11 +43,41 @@ export default async (req) => {
 
     const apiResponse = await fetch(traktUrl, {
       headers: {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
         'trakt-api-version': TRAKT_API_VERSION,
         'trakt-api-key': TRAKT_API_KEY,
+        'User-Agent': TRAKT_USER_AGENT,
       },
     });
+
+    const contentType = apiResponse.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      const htmlBody = await apiResponse.text();
+      const cloudflareBlocked = /cloudflare|you have been blocked|attention required/i.test(htmlBody);
+      if (cloudflareBlocked) {
+        console.error('[trakt function] Cloudflare block detected while calling Trakt.', {
+          status: apiResponse.status,
+          url: traktUrl,
+        });
+        const blockedResponse = new Response(
+          JSON.stringify({
+            error: 'Trakt blocked by Cloudflare',
+            details: 'A chamada à Trakt foi bloqueada pelo Cloudflare.',
+          }),
+          { status: 502, headers: { 'Content-Type': 'application/json' } }
+        );
+        return addCorsHeaders(blockedResponse);
+      }
+      const unexpectedHtmlResponse = new Response(
+        JSON.stringify({
+          error: 'Unexpected HTML response from Trakt',
+          details: 'A Trakt respondeu com HTML em vez de JSON.',
+        }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      );
+      return addCorsHeaders(unexpectedHtmlResponse);
+    }
 
     // Se a resposta da API do Trakt não for bem-sucedida, propaga o erro.
     if (!apiResponse.ok) {
