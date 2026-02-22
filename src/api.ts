@@ -108,7 +108,7 @@ export async function fetchTraktData(
     };
 
     try {
-        const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show`;
+        const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show&extended=full`;
         const searchResponse = await fetch(searchUrl, { signal });
         let searchResult: any[] = [];
         if (searchResponse.ok) {
@@ -118,11 +118,11 @@ export async function fetchTraktData(
         }
 
         let traktId = searchResult[0]?.show?.ids?.trakt as number | undefined;
-        let fallbackShow: any = null;
+        let fallbackShow: any = searchResult[0]?.show || null;
 
         if (!traktId && fallbackImdbId) {
             try {
-                const imdbSearchUrl = `${API_BASE_TRAKT}/search/imdb/${encodeURIComponent(fallbackImdbId)}?type=show`;
+                const imdbSearchUrl = `${API_BASE_TRAKT}/search/imdb/${encodeURIComponent(fallbackImdbId)}?type=show&extended=full`;
                 const imdbResponse = await fetch(imdbSearchUrl, { signal });
                 if (imdbResponse.ok) {
                     const imdbResults = await imdbResponse.json() as any[];
@@ -139,7 +139,7 @@ export async function fetchTraktData(
             for (const query of candidateQueries) {
                 if (traktId) break;
                 try {
-                    const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(query)}`;
+                    const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(query)}&extended=full`;
                     const fallbackResponse = await fetch(queryUrl, { signal });
                     if (!fallbackResponse.ok) continue;
                     const fallbackResults = await fallbackResponse.json() as any[];
@@ -163,11 +163,14 @@ export async function fetchTraktData(
             const showDetailsResponse = await fetch(showDetailsUrl, { signal });
             if (showDetailsResponse.ok) {
                 fullShowData = await showDetailsResponse.json();
+            } else {
+                console.warn(`Trakt show details returned status ${showDetailsResponse.status}. Using fallback show data.`);
             }
         }
         
-        const traktOverview = fullShowData?.overview || null;
-        const trailerKey = parseYouTubeKey(fullShowData?.trailer);
+        const sourceData = fullShowData || fallbackShow;
+        const traktOverview = sourceData?.overview || null;
+        const trailerKey = parseYouTubeKey(sourceData?.trailer);
 
         let ratings = null;
         if (traktId) {
@@ -179,14 +182,14 @@ export async function fetchTraktData(
                 console.warn('Could not fetch Trakt ratings endpoint, using show details fallback if available.');
             }
         }
-        if (!ratings && typeof fullShowData?.rating === 'number') {
+        if (!ratings && typeof sourceData?.rating === 'number') {
             ratings = {
-                rating: fullShowData.rating,
-                votes: typeof fullShowData.votes === 'number' ? fullShowData.votes : 0,
+                rating: sourceData.rating,
+                votes: typeof sourceData.votes === 'number' ? sourceData.votes : 0,
             };
         }
 
-        return { ratings, trailerKey, traktId, overview: traktOverview, certification: fullShowData?.certification };
+        return { ratings, trailerKey, traktId, overview: traktOverview, certification: sourceData?.certification };
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
             throw error;
