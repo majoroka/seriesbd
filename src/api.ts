@@ -96,18 +96,38 @@ export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null)
 
         const traktOverview = fullShowData?.overview;
         let trailerKey = null;
-        if (fullShowData?.trailer && fullShowData.trailer.includes('youtube.com')) {
+        if (fullShowData?.trailer && (fullShowData.trailer.includes('youtube.com') || fullShowData.trailer.includes('youtu.be'))) {
             try {
                 const url = new URL(fullShowData.trailer);
-                trailerKey = url.searchParams.get('v');
+                if (url.hostname.includes('youtu.be')) {
+                    trailerKey = url.pathname.replace('/', '').trim() || null;
+                } else {
+                    trailerKey = url.searchParams.get('v');
+                    // Fallback para URLs no formato /shorts/{id}
+                    if (!trailerKey && url.pathname.includes('/shorts/')) {
+                        trailerKey = url.pathname.split('/shorts/')[1]?.split('/')[0] || null;
+                    }
+                }
             } catch (e) {
                 console.warn('Could not parse Trakt trailer URL:', fullShowData.trailer);
             }
         }
 
-        const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
-        const ratingsResponse = await fetch(ratingsUrl, { signal });
-        const ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
+        let ratings = null;
+        try {
+            const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
+            const ratingsResponse = await fetch(ratingsUrl, { signal });
+            ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
+        } catch (e) {
+            console.warn('Could not fetch Trakt ratings endpoint, using show details fallback if available.');
+        }
+
+        if (!ratings && typeof fullShowData?.rating === 'number') {
+            ratings = {
+                rating: fullShowData.rating,
+                votes: typeof fullShowData.votes === 'number' ? fullShowData.votes : 0,
+            };
+        }
 
         return { ratings, trailerKey, traktId, overview: traktOverview, certification: fullShowData?.certification };
 
