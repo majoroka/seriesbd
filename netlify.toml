@@ -14,7 +14,7 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://image.tmdb.org https://via.placeholder.com https://walter.trakt.tv https://*.trakt.tv; connect-src 'self'; frame-src https://www.youtube.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:"
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://image.tmdb.org https://via.placeholder.com https://walter.trakt.tv https://*.trakt.tv; connect-src 'self' https://image.tmdb.org https://walter.trakt.tv https://*.trakt.tv; frame-src https://www.youtube.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Content-Type-Options = "nosniff"
 

@@ -9,7 +9,7 @@ const DEV_CSP = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
   "img-src 'self' data: https://image.tmdb.org https://via.placeholder.com https://walter.trakt.tv https://*.trakt.tv",
-  "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*",
+  "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:* https://image.tmdb.org https://walter.trakt.tv https://*.trakt.tv",
   "frame-src https://www.youtube.com",
   "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
   "manifest-src 'self'",
@@ -64,6 +64,19 @@ export default defineConfig(({ command }) => ({
               cacheName: 'tmdb-images-cache',
               expiration: {
                 maxEntries: 250,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dias
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Cache de imagens da Trakt (posters sazonais, quando disponíveis)
+            urlPattern: /^https:\/\/([a-z0-9-]+\.)?trakt\.tv\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'trakt-images-cache',
+              expiration: {
+                maxEntries: 150,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dias
               },
               cacheableResponse: { statuses: [0, 200] },
