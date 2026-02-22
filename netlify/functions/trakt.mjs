@@ -15,6 +15,18 @@ const addCorsHeaders = (response) => {
   return response;
 };
 
+/**
+ * Clona e sanitiza headers vindos da origem para evitar inconsistências no browser.
+ * @param {HeadersInit} sourceHeaders
+ * @returns {Headers}
+ */
+const sanitizeOriginHeaders = (sourceHeaders) => {
+  const headers = new Headers(sourceHeaders);
+  headers.delete('content-encoding');
+  headers.delete('content-length');
+  return headers;
+};
+
 export default async (req) => {
   // Handler para OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
@@ -86,7 +98,7 @@ export default async (req) => {
       const errorResponse = new Response(errorBody, {
         status: apiResponse.status,
         statusText: apiResponse.statusText,
-        headers: apiResponse.headers,
+        headers: sanitizeOriginHeaders(apiResponse.headers),
       });
       return addCorsHeaders(errorResponse);
     }
@@ -95,13 +107,8 @@ export default async (req) => {
     const response = new Response(apiResponse.body, {
       status: apiResponse.status,
       statusText: apiResponse.statusText,
-      headers: apiResponse.headers,
+      headers: sanitizeOriginHeaders(apiResponse.headers),
     });
-
-    // O browser falhará se passarmos o header Content-Encoding da API de origem,
-    // uma vez que o corpo já foi descomprimido pelo fetch().
-    response.headers.delete('content-encoding');
-    response.headers.delete('content-length');
 
     return addCorsHeaders(response);
   } catch (error) {

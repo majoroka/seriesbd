@@ -270,10 +270,6 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
             ])
         ]);
 
-        card.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: series.id } }));
-        });
-
         scroller.appendChild(card);
     });
     container.appendChild(scroller);
@@ -497,19 +493,10 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleInGrid,
         statusInGrid
     ]);
-    const itemElement = el('div', { class: 'watchlist-item', 'data-series-id': String(series.id) }, [
+    return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id) }, [
         posterElement,
         watchlistInfo,
     ]);
-
-    itemElement.addEventListener("click", (e) => {
-        const target = e.target;
-        if (target instanceof Element && target.closest(".remove-btn")) {
-            return; // Ação de remover é tratada no main.ts
-        }
-        document.dispatchEvent(new CustomEvent("display-series-details", { detail: { seriesId: series.id } }));
-    });
-    return itemElement;
 }
 
 export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeasonsData: TMDbSeason[], creditsData: TMDbCredits, traktSeriesData: TraktData | null, traktSeasonsData: TraktSeason[] | null) {

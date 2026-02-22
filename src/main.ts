@@ -468,6 +468,9 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
     }
 }
 
+const TOTAL_EPISODES_RETRY_COOLDOWN_MS = 60 * 1000;
+const totalEpisodesRetryAt = new Map<number, number>();
+
 async function updateGlobalProgress() {
     const seriesInProgress = S.myWatchlist.filter(series => S.watchedState[series.id] && S.watchedState[series.id].length > 0);
     if (seriesInProgress.length === 0) {
@@ -475,19 +478,43 @@ async function updateGlobalProgress() {
         return;
     }
 
-    const fetchPromises = seriesInProgress
-        .filter(series => series.total_episodes === undefined)
-        .map(series => API.fetchSeriesDetails(series.id, null).then((details: any) => {
-            const count = details.seasons?.filter((season: any) => season.season_number !== 0).reduce((acc: any, season: any) => acc + season.episode_count, 0) || 0;
-            series.total_episodes = count;
-        }).catch((err: any) => {
-            console.error(`Failed to fetch details for series ${series.id} to update progress`, err);
-            series.total_episodes = 0;
+    const now = Date.now();
+    const seriesNeedingTotals = seriesInProgress.filter(series => {
+        const hasValidTotal = typeof series.total_episodes === 'number' && series.total_episodes > 0;
+        if (hasValidTotal) return false;
+        const retryAt = totalEpisodesRetryAt.get(series.id) ?? 0;
+        return now >= retryAt;
+    });
+
+    if (seriesNeedingTotals.length > 0) {
+        const updatedSeries: Series[] = [];
+        await Promise.all(seriesNeedingTotals.map(async (series) => {
+            try {
+                const details = await API.fetchSeriesDetails(series.id, null);
+                const count = details.seasons
+                    ?.filter(season => season.season_number !== 0)
+                    .reduce((acc, season) => acc + season.episode_count, 0) || 0;
+
+                if (count > 0) {
+                    if (series.total_episodes !== count) {
+                        series.total_episodes = count;
+                        updatedSeries.push(series);
+                    }
+                    totalEpisodesRetryAt.delete(series.id);
+                    return;
+                }
+
+                // Não grava 0 em caso de payload incompleto/transitório.
+                delete series.total_episodes;
+                totalEpisodesRetryAt.set(series.id, Date.now() + TOTAL_EPISODES_RETRY_COOLDOWN_MS);
+                console.warn(`Total de episódios indisponível para série ${series.id}. Novo retry agendado.`);
+            } catch (err) {
+                // Preserva o último valor conhecido e volta a tentar após cooldown.
+                totalEpisodesRetryAt.set(series.id, Date.now() + TOTAL_EPISODES_RETRY_COOLDOWN_MS);
+                console.error(`Failed to fetch details for series ${series.id} to update progress`, err);
+            }
         }));
 
-    if (fetchPromises.length > 0) {
-        await Promise.all(fetchPromises);
-        const updatedSeries = seriesInProgress.filter(series => series.total_episodes !== undefined);
         if (updatedSeries.length > 0) {
             await db.watchlist.bulkPut(updatedSeries);
         }
@@ -496,8 +523,11 @@ async function updateGlobalProgress() {
     let totalEpisodes = 0;
     let totalWatched = 0;
     seriesInProgress.forEach(series => {
-        totalEpisodes += series.total_episodes || 0;
-        totalWatched += S.watchedState[series.id]?.length || 0;
+        const seriesTotalEpisodes = series.total_episodes;
+        if (typeof seriesTotalEpisodes === 'number' && seriesTotalEpisodes > 0) {
+            totalEpisodes += seriesTotalEpisodes;
+            totalWatched += S.watchedState[series.id]?.length || 0;
+        }
     });
 
     const percentage = totalEpisodes > 0 ? Math.round((totalWatched / totalEpisodes) * 100) : 0;
@@ -732,6 +762,31 @@ function setupPwaUpdateNotifications() {
   });
 }
 
+function renderRemoteErrorWithRetry(
+    container: HTMLElement,
+    retryAction: () => void,
+    options: { offlineMessage: string; onlineMessage: string }
+) {
+    const message = navigator.onLine ? options.onlineMessage : options.offlineMessage;
+    container.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'remote-error-state';
+
+    const text = document.createElement('p');
+    text.className = 'empty-list-message';
+    text.textContent = message;
+
+    const retryButton = document.createElement('button');
+    retryButton.type = 'button';
+    retryButton.className = 'search-bar-button secondary';
+    retryButton.textContent = 'Tentar novamente';
+    retryButton.addEventListener('click', retryAction);
+
+    wrapper.appendChild(text);
+    wrapper.appendChild(retryButton);
+    container.appendChild(wrapper);
+}
+
 async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -745,7 +800,17 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
             console.log(`Trending fetch aborted for ${timeWindow}`);
         } else {
             console.error(`Erro ao carregar tendências (${timeWindow}):`, error);
-            container.innerHTML = '<p>Ocorreu um erro ao carregar as tendências.</p>';
+            renderRemoteErrorWithRetry(
+                container,
+                () => {
+                    S.resetSearchAbortController();
+                    loadTrending(timeWindow, containerId);
+                },
+                {
+                    offlineMessage: 'Sem ligação à internet. As tendências não podem ser carregadas offline.',
+                    onlineMessage: `Não foi possível carregar as tendências (${timeWindow === 'day' ? 'hoje' : 'semana'}).`,
+                }
+            );
         }
     }
 }
@@ -844,15 +909,32 @@ async function loadPopularSeries(loadMore = false) {
         });
     } catch (error) {
         console.error('Erro ao carregar séries populares:', error);
-        DOM.popularContainer.innerHTML = '<p>Ocorreu um erro ao carregar as séries populares.</p>';
+        renderRemoteErrorWithRetry(
+            DOM.popularContainer,
+            () => loadPopularSeries(),
+            {
+                offlineMessage: 'Sem ligação à internet. A secção Populares não está disponível offline.',
+                onlineMessage: 'Não foi possível carregar as séries populares.',
+            }
+        );
         isLoadingPopular = false;
     }
 }
 
 let premieresSeriesPage = 1;
+let isLoadingPremieres = false;
+const loadedPremieresSeriesIds = new Set<number>();
 async function loadPremieresSeries(loadMore = false) {
+    if (isLoadingPremieres) return;
+    isLoadingPremieres = true;
+    if (DOM.premieresLoadMoreBtn) {
+        DOM.premieresLoadMoreBtn.disabled = true;
+        DOM.premieresLoadMoreBtn.textContent = 'A carregar...';
+    }
+
     if (!loadMore) {
         premieresSeriesPage = 1;
+        loadedPremieresSeriesIds.clear();
         DOM.premieresContainer.innerHTML = '<p>A carregar estreias...</p>';
         DOM.premieresLoadMoreContainer.style.display = 'none';
     }
@@ -861,7 +943,7 @@ async function loadPremieresSeries(loadMore = false) {
     const startingRank = loadMore ? DOM.premieresContainer.childElementCount + 1 : 1;
 
     try {        
-        const data = await API.fetchNewPremieres(premieresSeriesPage);
+        const data = await API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal);
         
         if (!loadMore) {
             DOM.premieresContainer.innerHTML = '';
@@ -871,21 +953,40 @@ async function loadPremieresSeries(loadMore = false) {
         const seriesNotInLibrary = data.results.filter(
             (series) => !S.myWatchlist.some(s => s.id === series.id) && !S.myArchive.some(s => s.id === series.id)
         );
+        const uniqueSeries = seriesNotInLibrary.filter(series => !loadedPremieresSeriesIds.has(series.id));
 
         // Na primeira carga, mostra apenas 18. Nas seguintes, mostra a página toda.
-        const seriesToRender = loadMore ? seriesNotInLibrary : seriesNotInLibrary.slice(0, 18);
+        const seriesToRender = loadMore ? uniqueSeries : uniqueSeries.slice(0, 18);
+        seriesToRender.forEach(series => loadedPremieresSeriesIds.add(series.id));
 
         UI.renderPremieresSeries(seriesToRender, startingRank);
 
-        if (data.page < data.total_pages && seriesNotInLibrary.length > 0) {
+        if (data.page < data.total_pages) {
             DOM.premieresLoadMoreContainer.style.display = 'block';
-            premieresSeriesPage++;
+            premieresSeriesPage = data.page + 1;
         } else {
             DOM.premieresLoadMoreContainer.style.display = 'none';
         }
     } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            console.log('Premieres fetch aborted');
+            return;
+        }
         console.error('Erro ao carregar as estreias:', error);
-        DOM.premieresContainer.innerHTML = '<p>Ocorreu um erro ao carregar as estreias.</p>';
+        renderRemoteErrorWithRetry(
+            DOM.premieresContainer,
+            () => loadPremieresSeries(loadMore),
+            {
+                offlineMessage: 'Sem ligação à internet. A secção Estreias não está disponível offline.',
+                onlineMessage: 'Não foi possível carregar as estreias.',
+            }
+        );
+    } finally {
+        isLoadingPremieres = false;
+        if (DOM.premieresLoadMoreBtn) {
+            DOM.premieresLoadMoreBtn.disabled = false;
+            DOM.premieresLoadMoreBtn.textContent = 'Ver Mais';
+        }
     }
 }
 // Event Listeners
@@ -945,7 +1046,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log('Search aborted');
                     } else {
                         console.error('Erro ao pesquisar séries:', error);
-                        DOM.searchResultsContainer.innerHTML = '<p>Ocorreu um erro ao realizar a pesquisa.</p>';
+                        renderRemoteErrorWithRetry(
+                            DOM.searchResultsContainer,
+                            () => performSearch(),
+                            {
+                                offlineMessage: 'Sem ligação à internet. A pesquisa remota não está disponível offline.',
+                                onlineMessage: 'Não foi possível realizar a pesquisa.',
+                            }
+                        );
                     }
                 });
         } else if (query.length === 0) {
