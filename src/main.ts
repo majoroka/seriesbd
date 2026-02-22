@@ -1011,6 +1011,14 @@ let isLoadingPopular = false;
 const POPULAR_SERIES_DETAILS_BATCH_SIZE = 8;
 const POPULAR_SERIES_DETAILS_BATCH_DELAY_MS = 100;
 
+function sortPopularSeriesByRanking(seriesList: Series[]): Series[] {
+    return [...seriesList].sort((a, b) => {
+        const ratingDiff = (b.vote_average || 0) - (a.vote_average || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        return (a.name || '').localeCompare(b.name || '', 'pt-PT');
+    });
+}
+
 function dedupePopularSeries(seriesList: Series[]): Series[] {
     const seenIds = new Set<number>();
     return seriesList.filter(series => {
@@ -1108,7 +1116,9 @@ async function loadPopularSeries(loadMore = false) {
             const chunk = await fetchAndProcessChunk(page, POPULAR_SERIES_CHUNK_SIZE);
             remainingSeries.push(...chunk);
         }
-        allPopularSeries = dedupePopularSeries([...allPopularSeries, ...remainingSeries]);
+        allPopularSeries = sortPopularSeriesByRanking(
+            dedupePopularSeries([...allPopularSeries, ...remainingSeries])
+        );
         // Re-renderiza a primeira página com a lista completa para garantir consistência
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
@@ -1118,7 +1128,7 @@ async function loadPopularSeries(loadMore = false) {
     try {
         // Carrega e renderiza o primeiro chunk rapidamente
         const firstChunk = await fetchAndProcessChunk(1, POPULAR_SERIES_CHUNK_SIZE);
-        allPopularSeries = dedupePopularSeries(firstChunk);
+        allPopularSeries = sortPopularSeriesByRanking(dedupePopularSeries(firstChunk));
         popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_CHUNK_SIZE, allPopularSeries.length);
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
