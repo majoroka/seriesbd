@@ -125,7 +125,9 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
     - `/api/trakt/*` -> `/.netlify/functions/trakt/:splat`
 - **Segurança**
   - Chaves nunca são expostas no frontend.
-  - CSP definida em `index.html` restringe fontes de conteúdo e frames (YouTube).
+  - CSP por ambiente:
+    - Dev (`vite.config.ts`): política compatível com HMR (`ws/wss`, regras mais permissivas).
+    - Produção (`netlify.toml`): política mais restritiva via headers HTTP.
 
 ## PWA e funcionamento offline
 

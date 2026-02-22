@@ -110,7 +110,10 @@ npm run test
 - Uso de `processInBatches` para rate limiting e redução de chamadas simultâneas à API.
 - Preferência por funções puras utilitárias em `utils.ts`, mantendo `ui.ts` focado na camada de apresentação.
 - Preferências de utilizador e caches guardadas em IndexedDB (`kvStore`, `seasonCache`).
-- CSP definida em `index.html` e todas as chamadas externas mediadas por funções serverless.
+- CSP por ambiente:
+  - Desenvolvimento: aplicada por `vite.config.ts` (compatível com HMR).
+  - Produção: aplicada por headers no `netlify.toml` (mais restritiva).
+- Todas as chamadas externas continuam mediadas por funções serverless.
 
 ## Documentação complementar
 

@@ -2,8 +2,27 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+const DEV_CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+  "img-src 'self' data: https://image.tmdb.org https://via.placeholder.com",
+  "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*",
+  "frame-src https://www.youtube.com",
+  "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+  "manifest-src 'self'",
+  "worker-src 'self' blob:",
+].join('; ');
+
+export default defineConfig(({ command }) => ({
   server: {
+    headers: command === 'serve'
+      ? {
+          'Content-Security-Policy': DEV_CSP,
+        }
+      : undefined,
   },
   plugins: [
     VitePWA({
@@ -59,4 +78,4 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './vitest.setup.ts',
   },
-});
+}));

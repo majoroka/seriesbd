@@ -8,17 +8,11 @@
 
     <title>seriesBD</title>
 
-    <!-- 
-        Content-Security-Policy (CSP) básica para aumentar a segurança.
-        - default-src 'self': Por defeito, permite apenas conteúdo da mesma origem (o próprio domínio).
-        - script-src 'self' 'unsafe-inline': Permite scripts da mesma origem e inline. 'unsafe-inline' é necessário para o HMR do Vite em desenvolvimento. Para produção, o ideal seria usar nonces ou hashes.
-        - style-src 'self' 'unsafe-inline' ...: Permite estilos da mesma origem, inline (Vite injeta estilos), e dos CDNs de fontes e ícones.
-        - img-src 'self' data: ...: Permite imagens da mesma origem, data URIs, e do CDN de imagens (TMDb).
-        - connect-src 'self' ws: wss:: Permite ligações XHR/fetch para a própria origem (incluindo o proxy /api) e ligações WebSocket (ws: e wss:) para o HMR do Vite.
-        - frame-src: Permite iframes do YouTube para os trailers.
-        - font-src: Permite fontes dos CDNs (Google Fonts, Font Awesome).
+    <!--
+        A CSP é definida por ambiente:
+        - desenvolvimento: via `vite.config.ts` (permite HMR com ws/wss e regras mais permissivas)
+        - produção: via `netlify.toml` (mais restritiva)
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://image.tmdb.org https://via.placeholder.com; connect-src 'self' ws: wss:; frame-src https://www.youtube.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
