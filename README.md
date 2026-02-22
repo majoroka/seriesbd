@@ -6,7 +6,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
 - **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente.
-- **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações (TMDb, IMDb), trailers e gestão de progresso.
+- **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações públicas (TMDb + Trakt), trailers e gestão de progresso.
 - **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), populares e próximas estreias.
 - **Estatísticas Detalhadas**: Visualize o tempo total assistido, número de episódios vistos e analise os seus hábitos com gráficos de géneros, anos de lançamento e muito mais.
 - **Classificação e Notas**: Avalie as suas séries de 1 a 10 estrelas e adicione notas pessoais.
@@ -52,7 +52,9 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    npm run dev
    ```
 
-   O Netlify CLI expõe a app em `http://localhost:8888` e encaminha `/api/*` para as funções serverless.
+   O Netlify CLI expõe a app em `http://localhost:8888` e encaminha:
+   - `/api/tmdb/*` -> `tmdb` function
+   - `/api/trakt/*` -> `trakt` function
 4. Build de produção:
 
    ```bash
@@ -117,7 +119,7 @@ npm run test
 
 ## Deploy
 
-- Netlify é o alvo principal (`netlify.toml` define build, funções e rewrites `/api/*`).
+- Netlify é o alvo principal (`netlify.toml` define build, funções e rewrites específicos por provider: `/api/tmdb/*` e `/api/trakt/*`).
 - Para deploy manual basta executar:
 
   ```bash
@@ -128,3 +130,11 @@ npm run test
   ```
 
   (Certifique-se de que as chaves `TMDB_API_KEY` e `TRAKT_API_KEY` estão configuradas no ambiente Netlify.)
+
+## Notas de robustez e troubleshooting
+
+- A secção **Populares** tenta primeiro Trakt; se falhar, faz fallback automático para TMDb.
+- Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
+- O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
+- Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
+- Em offline, funcionalidades dependentes de `/api/*` (pesquisa remota, tendências/populares/estreias, ratings públicos) podem ficar indisponíveis até voltar a ligação.

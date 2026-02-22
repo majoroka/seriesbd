@@ -45,7 +45,8 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Implementa o cliente para TMDb/Trakt consumindo os proxies `/api/tmdb` e `/api/trakt`.
 - Garante uniformização de erros e parâmetros (locale `pt-PT`, fallback de `AbortController`).
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
-- Expõe métodos para tendências diárias/semanais, populares (Trakt), estreias recentes, detalhes e créditos.
+- Expõe métodos para tendências diárias/semanais, populares, estreias recentes, detalhes, créditos e vídeos.
+- `fetchTraktData` aplica fallback progressivo de matching (TMDb ID -> IMDb ID -> nome/ano) e fallback de ratings/trailer a partir de `extended=full` quando endpoints dedicados falham.
 
 ### `src/db.ts`
 
@@ -93,6 +94,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 4. **Secções dinâmicas**
 
    - Tendências (`loadTrending`), Populares (`loadPopularSeries`) e Estreias (`loadPremieresSeries`) recorrem ao `searchAbortController` partilhado para cancelar pedidos em trânsito.
+   - Populares usa Trakt como fonte primária, com fallback automático para TMDb em caso de erro/bloqueio.
    - Dados são filtrados contra a biblioteca local para evitar duplicados.
 
 5. **Estatísticas**
@@ -116,9 +118,11 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 ## Integração com APIs externas
 
 - **Netlify Functions**
-  - `/netlify/functions/tmdb.mjs` injeta `TMDB_API_KEY`, normaliza headers e trata CORS/Content-Encoding.
-  - `/netlify/functions/trakt.mjs` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`) e responde a preflight.
-  - `netlify.toml` redireciona `/api/*` para as funções tanto em desenvolvimento (`netlify dev`) como em produção.
+  - `/netlify/functions/tmdb.mjs` injeta `TMDB_API_KEY`, normaliza headers, trata CORS/Content-Encoding e respeita `language` explícito no query string.
+  - `/netlify/functions/trakt.mjs` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`, `User-Agent`), responde a preflight e deteta bloqueios Cloudflare (retornando `502` em JSON para diagnóstico).
+  - `netlify.toml` redireciona rotas específicas para cada provider:
+    - `/api/tmdb/*` -> `/.netlify/functions/tmdb/:splat`
+    - `/api/trakt/*` -> `/.netlify/functions/trakt/:splat`
 - **Segurança**
   - Chaves nunca são expostas no frontend.
   - CSP definida em `index.html` restringe fontes de conteúdo e frames (YouTube).
@@ -144,8 +148,9 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ## Pontos de atenção e oportunidades
 
-- **Erros TMDb/Trakt:** atualmente apenas logados; pode-se introduzir retry/backoff específico ou fila de operações offline.
+- **Erros TMDb/Trakt:** há fallback funcional para vários fluxos, mas ainda sem retry/backoff dedicado por endpoint.
 - **Responsividade:** a folha `style.css` cobre breakpoints principais, com especial atenção à grelha de estatísticas que agora se adapta a ecrãs verticais estreitos. Seria útil introduzir testes visuais ou Storybook.
 - **Internacionalização:** UI e dados estão em `pt-PT`; preparar camada de tradução facilitaria expansão.
 - **Sincronização multi-dispositivo:** hoje é apenas local; uma API backend seria necessária para cloud sync (ver Roadmap).
 - **Desempenho na Vista de Detalhes:** A função `renderSeriesDetails` cria toda a árvore DOM dos episódios a cada interação. Em séries com muitas temporadas, a virtualização da lista (renderizar apenas os episódios visíveis) poderia melhorar significativamente o desempenho.
+- **Dependência de terceiros (Trakt/Cloudflare):** mesmo com fallback, bloqueios upstream podem reduzir dados públicos (ex.: rating Trakt) em cenários específicos.
