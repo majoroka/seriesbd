@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { SEASON_CACHE_DURATION } from "./constants";
 import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from "./types";
 
 const API_BASE_TMDB = '/api/tmdb';
@@ -132,7 +133,6 @@ export async function fetchTraktSeasonsData(traktId: number | undefined, signal:
  */
 export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: number, signal: AbortSignal | null): Promise<TMDbSeason> {
     const cacheKey = [seriesId, seasonNumber];
-    const SEASON_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 dias
     const cachedSeason = await db.seasonCache.get(cacheKey);
 
     if (cachedSeason && (Date.now() - cachedSeason.cachedAt < SEASON_CACHE_DURATION)) {
@@ -140,7 +140,11 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
     }
 
     const url = `${API_BASE_TMDB}/tv/${seriesId}/season/${seasonNumber}`;
-    const seasonData = await fetch(url, { signal }).then(res => res.json());
+    const seasonResponse = await fetch(url, { signal });
+    if (!seasonResponse.ok) {
+        throw new Error(`HTTP error! status: ${seasonResponse.status}`);
+    }
+    const seasonData = await seasonResponse.json() as TMDbSeason;
     
     await db.seasonCache.put({
         seriesId: seriesId,
@@ -149,7 +153,7 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
         cachedAt: Date.now()
     });
 
-    return seasonData as TMDbSeason;
+    return seasonData;
 }
 
 /**

@@ -104,8 +104,10 @@ async function updateNextAired() {
     const oneDay = 24 * 60 * 60 * 1000;
 
     const seriesToFetch = allUserSeries.filter(series => {
-        if (!series._lastUpdated || series._details?.status === 'Ended') return false; // Não busca atualizações para séries terminadas
+        if (series._details?.status === 'Ended') return false; // Não busca atualizações para séries terminadas
+        if (!series._lastUpdated) return true;
         const lastUpdatedTime = new Date(series._lastUpdated).getTime();
+        if (isNaN(lastUpdatedTime)) return true;
         return (now - lastUpdatedTime) > oneDay;
     });
 
@@ -299,6 +301,11 @@ async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HT
 async function handleQuickAdd(series: Series, button: HTMLButtonElement) {
     await addSeriesToWatchlist(series);
     UI.markButtonAsAdded(button, 'Adicionado');
+}
+
+async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonElement) {
+    await addAndMarkAllAsSeen(series);
+    UI.markButtonAsAdded(button, 'Visto');
 }
 
 /**
@@ -954,6 +961,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
             if (seriesToAdd) {
                 await handleQuickAdd(seriesToAdd, addSeriesQuickBtn as HTMLButtonElement);
+            }
+            return;
+        }
+
+        const markAllSeenQuickBtn = target.closest('.mark-all-seen-quick-btn');
+        if (markAllSeenQuickBtn) {
+            const seriesId = parseInt((markAllSeenQuickBtn as HTMLElement).dataset.seriesId!, 10);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
+            if (seriesToAdd) {
+                await handleQuickAddAndMarkAllSeen(seriesToAdd, markAllSeenQuickBtn as HTMLButtonElement);
             }
             return;
         }

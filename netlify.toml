@@ -11,8 +11,13 @@
   node_bundler = "esbuild"
   directory = "netlify/functions" # Define explicitamente o diretório das funções
 
-# Redireciona os pedidos de API para as Netlify Functions em desenvolvimento
+# Redireciona os pedidos de API para as Netlify Functions
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/tmdb/*"
+  to = "/.netlify/functions/tmdb/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/trakt/*"
+  to = "/.netlify/functions/trakt/:splat"
   status = 200

@@ -19,9 +19,9 @@ describe('formatDuration', () => {
     expect(formatDuration(125)).toBe('2h 5min');
   });
 
-  it('should format large durations with days and hours', () => {
+  it('should format large durations with days, hours and minutes', () => {
     // 2 days, 3 hours, 30 minutes = (2 * 24 * 60) + (3 * 60) + 30 = 3090
-    expect(formatDuration(3090)).toBe('2d 3h');
+    expect(formatDuration(3090)).toBe('2d 3h 30min');
   });
 });
 
