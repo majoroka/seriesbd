@@ -75,53 +75,91 @@ export async function fetchSeriesVideos(
  * Fetches rich data (ratings, trailer) for a show from Trakt.tv using its TMDb ID.
  * @param {string} tmdbId - The TMDb ID of the series.
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
+ * @param fallbackTitle - Título da série para fallback de pesquisa textual.
+ * @param fallbackYear - Ano da série para melhorar o match no fallback.
  * @returns {Promise<object|null>} A promise that resolves to an object with ratings and trailerKey, or null.
  */
-export async function fetchTraktData(tmdbId: number, signal: AbortSignal | null): Promise<TraktData | null> {
+export async function fetchTraktData(
+    tmdbId: number,
+    signal: AbortSignal | null,
+    fallbackTitle?: string,
+    fallbackYear?: number
+): Promise<TraktData | null> {
+    const parseYouTubeKey = (trailerUrl: string | null | undefined): string | null => {
+        if (!trailerUrl) return null;
+        if (!trailerUrl.includes('youtube.com') && !trailerUrl.includes('youtu.be')) return null;
+        try {
+            const url = new URL(trailerUrl);
+            if (url.hostname.includes('youtu.be')) {
+                return url.pathname.replace('/', '').trim() || null;
+            }
+            const fromQuery = url.searchParams.get('v');
+            if (fromQuery) return fromQuery;
+            if (url.pathname.includes('/shorts/')) {
+                return url.pathname.split('/shorts/')[1]?.split('/')[0] || null;
+            }
+            return null;
+        } catch (e) {
+            console.warn('Could not parse Trakt trailer URL:', trailerUrl);
+            return null;
+        }
+    };
+
     try {
         const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show`;
         const searchResponse = await fetch(searchUrl, { signal });
-        if (!searchResponse.ok) {
-            if (searchResponse.status === 404) return null;
-            throw new Error(`Trakt search API error! status: ${searchResponse.status}`);
+        let searchResult: any[] = [];
+        if (searchResponse.ok) {
+            searchResult = await searchResponse.json();
+        } else if (searchResponse.status !== 404) {
+            console.warn(`Trakt search by TMDb returned status ${searchResponse.status}. Trying fallback search.`);
         }
-        const searchResult = await searchResponse.json();
-        const traktId = searchResult[0]?.show?.ids?.trakt;
 
-        if (!traktId) return null;
+        let traktId = searchResult[0]?.show?.ids?.trakt as number | undefined;
+        let fallbackShow: any = null;
 
-        const showDetailsUrl = `${API_BASE_TRAKT}/shows/${traktId}?extended=full`;
-        const showDetailsResponse = await fetch(showDetailsUrl, { signal });
-        const fullShowData = showDetailsResponse.ok ? await showDetailsResponse.json() : null;
-
-        const traktOverview = fullShowData?.overview;
-        let trailerKey = null;
-        if (fullShowData?.trailer && (fullShowData.trailer.includes('youtube.com') || fullShowData.trailer.includes('youtu.be'))) {
+        if (!traktId && fallbackTitle) {
             try {
-                const url = new URL(fullShowData.trailer);
-                if (url.hostname.includes('youtu.be')) {
-                    trailerKey = url.pathname.replace('/', '').trim() || null;
-                } else {
-                    trailerKey = url.searchParams.get('v');
-                    // Fallback para URLs no formato /shorts/{id}
-                    if (!trailerKey && url.pathname.includes('/shorts/')) {
-                        trailerKey = url.pathname.split('/shorts/')[1]?.split('/')[0] || null;
-                    }
+                const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(fallbackTitle)}`;
+                const fallbackResponse = await fetch(queryUrl, { signal });
+                if (fallbackResponse.ok) {
+                    const fallbackResults = await fallbackResponse.json() as any[];
+                    const matchByTmdb = fallbackResults.find(item => Number(item?.show?.ids?.tmdb) === tmdbId);
+                    const matchByYear = typeof fallbackYear === 'number'
+                        ? fallbackResults.find(item => item?.show?.year === fallbackYear)
+                        : null;
+                    fallbackShow = matchByTmdb?.show || matchByYear?.show || fallbackResults[0]?.show || null;
+                    traktId = fallbackShow?.ids?.trakt as number | undefined;
                 }
-            } catch (e) {
-                console.warn('Could not parse Trakt trailer URL:', fullShowData.trailer);
+            } catch (error) {
+                console.warn('Trakt fallback search by show name failed:', error);
             }
         }
 
-        let ratings = null;
-        try {
-            const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
-            const ratingsResponse = await fetch(ratingsUrl, { signal });
-            ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
-        } catch (e) {
-            console.warn('Could not fetch Trakt ratings endpoint, using show details fallback if available.');
+        if (!traktId && !fallbackShow) return null;
+
+        let fullShowData = fallbackShow;
+        if (traktId) {
+            const showDetailsUrl = `${API_BASE_TRAKT}/shows/${traktId}?extended=full`;
+            const showDetailsResponse = await fetch(showDetailsUrl, { signal });
+            if (showDetailsResponse.ok) {
+                fullShowData = await showDetailsResponse.json();
+            }
         }
 
+        const traktOverview = fullShowData?.overview || null;
+        const trailerKey = parseYouTubeKey(fullShowData?.trailer);
+
+        let ratings = null;
+        if (traktId) {
+            try {
+                const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
+                const ratingsResponse = await fetch(ratingsUrl, { signal });
+                ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
+            } catch (e) {
+                console.warn('Could not fetch Trakt ratings endpoint, using show details fallback if available.');
+            }
+        }
         if (!ratings && typeof fullShowData?.rating === 'number') {
             ratings = {
                 rating: fullShowData.rating,

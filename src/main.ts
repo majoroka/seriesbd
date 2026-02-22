@@ -226,11 +226,12 @@ async function displaySeriesDetails(seriesId: number) {
         DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
         UI.showSection('series-view-section');
         
-        const [seriesData, creditsData, traktSeriesData] = await Promise.all([
+        const [seriesData, creditsData] = await Promise.all([
             API.fetchSeriesDetails(seriesId, signal),
-            API.fetchSeriesCredits(seriesId, signal),
-            API.fetchTraktData(seriesId, signal)
+            API.fetchSeriesCredits(seriesId, signal)
         ]);
+        const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
+        const traktSeriesData = await API.fetchTraktData(seriesId, signal, seriesData.name, fallbackYear);
 
         // Fallback para trailer: se Trakt falhar e TMDb(pt-PT) não tiver vídeos,
         // tenta vídeos TMDb em en-US para recuperar o botão "Ver Trailer".

@@ -39,7 +39,10 @@ export default async (req) => {
 
     const searchParams = url.searchParams;
     searchParams.set('api_key', TMDB_API_KEY);
-    searchParams.set('language', 'pt-PT');
+    // Mantém pt-PT por defeito, mas respeita idioma explícito (ex.: fallback de trailers en-US).
+    if (!searchParams.has('language')) {
+      searchParams.set('language', 'pt-PT');
+    }
 
     const tmdbUrl = `${TMDB_BASE_URL}${endpointPath}?${searchParams.toString()}`;
     

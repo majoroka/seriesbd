@@ -84,7 +84,7 @@ export interface TraktRatings {
 export interface TraktData {
     ratings: TraktRatings | null;
     trailerKey: string | null;
-    traktId: number;
+    traktId?: number;
     overview: string | null;
     certification: string | null;
 }
