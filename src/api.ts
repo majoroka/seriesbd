@@ -35,7 +35,7 @@ export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSig
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
-    const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos&language=pt-PT`;
+    const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos,external_ids&language=pt-PT`;
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
@@ -83,7 +83,9 @@ export async function fetchTraktData(
     tmdbId: number,
     signal: AbortSignal | null,
     fallbackTitle?: string,
-    fallbackYear?: number
+    fallbackYear?: number,
+    fallbackOriginalTitle?: string,
+    fallbackImdbId?: string | null
 ): Promise<TraktData | null> {
     const parseYouTubeKey = (trailerUrl: string | null | undefined): string | null => {
         if (!trailerUrl) return null;
@@ -118,11 +120,28 @@ export async function fetchTraktData(
         let traktId = searchResult[0]?.show?.ids?.trakt as number | undefined;
         let fallbackShow: any = null;
 
-        if (!traktId && fallbackTitle) {
+        if (!traktId && fallbackImdbId) {
             try {
-                const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(fallbackTitle)}`;
-                const fallbackResponse = await fetch(queryUrl, { signal });
-                if (fallbackResponse.ok) {
+                const imdbSearchUrl = `${API_BASE_TRAKT}/search/imdb/${encodeURIComponent(fallbackImdbId)}?type=show`;
+                const imdbResponse = await fetch(imdbSearchUrl, { signal });
+                if (imdbResponse.ok) {
+                    const imdbResults = await imdbResponse.json() as any[];
+                    fallbackShow = imdbResults[0]?.show || null;
+                    traktId = fallbackShow?.ids?.trakt as number | undefined;
+                }
+            } catch (error) {
+                console.warn('Trakt fallback search by IMDb ID failed:', error);
+            }
+        }
+
+        if (!traktId && (fallbackOriginalTitle || fallbackTitle)) {
+            const candidateQueries = Array.from(new Set([fallbackOriginalTitle, fallbackTitle].filter(Boolean))) as string[];
+            for (const query of candidateQueries) {
+                if (traktId) break;
+                try {
+                    const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(query)}`;
+                    const fallbackResponse = await fetch(queryUrl, { signal });
+                    if (!fallbackResponse.ok) continue;
                     const fallbackResults = await fallbackResponse.json() as any[];
                     const matchByTmdb = fallbackResults.find(item => Number(item?.show?.ids?.tmdb) === tmdbId);
                     const matchByYear = typeof fallbackYear === 'number'
@@ -130,9 +149,9 @@ export async function fetchTraktData(
                         : null;
                     fallbackShow = matchByTmdb?.show || matchByYear?.show || fallbackResults[0]?.show || null;
                     traktId = fallbackShow?.ids?.trakt as number | undefined;
+                } catch (error) {
+                    console.warn('Trakt fallback search by show name failed:', error);
                 }
-            } catch (error) {
-                console.warn('Trakt fallback search by show name failed:', error);
             }
         }
 
@@ -146,7 +165,7 @@ export async function fetchTraktData(
                 fullShowData = await showDetailsResponse.json();
             }
         }
-
+        
         const traktOverview = fullShowData?.overview || null;
         const trailerKey = parseYouTubeKey(fullShowData?.trailer);
 
@@ -168,7 +187,6 @@ export async function fetchTraktData(
         }
 
         return { ratings, trailerKey, traktId, overview: traktOverview, certification: fullShowData?.certification };
-
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
             throw error;

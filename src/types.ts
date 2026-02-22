@@ -35,6 +35,7 @@ export interface TMDbSeason extends Season {
 export interface Series {
     id: number;
     name: string;
+    original_name?: string;
     overview: string;
     poster_path: string | null;
     backdrop_path: string | null;
@@ -63,6 +64,7 @@ export interface TMDbSeriesDetails extends Omit<Series, 'episode_run_time' | '_d
     status: string;
     vote_average: number;
     videos: { results: { key: string; site: string; type: string; official: boolean }[] };
+    external_ids?: { imdb_id: string | null };
 }
 
 export interface TMDbPerson {

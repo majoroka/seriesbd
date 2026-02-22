@@ -231,7 +231,17 @@ async function displaySeriesDetails(seriesId: number) {
             API.fetchSeriesCredits(seriesId, signal)
         ]);
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
-        const traktSeriesData = await API.fetchTraktData(seriesId, signal, seriesData.name, fallbackYear);
+        const fallbackOriginalTitle = seriesData.original_name && seriesData.original_name !== seriesData.name
+            ? seriesData.original_name
+            : undefined;
+        const traktSeriesData = await API.fetchTraktData(
+            seriesId,
+            signal,
+            seriesData.name,
+            fallbackYear,
+            fallbackOriginalTitle,
+            seriesData.external_ids?.imdb_id
+        );
 
         // Fallback para trailer: se Trakt falhar e TMDb(pt-PT) não tiver vídeos,
         // tenta vídeos TMDb em en-US para recuperar o botão "Ver Trailer".
