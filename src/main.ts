@@ -231,6 +231,26 @@ async function displaySeriesDetails(seriesId: number) {
             API.fetchSeriesCredits(seriesId, signal),
             API.fetchTraktData(seriesId, signal)
         ]);
+
+        // Fallback para trailer: se Trakt falhar e TMDb(pt-PT) não tiver vídeos,
+        // tenta vídeos TMDb em en-US para recuperar o botão "Ver Trailer".
+        const hasYouTubeVideo = Array.isArray(seriesData.videos?.results)
+            && seriesData.videos.results.some(video => video.site === 'YouTube');
+        if (!traktSeriesData?.trailerKey && !hasYouTubeVideo) {
+            try {
+                const fallbackVideos = await API.fetchSeriesVideos(seriesId, signal, 'en-US');
+                if (Array.isArray(fallbackVideos?.results) && fallbackVideos.results.length > 0) {
+                    const currentVideos = seriesData.videos?.results || [];
+                    const mergedVideos = [...currentVideos, ...fallbackVideos.results].filter((video, index, arr) =>
+                        arr.findIndex(v => v.key === video.key) === index
+                    );
+                    seriesData.videos = { results: mergedVideos };
+                }
+            } catch (error) {
+                console.warn('Falha ao carregar fallback de vídeos TMDb (en-US):', error);
+            }
+        }
+
         const traktId = traktSeriesData?.traktId as number | undefined;
         const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
         const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));

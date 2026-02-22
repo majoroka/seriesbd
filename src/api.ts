@@ -54,6 +54,24 @@ export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal |
 }
 
 /**
+ * Busca os vídeos de uma série no TMDb (trailers/teasers).
+ * @param seriesId - O ID da série.
+ * @param signal - O sinal para abortar o pedido.
+ * @param language - Idioma preferencial dos vídeos (ex.: en-US).
+ */
+export async function fetchSeriesVideos(
+    seriesId: number,
+    signal: AbortSignal | null,
+    language: string = 'en-US'
+): Promise<TMDbSeriesDetails['videos']> {
+    const query = language ? `?language=${encodeURIComponent(language)}` : '';
+    const url = `${API_BASE_TMDB}/tv/${seriesId}/videos${query}`;
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+}
+
+/**
  * Fetches rich data (ratings, trailer) for a show from Trakt.tv using its TMDb ID.
  * @param {string} tmdbId - The TMDb ID of the series.
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
