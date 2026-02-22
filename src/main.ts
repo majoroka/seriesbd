@@ -1008,6 +1008,18 @@ let popularSeriesDisplayedCount = 0;
 const POPULAR_SERIES_CHUNK_SIZE = 50;
 const POPULAR_SERIES_TOTAL_TO_FETCH = 250;
 let isLoadingPopular = false;
+const POPULAR_SERIES_DETAILS_BATCH_SIZE = 8;
+const POPULAR_SERIES_DETAILS_BATCH_DELAY_MS = 100;
+
+function dedupePopularSeries(seriesList: Series[]): Series[] {
+    const seenIds = new Set<number>();
+    return seriesList.filter(series => {
+        if (!series || typeof series.id !== 'number') return false;
+        if (seenIds.has(series.id)) return false;
+        seenIds.add(series.id);
+        return true;
+    });
+}
 
 async function loadPopularSeries(loadMore = false) {
     if (isLoadingPopular) return;
@@ -1040,24 +1052,41 @@ async function loadPopularSeries(loadMore = false) {
                 { page, size, source: 'trakt' }
             );
             const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
-            const seriesPromises = validTraktShows.map(async (item: any) => {
-                 try {
-                     const tmdbId = item.ids.tmdb;
-                     const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
-                     return {
-                         id: tmdbId,
-                         name: item.title,
-                         overview: item.overview,
-                         first_air_date: item.first_aired,
-                         vote_average: item.rating,
-                         poster_path: tmdbDetails.poster_path,
-                     } as Series;
-                 } catch (error) {
-                     console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
-                     return null;
-                 }
-             });
-            return (await Promise.all(seriesPromises)).filter((s): s is Series => s !== null);
+            const detailResults = await processInBatches(
+                validTraktShows,
+                POPULAR_SERIES_DETAILS_BATCH_SIZE,
+                POPULAR_SERIES_DETAILS_BATCH_DELAY_MS,
+                async (item: any): Promise<Series> => {
+                    const tmdbId = Number(item.ids.tmdb);
+                    const baseSeries: Series = {
+                        id: tmdbId,
+                        name: item.title || 'Título indisponível',
+                        overview: item.overview || '',
+                        first_air_date: item.first_aired || '',
+                        vote_average: typeof item.rating === 'number' ? item.rating : 0,
+                        poster_path: null,
+                        backdrop_path: null,
+                        genres: [],
+                    };
+
+                    try {
+                        const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
+                        return {
+                            ...baseSeries,
+                            poster_path: tmdbDetails.poster_path ?? null,
+                            backdrop_path: tmdbDetails.backdrop_path ?? null,
+                        };
+                    } catch (error) {
+                        console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
+                        // Mantém a série na lista mesmo sem poster para não perder títulos populares.
+                        return baseSeries;
+                    }
+                }
+            );
+
+            return detailResults
+                .filter((result): result is PromiseFulfilledResult<Series> => result.status === 'fulfilled')
+                .map(result => result.value);
         } catch (error) {
             // Fallback: se Trakt falhar (ex.: rate limit/chave ausente), usa a lista popular do TMDb.
             console.warn('Falha ao carregar populares da Trakt. A usar fallback do TMDb.', error);
@@ -1079,9 +1108,8 @@ async function loadPopularSeries(loadMore = false) {
             const chunk = await fetchAndProcessChunk(page, POPULAR_SERIES_CHUNK_SIZE);
             remainingSeries.push(...chunk);
         }
-        allPopularSeries.push(...remainingSeries);
-        allPopularSeries.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
-        // Re-renderiza a primeira página com a lista completa e ordenada para garantir consistência
+        allPopularSeries = dedupePopularSeries([...allPopularSeries, ...remainingSeries]);
+        // Re-renderiza a primeira página com a lista completa para garantir consistência
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
         UI.renderPopularSeries(seriesToRender);
@@ -1090,8 +1118,8 @@ async function loadPopularSeries(loadMore = false) {
     try {
         // Carrega e renderiza o primeiro chunk rapidamente
         const firstChunk = await fetchAndProcessChunk(1, POPULAR_SERIES_CHUNK_SIZE);
-        allPopularSeries = [...firstChunk].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
-        popularSeriesDisplayedCount = POPULAR_SERIES_CHUNK_SIZE;
+        allPopularSeries = dedupePopularSeries(firstChunk);
+        popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_CHUNK_SIZE, allPopularSeries.length);
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
         UI.renderPopularSeries(seriesToRender);
