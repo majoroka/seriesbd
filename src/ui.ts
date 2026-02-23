@@ -734,9 +734,8 @@ export function renderSeriesDetails(
                             el('h1', {}, [`${seriesData.name} `, el('span', { class: 'release-year', text: releaseYear })])
                         ]),
                         el('div', { class: 'v2-header-actions' }, [
-                            el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
+                            el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
                                 el('i', { class: 'fas fa-arrow-left' }),
-                                ' Voltar'
                             ]),
                             el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
                                 el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos', 'aria-label': 'Marcar todos os episódios como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
