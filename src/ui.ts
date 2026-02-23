@@ -672,24 +672,38 @@ export function renderSeriesDetails(
     const progressHTML = `<div class="v2-overview-progress"><div class="v2-progress-bar-container"><div class="v2-progress-bar" style="width: ${overallProgress}%;"></div></div><div class="v2-progress-text"><span>${Math.round(overallProgress)}%</span><span>${watchedCount} / ${totalEpisodes} episódios</span></div></div>`;
     const tmdbRating = seriesData.vote_average || 0;
     const traktRating = traktSeriesData?.ratings?.rating || 0;
-    let ratingsCount = 0;
-    if (tmdbRating > 0) ratingsCount++;
-    if (traktRating > 0) ratingsCount++;
-    const averageRating = ratingsCount > 0 ? (tmdbRating + traktRating) / ratingsCount : 0;
-    const tmdbPercent = tmdbRating * 10;
-    const traktPercent = traktRating * 10;
+    const tvmazeRating = (typeof aggregatedSeriesData?.tvmazeData?.show?.rating?.average === 'number'
+        ? aggregatedSeriesData.tvmazeData.show.rating.average
+        : 0) || 0;
+    const ratingEntries = [
+        { key: 'tmdb', label: 'TMDb', value: tmdbRating, color: 'var(--primary-accent)' },
+        { key: 'trakt', label: 'Trakt', value: traktRating, color: 'var(--secondary-accent)' },
+        { key: 'tvmaze', label: 'TVMaze', value: tvmazeRating, color: 'var(--tvmaze-accent)' },
+    ].filter(entry => entry.value > 0);
+    const ratingsCount = ratingEntries.length;
+    const averageRating = ratingsCount > 0
+        ? ratingEntries.reduce((sum, entry) => sum + entry.value, 0) / ratingsCount
+        : 0;
+    const ringClasses = ratingsCount >= 3 ? ['outer', 'middle', 'inner'] : ratingsCount === 2 ? ['outer', 'middle'] : ['outer'];
     const publicRatingsElement = ratingsCount > 0 ? el('div', { class: 'v2-public-ratings' }, [
         el('p', { class: 'v2-action-label', text: 'Avaliações' }),
         el('div', { class: 'concentric-chart-wrapper' }, [
-            el('div', { class: 'concentric-chart' }, [
-                el('div', { class: 'chart-ring outer', style: `--progress: ${tmdbPercent}%; --color: var(--primary-accent);` }),
-                el('div', { class: 'chart-ring inner', style: `--progress: ${traktPercent}%; --color: var(--secondary-accent);` }),
+            el('div', { class: `concentric-chart rings-${ratingsCount}` }, [
+                ...ratingEntries.map((entry, index) =>
+                    el('div', {
+                        class: `chart-ring ${ringClasses[index]}`,
+                        style: `--progress: ${entry.value * 10}%; --color: ${entry.color};`
+                    })
+                ),
                 el('div', { class: 'chart-center' }, [el('span', { class: 'chart-average', text: averageRating.toFixed(1) })])
             ]),
-            el('div', { class: 'chart-legend' }, [
-                tmdbRating > 0 ? el('div', { class: 'legend-item' }, [el('span', { class: 'legend-color', style: 'background-color: var(--primary-accent);' }), el('span', { class: 'legend-text', text: 'TMDb:' }), el('strong', { class: 'legend-value', text: tmdbRating.toFixed(1) })]) : null,
-                traktRating > 0 ? el('div', { class: 'legend-item' }, [el('span', { class: 'legend-color', style: 'background-color: var(--secondary-accent);' }), el('span', { class: 'legend-text', text: 'Trakt:' }), el('strong', { class: 'legend-value', text: traktRating.toFixed(1) })]) : null
-            ])
+            el('div', { class: 'chart-legend' }, ratingEntries.map((entry) =>
+                el('div', { class: 'legend-item' }, [
+                    el('span', { class: 'legend-color', style: `background-color: ${entry.color};` }),
+                    el('span', { class: 'legend-text', text: `${entry.label}:` }),
+                    el('strong', { class: 'legend-value', text: entry.value.toFixed(1) })
+                ])
+            ))
         ])
     ]) : null;
     const currentUserData = S.userData[seriesData.id] || {};

@@ -31,6 +31,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Centraliza a criação de elementos (`el`), manipula classes e contém lógica de interação (p.ex. marcar episódio visto, abrir trailer).
 - Produz e gere instâncias Chart.js com opções de renderização adaptativas para mobile e suporta exportação a PNG/CSV via utilitários.
 - Implementa duas vistas de detalhes de série: a original e uma nova **vista V2** mais imersiva com backdrop dinâmico.
+- O bloco de ratings da vista V2 usa anéis concêntricos dinâmicos (TMDb/Trakt/TVMaze) e legenda por provider.
 - Emite eventos personalizados (`display-series-details`) para desacoplar interações do fluxo em `main.ts`.
 
 ### `src/state.ts`

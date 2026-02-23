@@ -7,6 +7,7 @@
     --primary-accent: #6dbebf;
     --primary-accent-hover: #5cb0b1;
     --secondary-accent: #ed6d85;
+    --tvmaze-accent: #386e67;
     --danger-color: #ff4d4d;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
@@ -1861,19 +1862,26 @@ body.light-theme .network-logo {
     background: conic-gradient(var(--color) var(--progress), rgba(255, 255, 255, 0.1) 0);
 }
 
+.chart-ring.middle {
+    width: 78%;
+    height: 78%;
+    top: 11%;
+    left: 11%;
+}
+
 .chart-ring.inner {
-    width: 70%;
-    height: 70%;
-    top: 15%;
-    left: 15%;
+    width: 56%;
+    height: 56%;
+    top: 22%;
+    left: 22%;
 }
 
 .chart-center {
     position: absolute;
-    top: 30%; /* (100% - 40%) / 2 */
-    left: 30%;
-    width: 40%;
-    height: 40%;
+    top: 33%; /* (100% - 34%) / 2 */
+    left: 33%;
+    width: 34%;
+    height: 34%;
     background-color: rgba(25, 25, 25, 0.8);
     border-radius: 50%;
     display: flex;
@@ -1881,12 +1889,26 @@ body.light-theme .network-logo {
     justify-content: center;
 }
 
+.concentric-chart.rings-2 .chart-center {
+    top: 28%;
+    left: 28%;
+    width: 44%;
+    height: 44%;
+}
+
+.concentric-chart.rings-1 .chart-center {
+    top: 24%;
+    left: 24%;
+    width: 52%;
+    height: 52%;
+}
+
 .chart-average {
     font-family: var(--font-mono);
-    font-size: 1.0rem; /* Reduzido para um visual mais compacto */
+    font-size: 0.9rem; /* Reduzido para acomodar melhor os 3 anéis */
     font-weight: 700;
     color: #fff;
-    letter-spacing: -1.5px; /* Reduz ainda mais o espaço entre os caracteres */
+    letter-spacing: -1px; /* Reduz ainda mais o espaço entre os caracteres */
 }
 
 .chart-legend {
@@ -1903,7 +1925,7 @@ body.light-theme .network-logo {
 }
 
 .legend-text {
-    width: 40px; /* Alinha os valores das notas */
+    width: 56px; /* Alinha os valores das notas */
 }
 
 .legend-value {
