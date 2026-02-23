@@ -146,3 +146,73 @@
 - Ficheiros-alvo:
   - `src/main.ts`
   - `netlify/functions/*.mjs`
+
+## P3-01 - Integrar TVMaze via Netlify Function
+- Título: `feat(tvmaze): adicionar proxy Netlify e lookup robusto por imdb/nome`
+- Labels sugeridas: `enhancement`, `priority:p3`, `backend`, `netlify-functions`, `integrations`
+- Descrição:
+  - Adicionar TVMaze como 3.ª fonte para enriquecer detalhes de séries.
+  - Implementar lookup por `imdb_id` com fallback por nome/ano.
+- Critérios de aceitação:
+  - [ ] Existe `netlify/functions/tvmaze.mjs` com CORS e headers normalizados.
+  - [ ] Lookup por IMDb funcional; fallback por nome/ano quando IMDb não existir.
+  - [ ] Logs estruturados incluem `requestId`, `endpoint`, `status`, `latência`.
+- Ficheiros-alvo:
+  - `netlify/functions/tvmaze.mjs`
+  - `netlify.toml`
+
+## P3-02 - Agregação PT-first (TMDb + Trakt + TVMaze)
+- Título: `feat(details): motor de agregação multi-fonte com prioridade português`
+- Labels sugeridas: `enhancement`, `priority:p3`, `frontend`, `data-quality`
+- Descrição:
+  - Unificar campos vindos de três fontes, priorizando português.
+  - Regra mandatória: `pt-PT -> pt -> en`; sem PT, escolher EN mais completa.
+- Critérios de aceitação:
+  - [ ] `overview` segue estritamente a prioridade PT-first.
+  - [ ] Sem conteúdo PT, escolhe-se a variante EN mais completa.
+  - [ ] Falha parcial de uma fonte não quebra a vista de detalhes.
+- Ficheiros-alvo:
+  - `src/api.ts`
+  - `src/types.ts`
+  - `src/main.ts`
+
+## P3-03 - Ratings UI com TVMaze (3.º anel)
+- Título: `feat(ui): adicionar rating TVMaze nos detalhes com terceiro anel`
+- Labels sugeridas: `enhancement`, `priority:p3`, `frontend`, `ui`
+- Descrição:
+  - Mostrar rating TVMaze no bloco "Avaliações" junto de TMDb e Trakt.
+  - Ajustar espessura dos anéis para acomodar terceiro círculo.
+- Critérios de aceitação:
+  - [ ] O bloco de avaliações mostra TVMaze quando disponível.
+  - [ ] Anéis concêntricos ficam mais finos para caber 3 fontes.
+  - [ ] Cor do anel TVMaze é `#386e67`.
+  - [ ] Legenda inclui linha "TVMaze" com valor formatado.
+- Ficheiros-alvo:
+  - `src/ui.ts`
+  - `src/style.css`
+
+## P3-04 - Matching seguro entre fontes
+- Título: `fix(matching): score mínimo e fallback controlado no mapeamento entre providers`
+- Labels sugeridas: `enhancement`, `priority:p3`, `stability`, `data-integrity`
+- Descrição:
+  - Reduzir risco de match incorreto entre TMDb/Trakt/TVMaze.
+- Critérios de aceitação:
+  - [ ] Match preferencial por `imdb_id`.
+  - [ ] Fallback por nome/ano com score mínimo documentado.
+  - [ ] Match fraco não é usado (degradação segura).
+- Ficheiros-alvo:
+  - `src/api.ts`
+  - `src/main.ts`
+
+## P3-05 - Testes PT-first e falha parcial
+- Título: `test(details): cobrir fallback linguístico e agregação de 3 ratings`
+- Labels sugeridas: `enhancement`, `priority:p3`, `tests`, `quality`
+- Descrição:
+  - Adicionar testes para garantir o comportamento PT-first e robustez de fallback.
+- Critérios de aceitação:
+  - [ ] Testes para seleção de conteúdo: `pt-PT -> pt -> en`.
+  - [ ] Testes para escolha de EN mais completa quando PT não existe.
+  - [ ] Testes para falha parcial de providers sem quebra da UI.
+- Ficheiros-alvo:
+  - `src/api.test.ts`
+  - novos `src/*.test.ts` relacionados

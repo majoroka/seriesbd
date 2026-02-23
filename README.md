@@ -1,6 +1,6 @@
 # seriesBD
 
-Aplicação web para organizar e acompanhar séries de televisão usando dados do TMDb e da Trakt. Permite gerir uma biblioteca pessoal, marcar episódios como vistos, acompanhar estreias e tendências e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
+Aplicação web para organizar e acompanhar séries de televisão usando dados do TMDb, Trakt e TVMaze. Permite gerir uma biblioteca pessoal, marcar episódios como vistos, acompanhar estreias e tendências e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
 - ## Funcionalidades principais
 
@@ -20,13 +20,14 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 - **Frontend:** Vite + TypeScript + HTML/CSS modularizados.
 - **Estado e persistência:** Dexie (IndexedDB) com cache de temporadas e KV store para preferências.
 - **UI e gráficos:** Chart.js, Font Awesome, animações personalizadas em `ui.ts`.
-- **Automação:** Netlify Functions para proxies TMDb/Trakt, vite-plugin-pwa para assets offline.
+- **Automação:** Netlify Functions para proxies TMDb/Trakt/TVMaze, vite-plugin-pwa para assets offline.
 - **Testes:** Vitest + Testing Library (ambiente jsdom).
 
 ## Requisitos
 
 - Node.js 20 LTS (recomendado) e npm.
 - Contas TMDb e Trakt com chaves de API válidas.
+- Conta TVMaze (opcional; usar chave apenas se necessário no teu plano/limites).
 - Netlify CLI (utilizada via `npm run dev`; não é necessário instalar globalmente).
 
 ## Configuração e execução locais
@@ -38,11 +39,12 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    npm install
    ```
 
-2. Definir variáveis de ambiente (ficheiro `.env` ou `netlify env:set`):
+2. Definir variáveis de ambiente (ficheiro `.env` na raiz do projeto, ou `netlify env:set`):
 
-   ```TMDB_API_KEY=...
-
+   ```env
+   TMDB_API_KEY=...
    TRAKT_API_KEY=...
+   TVMAZE_API_KEY=... # opcional
    ```
 
 3. Iniciar o ambiente de desenvolvimento (Vite + proxies de funções):
@@ -55,6 +57,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    O Netlify CLI expõe a app em `http://localhost:8888` e encaminha:
    - `/api/tmdb/*` -> `tmdb` function
    - `/api/trakt/*` -> `trakt` function
+   - `/api/tvmaze/*` -> `tvmaze` function
 4. Build de produção:
 
    ```bash
@@ -78,17 +81,17 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 
 ├─ index.html            # Layout principal e secções da dashboard
 ├─ src/
-│  ├─ api.ts             # Chamadas TMDb/Trakt e cache de temporadas
+│  ├─ api.ts             # Chamadas TMDb/Trakt/TVMaze e cache de temporadas
 │  ├─ main.ts            # Ponto de entrada, listeners e fluxo de UI
 │  ├─ state.ts           # Estado em memória + persistência Dexie
 │  ├─ ui.ts              # Renderização, modais, gráficos e interacções
 │  ├─ dom.ts             # Referências centralizadas ao DOM
 │  ├─ db.ts              # Definição Dexie e stores IndexedDB
 │  ├─ utils.ts           # Helpers (debounce, exportações, animações)
-│  ├─ types.ts           # Tipagens TMDb/Trakt/local
+│  ├─ types.ts           # Tipagens TMDb/Trakt/TVMaze/local
 │  └─ style.css          # Tema e responsividade
 ├─ netlify/
-│  └─ functions/         # Proxies serverless TMDb/Trakt
+│  └─ functions/         # Proxies serverless TMDb/Trakt/TVMaze
 └─ vite.config.ts        # Configuração Vite + PWA + Vitest
 ```
 
@@ -122,7 +125,7 @@ npm run test
 
 ## Deploy
 
-- Netlify é o alvo principal (`netlify.toml` define build, funções e rewrites específicos por provider: `/api/tmdb/*` e `/api/trakt/*`).
+- Netlify é o alvo principal (`netlify.toml` define build, funções e rewrites específicos por provider: `/api/tmdb/*`, `/api/trakt/*` e `/api/tvmaze/*`).
 - Para deploy manual basta executar:
 
   ```bash
@@ -132,7 +135,7 @@ npm run test
 
   ```
 
-  (Certifique-se de que as chaves `TMDB_API_KEY` e `TRAKT_API_KEY` estão configuradas no ambiente Netlify.)
+  (Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY` e `TVMAZE_API_KEY` estão configuradas no ambiente Netlify.)
 
 ## Notas de robustez e troubleshooting
 

@@ -1,10 +1,11 @@
 import { db } from "./db";
 import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
-import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason } from "./types";
+import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason, TVMazeResolveData } from "./types";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
+const API_BASE_TVMAZE = '/api/tvmaze';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
 
@@ -200,6 +201,35 @@ export async function fetchTraktData(
         console.error('Error fetching Trakt data:', error);
         return null;
     }
+}
+
+/**
+ * Resolve dados de uma série no TVMaze com lookup por IMDb e fallback por nome/ano.
+ * @param signal - O sinal para abortar o pedido.
+ * @param fallbackTitle - Título da série para fallback de pesquisa textual.
+ * @param fallbackYear - Ano da série para melhorar o match no fallback.
+ * @param fallbackImdbId - IMDb ID, quando disponível.
+ * @returns Dados normalizados da TVMaze ou null quando não houver match.
+ */
+export async function fetchTVMazeResolvedShow(
+    signal: AbortSignal | null,
+    fallbackTitle?: string,
+    fallbackYear?: number,
+    fallbackImdbId?: string | null
+): Promise<TVMazeResolveData | null> {
+    const params = new URLSearchParams();
+    if (fallbackImdbId) params.set('imdb', fallbackImdbId);
+    if (fallbackTitle) params.set('query', fallbackTitle);
+    if (typeof fallbackYear === 'number' && Number.isFinite(fallbackYear)) params.set('year', String(fallbackYear));
+
+    if (!params.has('imdb') && !params.has('query')) return null;
+
+    const url = `${API_BASE_TVMAZE}/resolve/show?${params.toString()}`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return response.json();
 }
 
 /**

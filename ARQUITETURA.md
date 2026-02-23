@@ -2,11 +2,11 @@
 
 ## Visão geral
 
-O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb e Trakt) são feitas através de funções serverless da Netlify que atuam como proxies e protegem as chaves de API.
+O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb, Trakt e TVMaze) são feitas através de funções serverless da Netlify que atuam como proxies e protegem as chaves de API.
 
 ```text
 ┌───────────┐        ┌────────────────────┐        ┌────────────────────────┐
-│  Browser  │ <────> │ Netlify Functions  │ <────> │ APIs externas (TMDb/Trakt) │
+│  Browser  │ <────> │ Netlify Functions  │ <────> │ APIs externas (TMDb/Trakt/TVMaze) │
 └───────────┘        └────────────────────┘        └────────────────────────┘
         │
         ▼
@@ -42,11 +42,12 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ### `src/api.ts`
 
-- Implementa o cliente para TMDb/Trakt consumindo os proxies `/api/tmdb` e `/api/trakt`.
+- Implementa o cliente para TMDb/Trakt/TVMaze consumindo os proxies `/api/tmdb`, `/api/trakt` e `/api/tvmaze`.
 - Garante uniformização de erros e parâmetros (locale `pt-PT`, fallback de `AbortController`).
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
 - Expõe métodos para tendências diárias/semanais, top rated, estreias recentes, detalhes, créditos e vídeos.
 - `fetchTraktData` aplica fallback progressivo de matching (TMDb ID -> IMDb ID -> nome/ano) e fallback de ratings/trailer a partir de `extended=full` quando endpoints dedicados falham.
+- `fetchTVMazeResolvedShow` resolve séries no TVMaze por IMDb ID e fallback por nome/ano (`/api/tvmaze/resolve/show`), devolvendo payload normalizado.
 
 ### `src/db.ts`
 
@@ -66,7 +67,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ### `src/types.ts` e `src/constants.ts`
 
-- Tipagens das respostas TMDb/Trakt e dos objetos locais (Series, WatchedState, SeasonCache).
+- Tipagens das respostas TMDb/Trakt/TVMaze e dos objetos locais (Series, WatchedState, SeasonCache).
 - Constantes para chaves de armazenamento (`kvStore`) e valores partilhados.
 
 ## Fluxos de dados
@@ -121,9 +122,11 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - **Netlify Functions**
   - `/netlify/functions/tmdb.mjs` injeta `TMDB_API_KEY`, normaliza headers, trata CORS/Content-Encoding e respeita `language` explícito no query string.
   - `/netlify/functions/trakt.mjs` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`, `User-Agent`), responde a preflight e deteta bloqueios Cloudflare (retornando `502` em JSON para diagnóstico).
+  - `/netlify/functions/tvmaze.mjs` faz proxy para TVMaze, suporta lookup dedicado (`/resolve/show`) com estratégia IMDb -> nome/ano e inclui observabilidade mínima (`requestId`, status, latência).
   - `netlify.toml` redireciona rotas específicas para cada provider:
     - `/api/tmdb/*` -> `/.netlify/functions/tmdb/:splat`
     - `/api/trakt/*` -> `/.netlify/functions/trakt/:splat`
+    - `/api/tvmaze/*` -> `/.netlify/functions/tvmaze/:splat`
 - **Segurança**
   - Chaves nunca são expostas no frontend.
   - CSP por ambiente:
@@ -147,14 +150,14 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 - Frontend (`main.ts`) regista falhas por secção dinâmica com contexto mínimo (`section`, `endpoint`, `status`) e mantém snapshot em `sessionStorage` (`seriesdb.observability.v1`).
 - Frontend guarda métricas básicas por secção (execuções, falhas, lentidão e duração média) para diagnóstico rápido em runtime.
-- Netlify Functions (`tmdb.mjs`, `trakt.mjs`) emitem logs estruturados com `requestId`, `endpoint`, `status` e latência upstream.
+- Netlify Functions (`tmdb.mjs`, `trakt.mjs`, `tvmaze.mjs`) emitem logs estruturados com `requestId`, `endpoint`, `status` e latência upstream.
 - As respostas proxy incluem headers de troubleshooting: `x-request-id`, `x-upstream-status`, `x-upstream-latency-ms`.
 - Modais de confirmação/erro (`UI.showNotification`, `showConfirmationModal`) mantêm feedback consistente.
 - Animações (`animateValue`, `animateDuration`) melhoram percepção de progresso sem sacrificar desempenho.
 
 ## Pontos de atenção e oportunidades
 
-- **Erros TMDb/Trakt:** há fallback funcional para vários fluxos, mas ainda sem retry/backoff dedicado por endpoint.
+- **Erros TMDb/Trakt/TVMaze:** há fallback funcional para vários fluxos, mas ainda sem retry/backoff dedicado por endpoint.
 - **Responsividade:** a folha `style.css` cobre breakpoints principais, com especial atenção à grelha de estatísticas que agora se adapta a ecrãs verticais estreitos. Seria útil introduzir testes visuais ou Storybook.
 - **Internacionalização:** UI e dados estão em `pt-PT`; preparar camada de tradução facilitaria expansão.
 - **Sincronização multi-dispositivo:** hoje é apenas local; uma API backend seria necessária para cloud sync (ver Roadmap).

@@ -97,6 +97,36 @@ export interface TraktSeason {
     images?: { poster?: { thumb?: string; full?: string } };
 }
 
+export interface TVMazeShow {
+    id: number;
+    name: string | null;
+    language: string | null;
+    premiered: string | null;
+    status: string | null;
+    type: string | null;
+    genres: string[];
+    url: string | null;
+    officialSite: string | null;
+    rating: { average: number | null };
+    image: { medium?: string; original?: string } | null;
+    externals: { imdb?: string | null; thetvdb?: number | null; tvrage?: number | null } | null;
+    summaryHtml: string | null;
+    summaryText: string;
+    network: any;
+    webChannel: any;
+}
+
+export interface TVMazeResolveData {
+    source: 'tvmaze';
+    match: {
+        method: 'imdb' | 'search';
+        score: number;
+        year?: number | null;
+        candidates?: number;
+    };
+    show: TVMazeShow | null;
+}
+
 export interface WatchedState {
     [seriesId: string]: number[];
 }

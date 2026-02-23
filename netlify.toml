@@ -28,3 +28,8 @@
   from = "/api/trakt/*"
   to = "/.netlify/functions/trakt/:splat"
   status = 200
+
+[[redirects]]
+  from = "/api/tvmaze/*"
+  to = "/.netlify/functions/tvmaze/:splat"
+  status = 200

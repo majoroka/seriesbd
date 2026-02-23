@@ -15,6 +15,7 @@
 - **Melhorias de Responsividade**: Otimizado o layout para ecrãs de diferentes tamanhos, incluindo a nova vista de detalhes e a grelha de estatísticas.
 - **CSP por Ambiente (P2-01)**: política separada para desenvolvimento (`vite.config.ts`) e produção (`netlify.toml`) para equilibrar DX e segurança.
 - **Observabilidade mínima (P2-02)**: logs com contexto por secção/endpoint/status, métricas básicas de falha e latência, e headers de troubleshooting nas funções proxy.
+- **Integração TVMaze via proxy (P3-01)**: nova Netlify Function (`/api/tvmaze/*`) com CORS/headers normalizados, observabilidade mínima e endpoint de resolução por IMDb com fallback por nome/ano.
 
 ## Backlog técnico (pronto para issues)
 
@@ -117,6 +118,54 @@
    - Critérios de aceitação:
    - Erros críticos com contexto mínimo (secção, endpoint, status).
    - Métricas básicas de falha por secção dinâmica.
+
+### P3 - Agregação multi-fonte (TMDb + Trakt + TVMaze)
+
+1. **P3-01 | Integrar TVMaze via Netlify Function**
+   - Objetivo: adicionar 3.ª fonte de dados para enriquecer detalhes da série.
+   - Impacto esperado: maior cobertura de metadados e ratings.
+   - Ficheiros alvo: `netlify/functions/tvmaze.mjs`, `netlify.toml`.
+   - Critérios de aceitação:
+   - Endpoint proxy para TVMaze com CORS/headers normalizados.
+   - Lookup por `imdb_id` e fallback por nome/ano.
+   - Observabilidade mínima equivalente às outras functions (`requestId`, status, latência).
+
+2. **P3-02 | API de agregação com prioridade PT**
+   - Objetivo: fundir TMDb/Trakt/TVMaze por campo, com regra linguística consistente.
+   - Impacto esperado: conteúdos mais completos e em português sempre que possível.
+   - Ficheiros alvo: `src/api.ts`, `src/types.ts`, `src/main.ts`.
+   - Critérios de aceitação:
+   - Prioridade de idioma: `pt-PT` -> `pt` -> `en`.
+   - Quando não houver PT, escolher EN mais completa (maior completude de texto).
+   - Falha de uma fonte não bloqueia render dos detalhes.
+
+3. **P3-03 | UI de ratings com 3 anéis (TMDb/Trakt/TVMaze)**
+   - Objetivo: mostrar também classificação TVMaze nos detalhes.
+   - Impacto esperado: leitura comparativa de ratings entre três fontes.
+   - Ficheiros alvo: `src/ui.ts`, `src/style.css`.
+   - Critérios de aceitação:
+   - Bloco de avaliações exibe TMDb, Trakt e TVMaze quando disponíveis.
+   - Círculos concêntricos ficam ligeiramente mais finos para acomodar o 3.º anel.
+   - Cor fixa TVMaze: `#386e67`.
+   - Legenda inclui linha "TVMaze" com valor formatado.
+
+4. **P3-04 | Estratégia de matching e qualidade de dados**
+   - Objetivo: reduzir falsos positivos na correspondência entre fontes.
+   - Impacto esperado: menos dados incorretos nos detalhes.
+   - Ficheiros alvo: `src/api.ts`, `src/main.ts`.
+   - Critérios de aceitação:
+   - Match preferencial por `imdb_id`; fallback por nome + ano com score mínimo.
+   - Quando match for fraco, descartar fonte em vez de arriscar dados errados.
+   - Logs de fallback/match para troubleshooting.
+
+5. **P3-05 | Testes de regressão para agregação PT-first**
+   - Objetivo: proteger a nova lógica contra regressões.
+   - Impacto esperado: entregas mais seguras e previsíveis.
+   - Ficheiros alvo: `src/api.test.ts`, novos testes de integração leve.
+   - Critérios de aceitação:
+   - Casos de teste cobrindo PT disponível vs fallback EN.
+   - Casos de teste cobrindo escolha do EN mais completo.
+   - Casos de teste cobrindo ratings de 3 fontes e falha parcial de providers.
 
 ## Definição de pronto para cada issue
 
