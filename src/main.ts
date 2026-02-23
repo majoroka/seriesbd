@@ -1108,9 +1108,18 @@ function applyTopRatedFilters(seriesList: Series[]): Series[] {
 
 function updateTopRatedFilterToggleButton() {
     if (!DOM.toggleAsianAnimationFilterBtn) return;
-    DOM.toggleAsianAnimationFilterBtn.innerHTML = excludeAsianAnimationFromTopRated
-        ? '<i class="fas fa-filter"></i> Top Rated sem animação asiática: ON'
-        : '<i class="fas fa-filter"></i> Top Rated sem animação asiática: OFF';
+    const showAsianAnimationInTopRated = !excludeAsianAnimationFromTopRated;
+    DOM.toggleAsianAnimationFilterBtn.classList.toggle('is-on', showAsianAnimationInTopRated);
+    DOM.toggleAsianAnimationFilterBtn.setAttribute('aria-pressed', String(showAsianAnimationInTopRated));
+    DOM.toggleAsianAnimationFilterBtn.setAttribute(
+        'aria-label',
+        showAsianAnimationInTopRated
+            ? 'Ocultar séries de animação asiática no Top Rated'
+            : 'Mostrar séries de animação asiática no Top Rated'
+    );
+    if (DOM.topRatedAnimationFilterState) {
+        DOM.topRatedAnimationFilterState.textContent = showAsianAnimationInTopRated ? 'ON' : 'OFF';
+    }
 }
 
 function updatePopularLoadMoreVisibility() {
@@ -1665,8 +1674,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTopRatedFilterToggleButton();
         UI.showNotification(
             excludeAsianAnimationFromTopRated
-                ? 'Filtro de animação asiática ativado no Top Rated.'
-                : 'Filtro de animação asiática desativado no Top Rated.'
+                ? 'Séries de animação asiática ocultadas no Top Rated.'
+                : 'Séries de animação asiática visíveis no Top Rated.'
         );
 
         const popularSection = document.getElementById('popular-section');

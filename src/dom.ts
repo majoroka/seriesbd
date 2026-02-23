@@ -40,6 +40,7 @@ export const settingsMenu = document.getElementById('settings-menu') as HTMLDivE
 export const exportDataBtn = document.getElementById('export-data-btn') as HTMLButtonElement;
 export const importDataBtn = document.getElementById('import-data-btn') as HTMLButtonElement;
 export const toggleAsianAnimationFilterBtn = document.getElementById('toggle-asian-animation-filter-btn') as HTMLButtonElement;
+export const topRatedAnimationFilterState = document.getElementById('top-rated-animation-filter-state') as HTMLSpanElement;
 export const rescanSeriesBtn = document.getElementById('rescan-series-btn') as HTMLButtonElement;
 export const refetchDataBtn = document.getElementById('refetch-data-btn') as HTMLButtonElement;
 export const allRatingsModal = document.getElementById('all-ratings-modal') as HTMLDivElement;

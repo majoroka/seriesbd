@@ -2368,6 +2368,68 @@ body.light-theme .network-logo {
     pointer-events: none;
 }
 
+.top-rated-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.top-rated-filter-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.2rem 0.45rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-card);
+}
+
+.top-rated-filter-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.top-rated-filter-state {
+    min-width: 2.2rem;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.top-rated-filter-toggle {
+    width: 42px;
+    height: 24px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-dark);
+    padding: 2px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.top-rated-filter-toggle .top-rated-filter-knob {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.top-rated-filter-toggle.is-on {
+    background-color: rgba(109, 190, 191, 0.2);
+    border-color: var(--primary-accent);
+}
+
+.top-rated-filter-toggle.is-on .top-rated-filter-knob {
+    transform: translateX(18px);
+    background-color: var(--primary-accent);
+}
+
 .view-toggle {
   display: flex;
   gap: 0; /* Remove gap for a segmented look */
@@ -2731,6 +2793,22 @@ body.light-theme .network-logo {
 
     #all-series-section .view-toggle {
         align-self: center;
+    }
+
+    #popular-section .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    #popular-section .top-rated-header-controls {
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    #popular-section .top-rated-filter-control {
+        width: 100%;
+        justify-content: center;
     }
 
     /* --- Header --- */
