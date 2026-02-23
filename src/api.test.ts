@@ -372,3 +372,138 @@ describe('fetchAggregatedSeriesMetadata', () => {
     expect(aggregated.overviewSource).toBe('tmdb');
   });
 });
+
+describe('P3-05 regression coverage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps three public rating sources available in the detail aggregation flow', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/trakt/search/imdb/tt3000')) {
+        return jsonResponse([
+          { show: { ids: { trakt: 3000 } } },
+        ]);
+      }
+
+      if (url.includes('/api/trakt/shows/3000?extended=full')) {
+        return jsonResponse({
+          rating: 8.6,
+          votes: 4321,
+          trailer: 'https://youtu.be/trailer3000',
+          certification: 'TV-14',
+          overview: 'Overview from Trakt provider.',
+        });
+      }
+
+      if (url.includes('/api/trakt/shows/3000/ratings')) {
+        return jsonResponse({ rating: 8.6, votes: 4321 });
+      }
+
+      if (url.includes('/api/trakt/shows/3000/translations/pt')) {
+        return jsonResponse([]);
+      }
+
+      if (url.includes('/api/trakt/shows/3000/translations/en')) {
+        return jsonResponse([{ overview: 'English translated overview from Trakt.' }]);
+      }
+
+      if (url.includes('/api/tmdb/tv/3000?language=en-US')) {
+        return jsonResponse({ overview: 'TMDb english overview.' });
+      }
+
+      if (url.includes('/api/tvmaze/resolve/show?')) {
+        return jsonResponse({
+          source: 'tvmaze',
+          match: { method: 'imdb', score: 1 },
+          show: {
+            id: 3000,
+            language: 'English',
+            summaryText: 'TVMaze summary',
+            summaryHtml: null,
+            rating: { average: 7.4 },
+          },
+        });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const tmdbRating = 9.2; // rating vindo de TMDb details
+    const traktData = await fetchTraktData(3000, null, 'Show 3000', 2022, 'Show 3000', 'tt3000');
+    const aggregated = await fetchAggregatedSeriesMetadata({
+      seriesId: 3000,
+      signal: null,
+      tmdbOverviewPt: '',
+      traktData,
+      fallbackTitle: 'Show 3000',
+      fallbackYear: 2022,
+      fallbackImdbId: 'tt3000',
+    });
+
+    expect(tmdbRating).toBeGreaterThan(0);
+    expect(traktData?.ratings?.rating).toBe(8.6);
+    expect(aggregated.tvmazeData?.show?.rating.average).toBe(7.4);
+  });
+
+  it('keeps Trakt rating data when TVMaze provider has no reliable match (partial provider failure)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/trakt/search/imdb/tt4000')) {
+        return jsonResponse([
+          { show: { ids: { trakt: 4000 } } },
+        ]);
+      }
+
+      if (url.includes('/api/trakt/shows/4000?extended=full')) {
+        return jsonResponse({
+          rating: 7.9,
+          votes: 2100,
+          trailer: 'https://youtu.be/trailer4000',
+          certification: 'TV-MA',
+          overview: 'Trakt fallback overview',
+        });
+      }
+
+      if (url.includes('/api/trakt/shows/4000/ratings')) {
+        return jsonResponse({ rating: 7.9, votes: 2100 });
+      }
+
+      if (url.includes('/api/trakt/shows/4000/translations/pt')) {
+        return jsonResponse([]);
+      }
+
+      if (url.includes('/api/trakt/shows/4000/translations/en')) {
+        return jsonResponse([{ overview: 'English overview from Trakt provider.' }]);
+      }
+
+      if (url.includes('/api/tmdb/tv/4000?language=en-US')) {
+        return jsonResponse({ overview: 'TMDb EN overview' });
+      }
+
+      if (url.includes('/api/tvmaze/resolve/show?')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const traktData = await fetchTraktData(4000, null, 'Show 4000', 2019, 'Show 4000', 'tt4000');
+    const aggregated = await fetchAggregatedSeriesMetadata({
+      seriesId: 4000,
+      signal: null,
+      tmdbOverviewPt: '',
+      traktData,
+      fallbackTitle: 'Show 4000',
+      fallbackYear: 2019,
+      fallbackImdbId: 'tt4000',
+    });
+
+    expect(traktData?.ratings?.rating).toBe(7.9);
+    expect(aggregated.tvmazeData).toBeNull();
+    expect(aggregated.overview).toContain('English overview');
+  });
+});
