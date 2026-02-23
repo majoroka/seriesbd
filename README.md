@@ -7,7 +7,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
 - **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente.
 - **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações públicas (TMDb + Trakt), trailers e gestão de progresso.
-- **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), populares e próximas estreias.
+- **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), Top Rated e próximas estreias.
 - **Estatísticas Detalhadas**: Visualize o tempo total assistido, número de episódios vistos e analise os seus hábitos com gráficos de géneros, anos de lançamento e muito mais.
 - **Classificação e Notas**: Avalie as suas séries de 1 a 10 estrelas e adicione notas pessoais.
 - **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
@@ -136,7 +136,7 @@ npm run test
 
 ## Notas de robustez e troubleshooting
 
-- A secção **Populares** tenta primeiro Trakt; se falhar, faz fallback automático para TMDb.
+- A secção **Top Rated** usa o endpoint `top_rated` do TMDb para priorizar séries com melhor avaliação pública.
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.

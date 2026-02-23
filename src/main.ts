@@ -1008,8 +1008,6 @@ let popularSeriesDisplayedCount = 0;
 const POPULAR_SERIES_CHUNK_SIZE = 50;
 const POPULAR_SERIES_TOTAL_TO_FETCH = 250;
 let isLoadingPopular = false;
-const POPULAR_SERIES_DETAILS_BATCH_SIZE = 8;
-const POPULAR_SERIES_DETAILS_BATCH_DELAY_MS = 100;
 
 function sortPopularSeriesByRanking(seriesList: Series[]): Series[] {
     return [...seriesList].sort((a, b) => {
@@ -1048,64 +1046,17 @@ async function loadPopularSeries(loadMore = false) {
     isLoadingPopular = true;
     allPopularSeries = [];
     popularSeriesDisplayedCount = 0;
-    DOM.popularContainer.innerHTML = '<p>A carregar as séries mais populares...</p>';
+    DOM.popularContainer.innerHTML = '<p>A carregar séries top rated...</p>';
     DOM.popularLoadMoreContainer.style.display = 'none';
 
-    const fetchAndProcessChunk = async (page: number, size: number): Promise<Series[]> => {
-        try {
-            const traktData = await runObservedSection(
-                'popular',
-                '/api/trakt/shows/popular',
-                () => API.fetchTraktPopularSeries(page, size),
-                { page, size, source: 'trakt' }
-            );
-            const validTraktShows = traktData.filter(item => item && item.ids && item.ids.tmdb);
-            const detailResults = await processInBatches(
-                validTraktShows,
-                POPULAR_SERIES_DETAILS_BATCH_SIZE,
-                POPULAR_SERIES_DETAILS_BATCH_DELAY_MS,
-                async (item: any): Promise<Series> => {
-                    const tmdbId = Number(item.ids.tmdb);
-                    const baseSeries: Series = {
-                        id: tmdbId,
-                        name: item.title || 'Título indisponível',
-                        overview: item.overview || '',
-                        first_air_date: item.first_aired || '',
-                        vote_average: typeof item.rating === 'number' ? item.rating : 0,
-                        poster_path: null,
-                        backdrop_path: null,
-                        genres: [],
-                    };
-
-                    try {
-                        const tmdbDetails = await API.fetchSeriesDetails(tmdbId, null);
-                        return {
-                            ...baseSeries,
-                            poster_path: tmdbDetails.poster_path ?? null,
-                            backdrop_path: tmdbDetails.backdrop_path ?? null,
-                        };
-                    } catch (error) {
-                        console.warn(`Não foi possível obter detalhes do TMDb para a série "${item.title}" (ID: ${item.ids.tmdb}).`, error);
-                        // Mantém a série na lista mesmo sem poster para não perder títulos populares.
-                        return baseSeries;
-                    }
-                }
-            );
-
-            return detailResults
-                .filter((result): result is PromiseFulfilledResult<Series> => result.status === 'fulfilled')
-                .map(result => result.value);
-        } catch (error) {
-            // Fallback: se Trakt falhar (ex.: rate limit/chave ausente), usa a lista popular do TMDb.
-            console.warn('Falha ao carregar populares da Trakt. A usar fallback do TMDb.', error);
-            const tmdbData = await runObservedSection(
-                'popular',
-                '/api/tmdb/tv/popular',
-                () => API.fetchPopularSeries(page),
-                { page, size, source: 'tmdb-fallback' }
-            );
-            return tmdbData.results;
-        }
+    const fetchAndProcessChunk = async (page: number): Promise<Series[]> => {
+        const tmdbData = await runObservedSection(
+            'popular',
+            '/api/tmdb/tv/top_rated',
+            () => API.fetchPopularSeries(page),
+            { page, source: 'tmdb-top-rated' }
+        );
+        return tmdbData.results;
     };
 
     const processRemainingChunks = async () => {
@@ -1113,7 +1064,7 @@ async function loadPopularSeries(loadMore = false) {
         const pagesToFetch = Math.ceil((POPULAR_SERIES_TOTAL_TO_FETCH - POPULAR_SERIES_CHUNK_SIZE) / POPULAR_SERIES_CHUNK_SIZE);
         for (let i = 0; i < pagesToFetch; i++) {
             const page = i + 2; // Começa na página 2
-            const chunk = await fetchAndProcessChunk(page, POPULAR_SERIES_CHUNK_SIZE);
+            const chunk = await fetchAndProcessChunk(page);
             remainingSeries.push(...chunk);
         }
         allPopularSeries = sortPopularSeriesByRanking(
@@ -1127,7 +1078,7 @@ async function loadPopularSeries(loadMore = false) {
 
     try {
         // Carrega e renderiza o primeiro chunk rapidamente
-        const firstChunk = await fetchAndProcessChunk(1, POPULAR_SERIES_CHUNK_SIZE);
+        const firstChunk = await fetchAndProcessChunk(1);
         allPopularSeries = sortPopularSeriesByRanking(dedupePopularSeries(firstChunk));
         popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_CHUNK_SIZE, allPopularSeries.length);
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
@@ -1146,13 +1097,13 @@ async function loadPopularSeries(loadMore = false) {
     } catch (error) {
         recordSectionFailure('popular', '/popular/render', error);
         persistObservabilitySnapshot();
-        console.error('Erro ao carregar séries populares:', error);
+        console.error('Erro ao carregar séries top rated:', error);
         renderRemoteErrorWithRetry(
             DOM.popularContainer,
             () => loadPopularSeries(),
             {
-                offlineMessage: 'Sem ligação à internet. A secção Populares não está disponível offline.',
-                onlineMessage: 'Não foi possível carregar as séries populares.',
+                offlineMessage: 'Sem ligação à internet. A secção Top Rated não está disponível offline.',
+                onlineMessage: 'Não foi possível carregar as séries top rated.',
             }
         );
         isLoadingPopular = false;

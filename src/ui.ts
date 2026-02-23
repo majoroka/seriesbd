@@ -512,7 +512,7 @@ export function renderPopularSeries(seriesList: Series[]) {
     const viewMode = DOM.popularContainer.classList.contains('grid-view') ? 'grid' : 'list';
 
     if (seriesList.length === 0) {
-        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Nenhuma série popular encontrada.</p>';
+        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Nenhuma série top rated encontrada.</p>';
         return;
     }
 
@@ -576,7 +576,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
             el('span', { text: `${Math.round(progressPercentage)}%` })
         ]);
     } else if (isDiscovery && viewMode === 'list') {
-        // Para as secções de descoberta (Populares, Estreias), mostra a avaliação pública em vez do progresso
+        // Para as secções de descoberta (Top Rated, Estreias), mostra a avaliação pública em vez do progresso
         const publicRating = (series.vote_average || 0).toFixed(1);
         progressElement = el('div', { class: 'public-rating-in-list' }, [
             el('i', { class: 'fas fa-star' }),

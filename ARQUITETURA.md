@@ -45,7 +45,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Implementa o cliente para TMDb/Trakt consumindo os proxies `/api/tmdb` e `/api/trakt`.
 - Garante uniformização de erros e parâmetros (locale `pt-PT`, fallback de `AbortController`).
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
-- Expõe métodos para tendências diárias/semanais, populares, estreias recentes, detalhes, créditos e vídeos.
+- Expõe métodos para tendências diárias/semanais, top rated, estreias recentes, detalhes, créditos e vídeos.
 - `fetchTraktData` aplica fallback progressivo de matching (TMDb ID -> IMDb ID -> nome/ano) e fallback de ratings/trailer a partir de `extended=full` quando endpoints dedicados falham.
 
 ### `src/db.ts`
@@ -93,8 +93,8 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 4. **Secções dinâmicas**
 
-   - Tendências (`loadTrending`), Populares (`loadPopularSeries`) e Estreias (`loadPremieresSeries`) recorrem ao `searchAbortController` partilhado para cancelar pedidos em trânsito.
-   - Populares usa Trakt como fonte primária, com fallback automático para TMDb em caso de erro/bloqueio.
+   - Tendências (`loadTrending`), Top Rated (`loadPopularSeries`) e Estreias (`loadPremieresSeries`) recorrem ao `searchAbortController` partilhado para cancelar pedidos em trânsito.
+   - Top Rated usa TMDb (`/tv/top_rated`) como fonte principal para ranking por avaliação pública.
    - Dados são filtrados contra a biblioteca local para evitar duplicados.
 
 5. **Estatísticas**

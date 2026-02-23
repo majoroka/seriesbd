@@ -257,29 +257,15 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
 }
 
 /**
- * Busca as séries mais populares do TMDb.
+ * Busca as séries mais bem avaliadas (top rated) do TMDb.
  * @param page - O número da página a ser buscada.
- * @returns Uma promessa que resolve com os dados das séries populares.
+ * @returns Uma promessa que resolve com os dados das séries top rated.
  */
 export async function fetchPopularSeries(page: number): Promise<{ results: Series[], page: number, total_pages: number }> {
-    const url = `${API_BASE_TMDB}/tv/popular?language=pt-PT&page=${page}`;
+    const url = `${API_BASE_TMDB}/tv/top_rated?language=pt-PT&page=${page}`;
     const response = await fetchWithRetry(url, {}, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) {
-        throw new Error('Não foi possível buscar as séries populares.');
-    }
-    return response.json();
-}
-
-/**
- * Busca as séries mais populares da Trakt.
- * @param page - O número da página a ser buscada.
- * @returns Uma promessa que resolve com os dados das séries populares da Trakt.
- */
-export async function fetchTraktPopularSeries(page: number, limit: number = 50): Promise<any[]> {
-    const url = `${API_BASE_TRAKT}/shows/popular?page=${page}&limit=${limit}&extended=full`;
-    const response = await fetchWithRetry(url, {}, RETRY_FAST.retries, RETRY_FAST.backoff);
-    if (!response.ok) {
-        throw new Error('Não foi possível buscar as séries populares da Trakt.');
+        throw new Error('Não foi possível buscar as séries top rated.');
     }
     return response.json();
 }
