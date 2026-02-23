@@ -137,6 +137,7 @@ npm run test
 ## Notas de robustez e troubleshooting
 
 - A secção **Top Rated** usa o endpoint `top_rated` do TMDb para priorizar séries com melhor avaliação pública.
+- O menu de definições inclui um toggle para excluir/incluir animação asiática no Top Rated.
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.

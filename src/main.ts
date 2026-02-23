@@ -878,6 +878,11 @@ async function initializeApp(): Promise<void> {
         }
         const settings = await db.kvStore.toArray();
         const settingsMap = new Map(settings.map((i: KVStoreItem) => [i.key, i.value]));
+        const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
+        excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
+            ? true
+            : topRatedFilterSetting === true || topRatedFilterSetting === 'true';
+        updateTopRatedFilterToggleButton();
         await S.loadStateFromDB();
         UI.applyViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY) ?? 'list', DOM.watchlistContainer, DOM.watchlistViewToggle);
         UI.applyViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY) ?? 'list', DOM.unseenContainer, DOM.unseenViewToggle);
@@ -1005,9 +1010,13 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
 
 let allPopularSeries: Series[] = [];
 let popularSeriesDisplayedCount = 0;
-const POPULAR_SERIES_CHUNK_SIZE = 50;
-const POPULAR_SERIES_TOTAL_TO_FETCH = 250;
+const POPULAR_SERIES_DISPLAY_BATCH_SIZE = 50;
+const POPULAR_SERIES_TARGET_TOTAL = 250;
 let isLoadingPopular = false;
+const TMDB_ANIMATION_GENRE_ID = 16;
+const ASIAN_ANIMATION_LANGUAGES = new Set(['ja', 'ko', 'zh', 'th', 'vi', 'id', 'ms', 'tl', 'hi']);
+const ASIAN_COUNTRIES = new Set(['JP', 'KR', 'CN', 'TW', 'HK', 'TH', 'VN', 'ID', 'MY', 'PH', 'IN']);
+let excludeAsianAnimationFromTopRated = true;
 
 function sortPopularSeriesByRanking(seriesList: Series[]): Series[] {
     return [...seriesList].sort((a, b) => {
@@ -1027,19 +1036,52 @@ function dedupePopularSeries(seriesList: Series[]): Series[] {
     });
 }
 
+function isAsianAnimationSeries(series: Series): boolean {
+    const maybeGenreIds = (series as unknown as { genre_ids?: number[] }).genre_ids;
+    const genreIds = Array.isArray(maybeGenreIds) ? maybeGenreIds.map(Number) : [];
+    const hasAnimationGenre = genreIds.includes(TMDB_ANIMATION_GENRE_ID)
+        || (Array.isArray(series.genres) && series.genres.some((genre) => genre.id === TMDB_ANIMATION_GENRE_ID));
+
+    if (!hasAnimationGenre) return false;
+
+    const originalLanguage = String((series as unknown as { original_language?: string }).original_language || '').toLowerCase();
+    const originCountryRaw = (series as unknown as { origin_country?: string[] }).origin_country;
+    const originCountries = Array.isArray(originCountryRaw) ? originCountryRaw.map(country => String(country).toUpperCase()) : [];
+
+    const isAsianByLanguage = originalLanguage.length > 0 && ASIAN_ANIMATION_LANGUAGES.has(originalLanguage);
+    const isAsianByCountry = originCountries.some(country => ASIAN_COUNTRIES.has(country));
+    return isAsianByLanguage || isAsianByCountry;
+}
+
+function applyTopRatedFilters(seriesList: Series[]): Series[] {
+    if (!excludeAsianAnimationFromTopRated) return seriesList;
+    return seriesList.filter(series => !isAsianAnimationSeries(series));
+}
+
+function updateTopRatedFilterToggleButton() {
+    if (!DOM.toggleAsianAnimationFilterBtn) return;
+    DOM.toggleAsianAnimationFilterBtn.innerHTML = excludeAsianAnimationFromTopRated
+        ? '<i class="fas fa-filter"></i> Top Rated sem animação asiática: ON'
+        : '<i class="fas fa-filter"></i> Top Rated sem animação asiática: OFF';
+}
+
+function updatePopularLoadMoreVisibility() {
+    if (isLoadingPopular) {
+        DOM.popularLoadMoreContainer.style.display = allPopularSeries.length > 0 ? 'block' : 'none';
+        return;
+    }
+    DOM.popularLoadMoreContainer.style.display = popularSeriesDisplayedCount < allPopularSeries.length ? 'block' : 'none';
+}
+
 async function loadPopularSeries(loadMore = false) {
     if (isLoadingPopular) return;
 
     if (loadMore && allPopularSeries.length > 0) {
-        popularSeriesDisplayedCount += POPULAR_SERIES_CHUNK_SIZE;
+        popularSeriesDisplayedCount += POPULAR_SERIES_DISPLAY_BATCH_SIZE;
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
         UI.renderPopularSeries(seriesToRender);
-        if (popularSeriesDisplayedCount >= allPopularSeries.length) {
-            DOM.popularLoadMoreContainer.style.display = 'none';
-        } else {
-            DOM.popularLoadMoreContainer.style.display = 'block';
-        }
+        updatePopularLoadMoreVisibility();
         return;
     }
 
@@ -1049,50 +1091,48 @@ async function loadPopularSeries(loadMore = false) {
     DOM.popularContainer.innerHTML = '<p>A carregar séries top rated...</p>';
     DOM.popularLoadMoreContainer.style.display = 'none';
 
-    const fetchAndProcessChunk = async (page: number): Promise<Series[]> => {
+    const fetchAndProcessChunk = async (page: number): Promise<{ results: Series[]; totalPages: number }> => {
         const tmdbData = await runObservedSection(
             'popular',
             '/api/tmdb/tv/top_rated',
             () => API.fetchPopularSeries(page),
             { page, source: 'tmdb-top-rated' }
         );
-        return tmdbData.results;
+        return {
+            results: applyTopRatedFilters(tmdbData.results),
+            totalPages: tmdbData.total_pages || 0,
+        };
     };
 
-    const processRemainingChunks = async () => {
-        const remainingSeries: Series[] = [];
-        const pagesToFetch = Math.ceil((POPULAR_SERIES_TOTAL_TO_FETCH - POPULAR_SERIES_CHUNK_SIZE) / POPULAR_SERIES_CHUNK_SIZE);
-        for (let i = 0; i < pagesToFetch; i++) {
-            const page = i + 2; // Começa na página 2
+    const processRemainingChunks = async (startPage: number, totalPages: number) => {
+        const maxPages = Math.max(1, totalPages);
+        for (let page = startPage; page <= maxPages; page++) {
+            if (allPopularSeries.length >= POPULAR_SERIES_TARGET_TOTAL) break;
             const chunk = await fetchAndProcessChunk(page);
-            remainingSeries.push(...chunk);
+            allPopularSeries = sortPopularSeriesByRanking(
+                dedupePopularSeries([...allPopularSeries, ...chunk.results])
+            );
         }
-        allPopularSeries = sortPopularSeriesByRanking(
-            dedupePopularSeries([...allPopularSeries, ...remainingSeries])
-        );
         // Re-renderiza a primeira página com a lista completa para garantir consistência
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
         UI.renderPopularSeries(seriesToRender);
+        updatePopularLoadMoreVisibility();
     };
 
     try {
         // Carrega e renderiza o primeiro chunk rapidamente
         const firstChunk = await fetchAndProcessChunk(1);
-        allPopularSeries = sortPopularSeriesByRanking(dedupePopularSeries(firstChunk));
-        popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_CHUNK_SIZE, allPopularSeries.length);
+        allPopularSeries = sortPopularSeriesByRanking(dedupePopularSeries(firstChunk.results));
+        popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_DISPLAY_BATCH_SIZE, allPopularSeries.length);
         const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
         DOM.popularContainer.innerHTML = '';
         UI.renderPopularSeries(seriesToRender);
-        if (allPopularSeries.length > 0) {
-            DOM.popularLoadMoreContainer.style.display = 'block';
-        }
+        updatePopularLoadMoreVisibility();
         // Carrega o resto em segundo plano
-        processRemainingChunks().finally(() => {
+        processRemainingChunks(2, firstChunk.totalPages).finally(() => {
             isLoadingPopular = false;
-            if (popularSeriesDisplayedCount >= allPopularSeries.length) {
-                DOM.popularLoadMoreContainer.style.display = 'none';
-            }
+            updatePopularLoadMoreVisibility();
         });
     } catch (error) {
         recordSectionFailure('popular', '/popular/render', error);
@@ -1568,6 +1608,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.exportDataBtn?.addEventListener('click', exportData);
     DOM.importDataBtn?.addEventListener('click', importData);
+    DOM.toggleAsianAnimationFilterBtn?.addEventListener('click', async () => {
+        excludeAsianAnimationFromTopRated = !excludeAsianAnimationFromTopRated;
+        await db.kvStore.put({
+            key: C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY,
+            value: excludeAsianAnimationFromTopRated,
+        });
+        updateTopRatedFilterToggleButton();
+        UI.showNotification(
+            excludeAsianAnimationFromTopRated
+                ? 'Filtro de animação asiática ativado no Top Rated.'
+                : 'Filtro de animação asiática desativado no Top Rated.'
+        );
+
+        const popularSection = document.getElementById('popular-section');
+        if (popularSection && popularSection.style.display !== 'none') {
+            S.resetSearchAbortController();
+            loadPopularSeries();
+        }
+    });
     DOM.rescanSeriesBtn?.addEventListener('click', rescanAllSeries);
     DOM.refetchDataBtn?.addEventListener('click', refetchAllMetadata);
 

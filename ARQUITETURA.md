@@ -95,6 +95,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
    - Tendências (`loadTrending`), Top Rated (`loadPopularSeries`) e Estreias (`loadPremieresSeries`) recorrem ao `searchAbortController` partilhado para cancelar pedidos em trânsito.
    - Top Rated usa TMDb (`/tv/top_rated`) como fonte principal para ranking por avaliação pública.
+   - O carregamento continua por páginas até atingir o alvo de 250 itens (ou limite da API), com toggle para excluir animação asiática.
    - Dados são filtrados contra a biblioteca local para evitar duplicados.
 
 5. **Estatísticas**
