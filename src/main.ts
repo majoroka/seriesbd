@@ -1062,8 +1062,6 @@ const POPULAR_SERIES_DISPLAY_BATCH_SIZE = 50;
 const POPULAR_SERIES_TARGET_TOTAL = 250;
 let isLoadingPopular = false;
 const TMDB_ANIMATION_GENRE_ID = 16;
-const ASIAN_ANIMATION_LANGUAGES = new Set(['ja', 'ko', 'zh', 'th', 'vi', 'id', 'ms', 'tl', 'hi']);
-const ASIAN_COUNTRIES = new Set(['JP', 'KR', 'CN', 'TW', 'HK', 'TH', 'VN', 'ID', 'MY', 'PH', 'IN']);
 let excludeAsianAnimationFromTopRated = true;
 
 function sortPopularSeriesByRanking(seriesList: Series[]): Series[] {
@@ -1084,41 +1082,36 @@ function dedupePopularSeries(seriesList: Series[]): Series[] {
     });
 }
 
-function isAsianAnimationSeries(series: Series): boolean {
+function isAnimationSeries(series: Series): boolean {
     const maybeGenreIds = (series as unknown as { genre_ids?: number[] }).genre_ids;
     const genreIds = Array.isArray(maybeGenreIds) ? maybeGenreIds.map(Number) : [];
-    const hasAnimationGenre = genreIds.includes(TMDB_ANIMATION_GENRE_ID)
-        || (Array.isArray(series.genres) && series.genres.some((genre) => genre.id === TMDB_ANIMATION_GENRE_ID));
-
-    if (!hasAnimationGenre) return false;
-
-    const originalLanguage = String((series as unknown as { original_language?: string }).original_language || '').toLowerCase();
-    const originCountryRaw = (series as unknown as { origin_country?: string[] }).origin_country;
-    const originCountries = Array.isArray(originCountryRaw) ? originCountryRaw.map(country => String(country).toUpperCase()) : [];
-
-    const isAsianByLanguage = originalLanguage.length > 0 && ASIAN_ANIMATION_LANGUAGES.has(originalLanguage);
-    const isAsianByCountry = originCountries.some(country => ASIAN_COUNTRIES.has(country));
-    return isAsianByLanguage || isAsianByCountry;
+    if (genreIds.includes(TMDB_ANIMATION_GENRE_ID)) return true;
+    if (!Array.isArray(series.genres)) return false;
+    return series.genres.some((genre) => {
+        const genreId = Number((genre as { id?: number }).id);
+        const genreName = String((genre as { name?: string }).name || '').toLowerCase();
+        return genreId === TMDB_ANIMATION_GENRE_ID || genreName === 'animation' || genreName === 'animação';
+    });
 }
 
 function applyTopRatedFilters(seriesList: Series[]): Series[] {
     if (!excludeAsianAnimationFromTopRated) return seriesList;
-    return seriesList.filter(series => !isAsianAnimationSeries(series));
+    return seriesList.filter(series => !isAnimationSeries(series));
 }
 
 function updateTopRatedFilterToggleButton() {
     if (!DOM.toggleAsianAnimationFilterBtn) return;
-    const showAsianAnimationInTopRated = !excludeAsianAnimationFromTopRated;
-    DOM.toggleAsianAnimationFilterBtn.classList.toggle('is-on', showAsianAnimationInTopRated);
-    DOM.toggleAsianAnimationFilterBtn.setAttribute('aria-pressed', String(showAsianAnimationInTopRated));
+    const showAnimationInTopRated = !excludeAsianAnimationFromTopRated;
+    DOM.toggleAsianAnimationFilterBtn.classList.toggle('is-on', showAnimationInTopRated);
+    DOM.toggleAsianAnimationFilterBtn.setAttribute('aria-pressed', String(showAnimationInTopRated));
     DOM.toggleAsianAnimationFilterBtn.setAttribute(
         'aria-label',
-        showAsianAnimationInTopRated
-            ? 'Ocultar séries de animação asiática no Top Rated'
-            : 'Mostrar séries de animação asiática no Top Rated'
+        showAnimationInTopRated
+            ? 'Ocultar séries de animação no Top Rated'
+            : 'Mostrar séries de animação no Top Rated'
     );
     if (DOM.topRatedAnimationFilterState) {
-        DOM.topRatedAnimationFilterState.textContent = showAsianAnimationInTopRated ? 'ON' : 'OFF';
+        DOM.topRatedAnimationFilterState.textContent = showAnimationInTopRated ? 'ON' : 'OFF';
     }
 }
 
@@ -1674,8 +1667,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTopRatedFilterToggleButton();
         UI.showNotification(
             excludeAsianAnimationFromTopRated
-                ? 'Séries de animação asiática ocultadas no Top Rated.'
-                : 'Séries de animação asiática visíveis no Top Rated.'
+                ? 'Séries de animação ocultadas no Top Rated.'
+                : 'Séries de animação visíveis no Top Rated.'
         );
 
         const popularSection = document.getElementById('popular-section');
