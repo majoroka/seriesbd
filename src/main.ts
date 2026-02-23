@@ -27,9 +27,14 @@ type PerformanceMetric = {
     lastDurationMs: number;
     lastRunAt: string;
 };
+type DetailReturnContext = {
+    sectionId: string;
+    scrollTop: number;
+};
 
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
+let detailReturnContext: DetailReturnContext | null = null;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -358,6 +363,38 @@ async function setupDetailViewActions(seriesData: TMDbSeriesDetails) {
     }
 }
 
+function getMainContentScrollContainer(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('.main-content');
+}
+
+function getVisibleMainSectionId(): string | null {
+    const visibleSection = Array.from(DOM.mainContentSections).find(section => section.style.display !== 'none');
+    return visibleSection?.id || null;
+}
+
+function captureDetailReturnContext() {
+    const visibleSectionId = getVisibleMainSectionId();
+    if (!visibleSectionId || visibleSectionId === 'series-view-section') return;
+    const mainContent = getMainContentScrollContainer();
+    detailReturnContext = {
+        sectionId: visibleSectionId,
+        scrollTop: mainContent?.scrollTop ?? 0,
+    };
+}
+
+function navigateBackFromSeriesDetails() {
+    const fallbackSection = 'watchlist-section';
+    const targetSection = detailReturnContext?.sectionId || fallbackSection;
+    const targetScrollTop = detailReturnContext?.scrollTop ?? 0;
+    UI.showSection(targetSection);
+    const mainContent = getMainContentScrollContainer();
+    if (mainContent) {
+        requestAnimationFrame(() => {
+            mainContent.scrollTop = targetScrollTop;
+        });
+    }
+}
+
 
 
 async function displaySeriesDetails(seriesId: number) {
@@ -365,6 +402,7 @@ async function displaySeriesDetails(seriesId: number) {
     const signal = S.detailViewAbortController.signal;
 
     try {
+        captureDetailReturnContext();
         DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
         UI.showSection('series-view-section');
         
@@ -1528,6 +1566,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item');
         if (seriesItem) {
             document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10) } }));
+            return;
+        }
+
+        const backToPreviousSectionBtn = target.closest('#back-to-previous-section-btn');
+        if (backToPreviousSectionBtn) {
+            navigateBackFromSeriesDetails();
             return;
         }
 
