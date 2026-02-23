@@ -1060,7 +1060,10 @@ let allPopularSeries: Series[] = [];
 let popularSeriesDisplayedCount = 0;
 const POPULAR_SERIES_DISPLAY_BATCH_SIZE = 50;
 const POPULAR_SERIES_TARGET_TOTAL = 250;
-let isLoadingPopular = false;
+const POPULAR_FETCH_CONCURRENCY = 4;
+let isPopularBootstrapping = false;
+let isPopularBackgroundLoading = false;
+let popularLoadToken = 0;
 const TMDB_ANIMATION_GENRE_ID = 16;
 let excludeAsianAnimationFromTopRated = true;
 
@@ -1116,30 +1119,91 @@ function updateTopRatedFilterToggleButton() {
 }
 
 function updatePopularLoadMoreVisibility() {
-    if (isLoadingPopular) {
-        DOM.popularLoadMoreContainer.style.display = allPopularSeries.length > 0 ? 'block' : 'none';
+    const canShowMoreNow = popularSeriesDisplayedCount < allPopularSeries.length;
+    const hasMoreLoading = isPopularBootstrapping || isPopularBackgroundLoading;
+
+    if (canShowMoreNow || hasMoreLoading) {
+        DOM.popularLoadMoreContainer.style.display = 'block';
+        if (DOM.popularLoadMoreBtn) {
+            DOM.popularLoadMoreBtn.disabled = !canShowMoreNow;
+            DOM.popularLoadMoreBtn.textContent = canShowMoreNow ? 'Ver Mais' : 'A carregar...';
+        }
         return;
     }
-    DOM.popularLoadMoreContainer.style.display = popularSeriesDisplayedCount < allPopularSeries.length ? 'block' : 'none';
+
+    DOM.popularLoadMoreContainer.style.display = 'none';
+    if (DOM.popularLoadMoreBtn) {
+        DOM.popularLoadMoreBtn.disabled = false;
+        DOM.popularLoadMoreBtn.textContent = 'Ver Mais';
+    }
+}
+
+function renderVisiblePopularSeries() {
+    const visibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
+    DOM.popularContainer.innerHTML = '';
+    UI.renderPopularSeries(allPopularSeries.slice(0, visibleCount));
+}
+
+function mergePopularSeries(results: Series[]) {
+    if (results.length === 0) return;
+    allPopularSeries = sortPopularSeriesByRanking(
+        dedupePopularSeries([...allPopularSeries, ...results])
+    ).slice(0, POPULAR_SERIES_TARGET_TOTAL);
+}
+
+async function fetchPopularPagesChunk(
+    pages: number[],
+    fetchAndProcessChunk: (page: number) => Promise<{ results: Series[]; totalPages: number }>
+) {
+    if (pages.length === 0) return;
+
+    const settled = await processInBatches(
+        pages,
+        POPULAR_FETCH_CONCURRENCY,
+        0,
+        async (page: number) => ({ page, chunk: await fetchAndProcessChunk(page) })
+    );
+
+    const mergedResults: Series[] = [];
+    for (const result of settled) {
+        if (result.status === 'rejected') throw result.reason;
+        mergedResults.push(...result.value.chunk.results);
+    }
+    mergePopularSeries(mergedResults);
 }
 
 async function loadPopularSeries(loadMore = false) {
-    if (isLoadingPopular) return;
-
-    if (loadMore && allPopularSeries.length > 0) {
+    if (loadMore) {
+        if (allPopularSeries.length === 0) {
+            updatePopularLoadMoreVisibility();
+            return;
+        }
+        const currentVisibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
         popularSeriesDisplayedCount += POPULAR_SERIES_DISPLAY_BATCH_SIZE;
-        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
-        DOM.popularContainer.innerHTML = '';
-        UI.renderPopularSeries(seriesToRender);
+        popularSeriesDisplayedCount = Math.min(popularSeriesDisplayedCount, POPULAR_SERIES_TARGET_TOTAL);
+        const nextVisibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
+
+        if (nextVisibleCount > currentVisibleCount) {
+            const seriesToAppend = allPopularSeries.slice(currentVisibleCount, nextVisibleCount);
+            if (currentVisibleCount === 0 || DOM.popularContainer.children.length === 0) {
+                renderVisiblePopularSeries();
+            } else {
+                UI.renderPopularSeries(seriesToAppend, currentVisibleCount + 1);
+            }
+        }
         updatePopularLoadMoreVisibility();
         return;
     }
 
-    isLoadingPopular = true;
+    if (isPopularBootstrapping) return;
+
+    const currentLoadToken = ++popularLoadToken;
+    isPopularBootstrapping = true;
+    isPopularBackgroundLoading = false;
     allPopularSeries = [];
-    popularSeriesDisplayedCount = 0;
+    popularSeriesDisplayedCount = POPULAR_SERIES_DISPLAY_BATCH_SIZE;
     DOM.popularContainer.innerHTML = '<p>A carregar séries top rated...</p>';
-    DOM.popularLoadMoreContainer.style.display = 'none';
+    updatePopularLoadMoreVisibility();
 
     const fetchAndProcessChunk = async (page: number): Promise<{ results: Series[]; totalPages: number }> => {
         const tmdbData = await runObservedSection(
@@ -1154,37 +1218,62 @@ async function loadPopularSeries(loadMore = false) {
         };
     };
 
-    const processRemainingChunks = async (startPage: number, totalPages: number) => {
+    const processRemainingChunks = async (startPage: number, totalPages: number, token: number) => {
         const maxPages = Math.max(1, totalPages);
-        for (let page = startPage; page <= maxPages; page++) {
-            if (allPopularSeries.length >= POPULAR_SERIES_TARGET_TOTAL) break;
-            const chunk = await fetchAndProcessChunk(page);
-            allPopularSeries = sortPopularSeriesByRanking(
-                dedupePopularSeries([...allPopularSeries, ...chunk.results])
-            );
+        let page = startPage;
+        while (page <= maxPages && allPopularSeries.length < POPULAR_SERIES_TARGET_TOTAL) {
+            if (token !== popularLoadToken) return;
+            const pagesToFetch: number[] = [];
+            for (let i = 0; i < POPULAR_FETCH_CONCURRENCY && page <= maxPages; i++, page++) {
+                pagesToFetch.push(page);
+            }
+            await fetchPopularPagesChunk(pagesToFetch, fetchAndProcessChunk);
+            if (token !== popularLoadToken) return;
+            renderVisiblePopularSeries();
+            updatePopularLoadMoreVisibility();
         }
-        // Re-renderiza a primeira página com a lista completa para garantir consistência
-        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
-        DOM.popularContainer.innerHTML = '';
-        UI.renderPopularSeries(seriesToRender);
-        updatePopularLoadMoreVisibility();
     };
 
     try {
-        // Carrega e renderiza o primeiro chunk rapidamente
+        // Carrega o primeiro chunk e continua até garantir, no mínimo, 50 itens filtrados no primeiro render.
         const firstChunk = await fetchAndProcessChunk(1);
-        allPopularSeries = sortPopularSeriesByRanking(dedupePopularSeries(firstChunk.results));
-        popularSeriesDisplayedCount = Math.min(POPULAR_SERIES_DISPLAY_BATCH_SIZE, allPopularSeries.length);
-        const seriesToRender = allPopularSeries.slice(0, popularSeriesDisplayedCount);
-        DOM.popularContainer.innerHTML = '';
-        UI.renderPopularSeries(seriesToRender);
+        if (currentLoadToken !== popularLoadToken) return;
+
+        mergePopularSeries(firstChunk.results);
+        let nextPage = 2;
+        const maxPages = Math.max(1, firstChunk.totalPages);
+        const initialTarget = Math.min(POPULAR_SERIES_DISPLAY_BATCH_SIZE, POPULAR_SERIES_TARGET_TOTAL);
+
+        while (allPopularSeries.length < initialTarget && nextPage <= maxPages) {
+            const pagesToFetch: number[] = [];
+            for (let i = 0; i < POPULAR_FETCH_CONCURRENCY && nextPage <= maxPages; i++, nextPage++) {
+                pagesToFetch.push(nextPage);
+            }
+            await fetchPopularPagesChunk(pagesToFetch, fetchAndProcessChunk);
+            if (currentLoadToken !== popularLoadToken) return;
+        }
+
+        popularSeriesDisplayedCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
+        renderVisiblePopularSeries();
         updatePopularLoadMoreVisibility();
-        // Carrega o resto em segundo plano
-        processRemainingChunks(2, firstChunk.totalPages).finally(() => {
-            isLoadingPopular = false;
+
+        // Carrega o resto em segundo plano para chegar ao alvo total sem bloquear o "Ver Mais".
+        if (nextPage <= maxPages && allPopularSeries.length < POPULAR_SERIES_TARGET_TOTAL) {
+            isPopularBackgroundLoading = true;
             updatePopularLoadMoreVisibility();
-        });
+            processRemainingChunks(nextPage, maxPages, currentLoadToken)
+                .catch((error) => {
+                    if (currentLoadToken !== popularLoadToken) return;
+                    console.warn('Falha no carregamento em segundo plano do Top Rated:', error);
+                })
+                .finally(() => {
+                    if (currentLoadToken !== popularLoadToken) return;
+                    isPopularBackgroundLoading = false;
+                    updatePopularLoadMoreVisibility();
+                });
+        }
     } catch (error) {
+        if (currentLoadToken !== popularLoadToken) return;
         recordSectionFailure('popular', '/popular/render', error);
         persistObservabilitySnapshot();
         console.error('Erro ao carregar séries top rated:', error);
@@ -1196,7 +1285,11 @@ async function loadPopularSeries(loadMore = false) {
                 onlineMessage: 'Não foi possível carregar as séries top rated.',
             }
         );
-        isLoadingPopular = false;
+    } finally {
+        if (currentLoadToken === popularLoadToken) {
+            isPopularBootstrapping = false;
+            updatePopularLoadMoreVisibility();
+        }
     }
 }
 

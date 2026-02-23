@@ -508,7 +508,7 @@ export function renderAllSeries() {
     });
 }
 
-export function renderPopularSeries(seriesList: Series[]) {
+export function renderPopularSeries(seriesList: Series[], startingRank: number = 1) {
     const viewMode = DOM.popularContainer.classList.contains('grid-view') ? 'grid' : 'list';
 
     if (seriesList.length === 0) {
@@ -517,7 +517,7 @@ export function renderPopularSeries(seriesList: Series[]) {
     }
 
     seriesList.forEach((series, index) => {
-        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, index + 1);
+        const seriesItemElement = createSeriesItemElement(series, false, viewMode, false, true, true, startingRank + index);
         DOM.popularContainer.appendChild(seriesItemElement);
     });
 }
