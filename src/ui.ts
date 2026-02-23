@@ -659,10 +659,17 @@ export function renderSeriesDetails(
         const studiosText = seriesData.production_companies?.length > 0 ? seriesData.production_companies.map(c => c.name).join(', ') : 'N/A';
         const countries = seriesData.production_countries?.map(c => c.name).join(', ') || 'N/A';
         const languages = seriesData.spoken_languages?.map(l => l.english_name).join(', ') || 'N/A';
+        const nextEpisodeAirDateRaw = seriesData.next_episode_to_air?.air_date || '';
+        const nextEpisodeAirDate = nextEpisodeAirDateRaw
+            ? new Date(nextEpisodeAirDateRaw).toLocaleDateString('pt-PT')
+            : '';
         let statusText = seriesData.status || 'N/A';
         if (seriesData.status === 'Ended') statusText = 'Finalizada';
         else if (seriesData.status === 'Canceled') statusText = 'Cancelada';
         else if (seriesData.status === 'Returning Series') statusText = 'Em Exibição';
+        if (statusText === 'Em Exibição' && nextEpisodeAirDate) {
+            statusText = `${statusText} (volta em ${nextEpisodeAirDate})`;
+        }
         const totalRuntime = formatHoursMinutes(totalRuntimeMinutes);
         return [{ label: 'Status', value: statusText }, { label: 'Transmissão', value: networksElements }, { label: 'Estúdios', value: studiosText }, { label: 'País', value: countries }, { label: 'Idioma Original', value: languages }, { label: 'Duração Total', value: totalRuntime }];
     })();
