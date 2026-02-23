@@ -9,7 +9,7 @@ vi.mock('./db', () => ({
   },
 }));
 
-import { fetchAggregatedSeriesMetadata, fetchTraktData } from './api';
+import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchTraktData } from './api';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -89,6 +89,85 @@ describe('fetchTraktData', () => {
 
     const data = await fetchTraktData(321, null, 'Unknown', 2021, 'Unknown', 'tt321');
     expect(data).toBeNull();
+  });
+});
+
+describe('TMDb detail fallbacks', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to /credits when aggregate_credits fails with 503', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/tmdb/tv/1705/aggregate_credits')) {
+        return jsonResponse({ status_message: 'temporarily unavailable' }, 503);
+      }
+
+      if (url.includes('/api/tmdb/tv/1705/credits')) {
+        return jsonResponse({
+          cast: [
+            { id: 1, name: 'Actor One', profile_path: '/a.jpg', character: 'Character A' },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const credits = await fetchSeriesCredits(1705, null);
+    expect(credits.cast).toHaveLength(1);
+    expect(credits.cast[0].name).toBe('Actor One');
+    expect(credits.cast[0].roles[0].character).toBe('Character A');
+  });
+
+  it('falls back to base detail endpoints when append_to_response fails with 503', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/tmdb/tv/1705?append_to_response=videos,external_ids')) {
+        return jsonResponse({ status_message: 'temporarily unavailable' }, 503);
+      }
+
+      if (url.includes('/api/tmdb/tv/1705?language=pt-PT')) {
+        return jsonResponse({
+          id: 1705,
+          name: 'Fallback Show',
+          overview: 'Overview PT',
+          poster_path: null,
+          backdrop_path: null,
+          first_air_date: '2010-01-01',
+          genres: [],
+          created_by: [],
+          next_episode_to_air: null,
+          episode_run_time: [45],
+          networks: [],
+          production_companies: [],
+          production_countries: [],
+          seasons: [],
+          spoken_languages: [],
+          status: 'Ended',
+          vote_average: 7.1,
+        });
+      }
+
+      if (url.includes('/api/tmdb/tv/1705/videos?language=pt-PT')) {
+        return jsonResponse({ results: [{ key: 'abc', site: 'YouTube', type: 'Trailer', official: true }] });
+      }
+
+      if (url.includes('/api/tmdb/tv/1705/external_ids')) {
+        return jsonResponse({ imdb_id: 'tt1705' });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const details = await fetchSeriesDetails(1705, null);
+    expect(details.id).toBe(1705);
+    expect(details.name).toBe('Fallback Show');
+    expect(details.videos.results).toHaveLength(1);
+    expect(details.external_ids?.imdb_id).toBe('tt1705');
   });
 });
 

@@ -42,7 +42,7 @@ function getErrorStatus(error: unknown): number | null {
         if (!Number.isNaN(status) && status > 0) return status;
     }
     const message = getErrorMessage(error);
-    const statusMatch = message.match(/status:\s*(\d{3})/i);
+    const statusMatch = message.match(/(?:status|server error):\s*(\d{3})/i);
     if (!statusMatch) return null;
     const parsed = Number(statusMatch[1]);
     return Number.isNaN(parsed) ? null : parsed;
@@ -368,15 +368,22 @@ async function displaySeriesDetails(seriesId: number) {
         DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
         UI.showSection('series-view-section');
         
-        const [seriesData, creditsData] = await runObservedSection(
+        const seriesData = await runObservedSection(
             'series-details',
             `/api/tmdb/tv/${seriesId}`,
-            () => Promise.all([
-                API.fetchSeriesDetails(seriesId, signal),
-                API.fetchSeriesCredits(seriesId, signal)
-            ]),
+            () => API.fetchSeriesDetails(seriesId, signal),
             { seriesId }
         );
+        const creditsData = await runObservedSection(
+            'series-details',
+            `/api/tmdb/tv/${seriesId}/aggregate_credits`,
+            () => API.fetchSeriesCredits(seriesId, signal),
+            { seriesId, optional: 'credits' }
+        ).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar créditos da série. A vista de detalhes continuará sem elenco.', error);
+            return { cast: [] };
+        });
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
         const fallbackOriginalTitle = seriesData.original_name && seriesData.original_name !== seriesData.name
             ? seriesData.original_name

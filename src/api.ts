@@ -20,6 +20,19 @@ const API_BASE_TVMAZE = '/api/tvmaze';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
 
+function extractStatusFromError(error: unknown): number | null {
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+        const status = Number((error as { status?: unknown }).status);
+        if (!Number.isNaN(status) && status > 0) return status;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    const match = message.match(/(\d{3})/);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
 /**
  * Pesquisa por séries no TMDb com base numa query.
  * @param {string} query - O termo de pesquisa.
@@ -51,9 +64,42 @@ export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSig
  */
 export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal | null): Promise<TMDbSeriesDetails> {
     const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos,external_ids&language=pt-PT`;
-    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    try {
+        const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+        if (response.ok) return await response.json();
+        if (response.status < 500) throw new Error(`HTTP error! status: ${response.status}`);
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        const status = extractStatusFromError(error);
+        if (status && status < 500) throw new Error(`HTTP error! status: ${status}`);
+
+        // Fallback de robustez: em erro transitório no payload agregado, tenta o detalhe base e
+        // busca vídeos/external_ids separadamente para não bloquear a vista.
+        const baseUrl = `${API_BASE_TMDB}/tv/${seriesId}?language=pt-PT`;
+        const baseResponse = await fetchWithRetry(baseUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+        if (!baseResponse.ok) {
+            throw new Error(`HTTP error! status: ${baseResponse.status}`);
+        }
+
+        const baseData = await baseResponse.json() as TMDbSeriesDetails;
+        const [videosResult, externalIdsResult] = await Promise.allSettled([
+            fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/videos?language=pt-PT`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),
+            fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/external_ids`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),
+        ]);
+
+        if (videosResult.status === 'fulfilled' && videosResult.value.ok) {
+            baseData.videos = await videosResult.value.json();
+        } else if (!baseData.videos) {
+            baseData.videos = { results: [] };
+        }
+
+        if (externalIdsResult.status === 'fulfilled' && externalIdsResult.value.ok) {
+            baseData.external_ids = await externalIdsResult.value.json();
+        }
+
+        return baseData;
+    }
+    throw new Error('Falha ao carregar detalhes da série.');
 }
 
 /**
@@ -63,9 +109,33 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
  */
 export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal | null): Promise<TMDbCredits> {
     const url = `${API_BASE_TMDB}/tv/${seriesId}/aggregate_credits?language=pt-PT`;
-    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    try {
+        const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+        if (response.ok) return await response.json();
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn(`[api] aggregate_credits falhou para série ${seriesId}. A tentar fallback /credits.`, error);
+    }
+
+    // Alguns títulos falham em aggregate_credits (503). Fallback para /credits.
+    const fallbackUrl = `${API_BASE_TMDB}/tv/${seriesId}/credits?language=pt-PT`;
+    const fallbackResponse = await fetchWithRetry(fallbackUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!fallbackResponse.ok) {
+        throw new Error(`HTTP error! status: ${fallbackResponse.status}`);
+    }
+
+    const fallbackPayload = await fallbackResponse.json() as {
+        cast?: Array<{ id: number; name: string; profile_path: string | null; character?: string | null }>;
+    };
+
+    return {
+        cast: (fallbackPayload.cast || []).map((person) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: [{ character: person.character || '' }],
+        })),
+    };
 }
 
 /**
