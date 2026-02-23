@@ -48,6 +48,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
 - Expõe métodos para tendências diárias/semanais, top rated, estreias recentes, detalhes, créditos e vídeos.
 - `fetchTraktData` aplica fallback progressivo de matching (TMDb ID -> IMDb ID -> nome/ano) e fallback de ratings/trailer a partir de `extended=full` quando endpoints dedicados falham.
+- O fallback por nome/ano na Trakt usa score mínimo; matches fracos são descartados para reduzir falsos positivos.
 - `fetchTVMazeResolvedShow` resolve séries no TVMaze por IMDb ID e fallback por nome/ano (`/api/tvmaze/resolve/show`), devolvendo payload normalizado.
 - `fetchAggregatedSeriesMetadata` agrega sinopse/certificação entre fontes com prioridade de idioma `pt-PT` -> `pt` -> `en`, escolhendo EN mais completo quando não existe PT.
 

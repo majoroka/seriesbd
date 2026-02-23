@@ -23,13 +23,9 @@ describe('fetchTraktData', () => {
     vi.restoreAllMocks();
   });
 
-  it('falls back from TMDb search to IMDb search and uses show rating fallback', async () => {
+  it('prefers IMDb match and uses show rating fallback when ratings endpoint fails', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
-
-      if (url.includes('/api/trakt/search/tmdb/123')) {
-        return jsonResponse([], 404);
-      }
 
       if (url.includes('/api/trakt/search/imdb/tt123')) {
         return jsonResponse([
@@ -72,12 +68,12 @@ describe('fetchTraktData', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
 
-      if (url.includes('/api/trakt/search/tmdb/321')) {
-        return jsonResponse([], 404);
-      }
-
       if (url.includes('/api/trakt/search/imdb/tt321')) {
         return jsonResponse([], 200);
+      }
+
+      if (url.includes('/api/trakt/search/tmdb/321')) {
+        return jsonResponse([], 404);
       }
 
       if (url.includes('/api/trakt/search/show?query=')) {
@@ -89,6 +85,87 @@ describe('fetchTraktData', () => {
 
     const data = await fetchTraktData(321, null, 'Unknown', 2021, 'Unknown', 'tt321');
     expect(data).toBeNull();
+  });
+
+  it('discards weak fallback matches from name+year search', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/trakt/search/imdb/tt555')) {
+        return jsonResponse([], 200);
+      }
+
+      if (url.includes('/api/trakt/search/tmdb/555')) {
+        return jsonResponse([], 404);
+      }
+
+      if (url.includes('/api/trakt/search/show?query=')) {
+        return jsonResponse([
+          {
+            score: 0.1,
+            show: {
+              title: 'Completely Different',
+              year: 1999,
+              ids: { trakt: 777, tmdb: 111 },
+            },
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchTraktData(555, null, 'Wanted Show', 2023, 'Wanted Show', 'tt555');
+    expect(data).toBeNull();
+  });
+
+  it('accepts strong fallback match by name+year when score is above threshold', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/trakt/search/imdb/tt888')) {
+        return jsonResponse([], 200);
+      }
+
+      if (url.includes('/api/trakt/search/tmdb/888')) {
+        return jsonResponse([], 404);
+      }
+
+      if (url.includes('/api/trakt/search/show?query=')) {
+        return jsonResponse([
+          {
+            score: 0.3,
+            show: {
+              title: 'Wanted Show',
+              year: 2023,
+              ids: { trakt: 888, tmdb: 888 },
+            },
+          },
+        ]);
+      }
+
+      if (url.includes('/api/trakt/shows/888?extended=full')) {
+        return jsonResponse({
+          rating: 8.9,
+          votes: 1500,
+          trailer: 'https://youtu.be/xyz789',
+          certification: 'TV-MA',
+          overview: 'Strong matched overview',
+        });
+      }
+
+      if (url.includes('/api/trakt/shows/888/ratings')) {
+        return jsonResponse({ rating: 8.9, votes: 1500 });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchTraktData(888, null, 'Wanted Show', 2023, 'Wanted Show', 'tt888');
+    expect(data).not.toBeNull();
+    expect(data?.traktId).toBe(888);
+    expect(data?.trailerKey).toBe('xyz789');
+    expect(data?.ratings).toEqual({ rating: 8.9, votes: 1500 });
   });
 });
 

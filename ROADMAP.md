@@ -18,6 +18,7 @@
 - **Integração TVMaze via proxy (P3-01)**: nova Netlify Function (`/api/tvmaze/*`) com CORS/headers normalizados, observabilidade mínima e endpoint de resolução por IMDb com fallback por nome/ano.
 - **Agregação PT-first multi-fonte (P3-02)**: detalhe da série passa a consolidar TMDb/Trakt/TVMaze com prioridade `pt-PT` -> `pt` -> `en` e fallback para EN mais completo quando PT não existe.
 - **Ratings com 3 anéis (P3-03)**: bloco de avaliações na vista de detalhes passa a mostrar TMDb, Trakt e TVMaze, com anéis mais finos e cor TVMaze `#386e67`.
+- **Matching hardening (P3-04)**: resolução entre fontes agora prioriza IMDb, usa fallback nome+ano com score mínimo e descarta matches fracos para reduzir falsos positivos.
 
 ## Backlog técnico (pronto para issues)
 

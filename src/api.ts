@@ -156,6 +156,68 @@ export async function fetchSeriesVideos(
     return await response.json();
 }
 
+const TRAKT_NAME_YEAR_MIN_SCORE = 0.95;
+
+function normalizeMatchText(value: string | null | undefined): string {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function scoreTraktNameYearCandidate(
+    item: any,
+    query: string,
+    expectedYear: number | undefined,
+    expectedTmdbId: number,
+    expectedImdbId: string | null | undefined
+): number {
+    const show = item?.show;
+    if (!show) return -1;
+
+    const ids = show?.ids || {};
+    const normalizedQuery = normalizeMatchText(query);
+    const normalizedTitle = normalizeMatchText(show?.title || show?.name);
+    const showYear = typeof show?.year === 'number' ? show.year : undefined;
+
+    let score = Math.max(0, Math.min(1, Number(item?.score || 0)));
+
+    if (ids?.tmdb && Number(ids.tmdb) === expectedTmdbId) {
+        score += 0.95;
+    } else if (ids?.tmdb && Number(ids.tmdb) !== expectedTmdbId) {
+        score -= 0.4;
+    }
+
+    const normalizedExpectedImdb = normalizeMatchText(expectedImdbId || '');
+    const normalizedShowImdb = normalizeMatchText(ids?.imdb || '');
+    if (normalizedExpectedImdb && normalizedShowImdb) {
+        if (normalizedShowImdb === normalizedExpectedImdb) score += 1.2;
+        else score -= 0.6;
+    }
+
+    if (normalizedQuery && normalizedTitle === normalizedQuery) score += 0.75;
+    else if (normalizedQuery && normalizedTitle.startsWith(normalizedQuery)) score += 0.45;
+    else if (normalizedQuery && normalizedTitle.includes(normalizedQuery)) score += 0.3;
+    else score -= 0.25;
+
+    if (typeof expectedYear === 'number') {
+        if (typeof showYear === 'number') {
+            const diff = Math.abs(showYear - expectedYear);
+            if (diff === 0) score += 0.45;
+            else if (diff === 1) score += 0.2;
+            else if (diff === 2) score += 0.05;
+            else score -= 0.45;
+        } else {
+            score -= 0.05;
+        }
+    }
+
+    if (!ids?.trakt) score -= 0.2;
+
+    return Number(score.toFixed(3));
+}
+
 /**
  * Fetches rich data (ratings, trailer) for a show from Trakt.tv using its TMDb ID.
  * @param {string} tmdbId - The TMDb ID of the series.
@@ -193,67 +255,144 @@ export async function fetchTraktData(
     };
 
     try {
-        const searchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show&extended=full`;
-        const searchResponse = await fetch(searchUrl, { signal });
-        let searchResult: any[] = [];
-        if (searchResponse.ok) {
-            searchResult = await searchResponse.json();
-        } else if (searchResponse.status !== 404) {
-            console.warn(`Trakt search by TMDb returned status ${searchResponse.status}. Trying fallback search.`);
-        }
+        let selectedShow: any = null;
+        let selectedMethod: 'imdb' | 'tmdb' | 'name-year' | null = null;
+        let selectedScore = 0;
+        let selectedQuery: string | null = null;
 
-        let traktId = searchResult[0]?.show?.ids?.trakt as number | undefined;
-        let fallbackShow: any = searchResult[0]?.show || null;
-
-        if (!traktId && fallbackImdbId) {
+        if (fallbackImdbId) {
             try {
                 const imdbSearchUrl = `${API_BASE_TRAKT}/search/imdb/${encodeURIComponent(fallbackImdbId)}?type=show&extended=full`;
                 const imdbResponse = await fetch(imdbSearchUrl, { signal });
                 if (imdbResponse.ok) {
                     const imdbResults = await imdbResponse.json() as any[];
-                    fallbackShow = imdbResults[0]?.show || null;
-                    traktId = fallbackShow?.ids?.trakt as number | undefined;
+                    if (imdbResults[0]?.show) {
+                        selectedShow = imdbResults[0].show;
+                        selectedMethod = 'imdb';
+                        selectedScore = 2;
+                    }
+                } else if (imdbResponse.status !== 404) {
+                    console.warn(`[match][trakt] IMDb lookup returned status ${imdbResponse.status}`, { tmdbId, fallbackImdbId });
                 }
             } catch (error) {
-                console.warn('Trakt fallback search by IMDb ID failed:', error);
+                console.warn('[match][trakt] Fallback por IMDb falhou.', { tmdbId, fallbackImdbId, error });
             }
         }
 
-        if (!traktId && (fallbackOriginalTitle || fallbackTitle)) {
+        if (!selectedShow) {
+            try {
+                const tmdbSearchUrl = `${API_BASE_TRAKT}/search/tmdb/${tmdbId}?type=show&extended=full`;
+                const tmdbResponse = await fetch(tmdbSearchUrl, { signal });
+                if (tmdbResponse.ok) {
+                    const tmdbResults = await tmdbResponse.json() as any[];
+                    const matchByTmdb = tmdbResults.find((item) => Number(item?.show?.ids?.tmdb) === tmdbId);
+                    const selectedResult = matchByTmdb || tmdbResults[0];
+                    if (selectedResult?.show) {
+                        selectedShow = selectedResult.show;
+                        selectedMethod = 'tmdb';
+                        selectedScore = matchByTmdb ? 1.8 : 1.1;
+                    }
+                } else if (tmdbResponse.status !== 404) {
+                    console.warn(`[match][trakt] TMDb lookup returned status ${tmdbResponse.status}`, { tmdbId });
+                }
+            } catch (error) {
+                console.warn('[match][trakt] Lookup por TMDb falhou.', { tmdbId, error });
+            }
+        }
+
+        if (!selectedShow && (fallbackOriginalTitle || fallbackTitle)) {
             const candidateQueries = Array.from(new Set([fallbackOriginalTitle, fallbackTitle].filter(Boolean))) as string[];
+            let bestCandidate: { show: any; score: number; query: string } | null = null;
+
             for (const query of candidateQueries) {
-                if (traktId) break;
                 try {
                     const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(query)}&extended=full`;
-                    const fallbackResponse = await fetch(queryUrl, { signal });
-                    if (!fallbackResponse.ok) continue;
-                    const fallbackResults = await fallbackResponse.json() as any[];
-                    const matchByTmdb = fallbackResults.find(item => Number(item?.show?.ids?.tmdb) === tmdbId);
-                    const matchByYear = typeof fallbackYear === 'number'
-                        ? fallbackResults.find(item => item?.show?.year === fallbackYear)
-                        : null;
-                    fallbackShow = matchByTmdb?.show || matchByYear?.show || fallbackResults[0]?.show || null;
-                    traktId = fallbackShow?.ids?.trakt as number | undefined;
+                    const queryResponse = await fetch(queryUrl, { signal });
+                    if (!queryResponse.ok) continue;
+                    const queryResults = await queryResponse.json() as any[];
+                    if (!Array.isArray(queryResults) || queryResults.length === 0) continue;
+
+                    const ranked = queryResults
+                        .map((item) => ({
+                            show: item?.show,
+                            score: scoreTraktNameYearCandidate(item, query, fallbackYear, tmdbId, fallbackImdbId),
+                            query,
+                        }))
+                        .filter((entry) => entry.show && entry.score >= 0)
+                        .sort((a, b) => b.score - a.score);
+
+                    if (!ranked[0]) continue;
+                    if (!bestCandidate || ranked[0].score > bestCandidate.score) {
+                        bestCandidate = ranked[0];
+                    }
                 } catch (error) {
-                    console.warn('Trakt fallback search by show name failed:', error);
+                    console.warn('[match][trakt] Fallback por nome/ano falhou.', { tmdbId, query, error });
+                }
+            }
+
+            if (bestCandidate) {
+                if (bestCandidate.score >= TRAKT_NAME_YEAR_MIN_SCORE) {
+                    selectedShow = bestCandidate.show;
+                    selectedMethod = 'name-year';
+                    selectedScore = bestCandidate.score;
+                    selectedQuery = bestCandidate.query;
+                } else {
+                    console.warn('[match][trakt] Match por nome/ano descartado por score fraco.', {
+                        tmdbId,
+                        threshold: TRAKT_NAME_YEAR_MIN_SCORE,
+                        bestScore: bestCandidate.score,
+                        query: bestCandidate.query,
+                        fallbackYear: fallbackYear ?? null,
+                    });
+                    return null;
                 }
             }
         }
 
-        if (!traktId && !fallbackShow) return null;
+        if (!selectedShow) {
+            console.warn('[match][trakt] Sem match confiável após fallbacks.', {
+                tmdbId,
+                fallbackImdbId: fallbackImdbId || null,
+                fallbackYear: fallbackYear ?? null,
+            });
+            return null;
+        }
 
-        let fullShowData = fallbackShow;
+        let traktId = selectedShow?.ids?.trakt as number | undefined;
+        if (!traktId) {
+            console.warn('[match][trakt] Match descartado por falta de traktId.', {
+                tmdbId,
+                method: selectedMethod,
+                score: selectedScore,
+                query: selectedQuery,
+            });
+            return null;
+        }
+
+        console.info('[match][trakt] Match selecionado.', {
+            tmdbId,
+            traktId,
+            method: selectedMethod,
+            score: Number(selectedScore.toFixed(3)),
+            query: selectedQuery,
+        });
+
+        let fullShowData = selectedShow;
         if (traktId) {
             const showDetailsUrl = `${API_BASE_TRAKT}/shows/${traktId}?extended=full`;
             const showDetailsResponse = await fetch(showDetailsUrl, { signal });
             if (showDetailsResponse.ok) {
                 fullShowData = await showDetailsResponse.json();
             } else {
-                console.warn(`Trakt show details returned status ${showDetailsResponse.status}. Using fallback show data.`);
+                console.warn(`Trakt show details returned status ${showDetailsResponse.status}. Using fallback show data.`, {
+                    tmdbId,
+                    traktId,
+                    method: selectedMethod,
+                });
             }
         }
         
-        const sourceData = fullShowData || fallbackShow;
+        const sourceData = fullShowData || selectedShow;
         const traktOverview = sourceData?.overview || null;
         const trailerKey = parseYouTubeKey(sourceData?.trailer);
 

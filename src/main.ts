@@ -396,6 +396,18 @@ async function displaySeriesDetails(seriesId: number) {
             fallbackOriginalTitle,
             seriesData.external_ids?.imdb_id
         );
+        if (traktSeriesData?.traktId) {
+            console.info('[match][details] Trakt match resolvido.', {
+                seriesId,
+                traktId: traktSeriesData.traktId,
+            });
+        } else {
+            console.warn('[match][details] Trakt sem match confiável. Seguir com fontes restantes.', {
+                seriesId,
+                imdbId: seriesData.external_ids?.imdb_id || null,
+                year: fallbackYear ?? null,
+            });
+        }
         const aggregatedMetadataPromise = runObservedSection(
             'series-details',
             `/api/aggregate/series/${seriesId}`,
@@ -449,6 +461,16 @@ async function displaySeriesDetails(seriesId: number) {
             traktSeasonPromise,
             aggregatedMetadataPromise,
         ]);
+        if (aggregatedSeriesData?.tvmazeData?.show?.id) {
+            console.info('[match][details] TVMaze match resolvido.', {
+                seriesId,
+                tvmazeId: aggregatedSeriesData.tvmazeData.show.id,
+                method: aggregatedSeriesData.tvmazeData.match?.method,
+                score: aggregatedSeriesData.tvmazeData.match?.score,
+            });
+        } else {
+            console.warn('[match][details] TVMaze sem match confiável.', { seriesId });
+        }
         const allTMDbSeasonsData = seasonResults.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled').map(res => res.value);
 
         const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);

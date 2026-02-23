@@ -144,6 +144,7 @@ npm run test
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - A sinopse dos detalhes usa agregação multi-fonte com prioridade linguística `pt-PT` -> `pt` -> `en`; na ausência de PT, é escolhido o texto em inglês mais completo.
 - O bloco de avaliações dos detalhes mostra 3 fontes quando disponíveis (TMDb, Trakt e TVMaze), com anéis concêntricos mais finos para acomodar a 3.ª métrica.
+- O matching cross-provider prioriza `imdb_id`; quando recorre a nome/ano, aplica score mínimo e descarta matches fracos para evitar dados errados.
 - O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
 - Observabilidade mínima ativa:
