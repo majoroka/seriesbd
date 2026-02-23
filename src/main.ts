@@ -1144,6 +1144,17 @@ function renderVisiblePopularSeries() {
     UI.renderPopularSeries(allPopularSeries.slice(0, visibleCount));
 }
 
+function renderTopRatedFromCache(): boolean {
+    if (allPopularSeries.length === 0) return false;
+    popularSeriesDisplayedCount = Math.max(
+        POPULAR_SERIES_DISPLAY_BATCH_SIZE,
+        Math.min(popularSeriesDisplayedCount, allPopularSeries.length)
+    );
+    renderVisiblePopularSeries();
+    updatePopularLoadMoreVisibility();
+    return true;
+}
+
 function mergePopularSeries(results: Series[]) {
     if (results.length === 0) return;
     allPopularSeries = sortPopularSeriesByRanking(
@@ -1385,8 +1396,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadTrending('day', 'trending-scroller-day');
                     loadTrending('week', 'trending-scroller-week');
                 } else if (targetId === 'popular-section') {
-                    S.resetSearchAbortController();
-                    loadPopularSeries();
+                    if (!renderTopRatedFromCache()) {
+                        S.resetSearchAbortController();
+                        loadPopularSeries();
+                    }
                 } else if (targetId === 'premieres-section') {
                     S.resetSearchAbortController();
                     loadPremieresSeries();
@@ -1401,7 +1414,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.unseenViewToggle, DOM.unseenContainer, C.UNSEEN_VIEW_MODE_KEY, UI.renderUnseen);
     setupViewToggle(DOM.archiveViewToggle, DOM.archiveContainer, C.ARCHIVE_VIEW_MODE_KEY, UI.renderArchive);
     setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
-    setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => loadPopularSeries());
+    setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => {
+        if (!renderTopRatedFromCache()) {
+            S.resetSearchAbortController();
+            loadPopularSeries();
+        }
+    });
     setupViewToggle(DOM.premieresViewToggle, DOM.premieresContainer, 'premieres_view_mode', () => loadPremieresSeries());
 
     DOM.allSeriesGenreFilter?.addEventListener('change', (event) => {
