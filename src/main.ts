@@ -389,6 +389,24 @@ async function displaySeriesDetails(seriesId: number) {
             fallbackOriginalTitle,
             seriesData.external_ids?.imdb_id
         );
+        const aggregatedMetadataPromise = runObservedSection(
+            'series-details',
+            `/api/aggregate/series/${seriesId}`,
+            () => API.fetchAggregatedSeriesMetadata({
+                seriesId,
+                signal,
+                tmdbOverviewPt: seriesData.overview,
+                traktData: traktSeriesData,
+                fallbackTitle: seriesData.name,
+                fallbackYear,
+                fallbackImdbId: seriesData.external_ids?.imdb_id,
+            }),
+            { seriesId, phase: 'aggregation' }
+        ).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha na agregação de metadados (P3-02). A continuar com dados base.', error);
+            return null;
+        });
 
         // Fallback para trailer: se Trakt falhar e TMDb(pt-PT) não tiver vídeos,
         // tenta vídeos TMDb em en-US para recuperar o botão "Ver Trailer".
@@ -419,9 +437,10 @@ async function displaySeriesDetails(seriesId: number) {
         const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
         const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
 
-        const [seasonResults, traktSeasonsData] = await Promise.all([
+        const [seasonResults, traktSeasonsData, aggregatedSeriesData] = await Promise.all([
             Promise.allSettled(seasonPromises),
-            traktSeasonPromise
+            traktSeasonPromise,
+            aggregatedMetadataPromise,
         ]);
         const allTMDbSeasonsData = seasonResults.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled').map(res => res.value);
 
@@ -446,7 +465,7 @@ async function displaySeriesDetails(seriesId: number) {
             seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
         });
 
-        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData);
+        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData);
 
         await setupDetailViewActions(seriesData);
 

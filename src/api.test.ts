@@ -9,7 +9,7 @@ vi.mock('./db', () => ({
   },
 }));
 
-import { fetchTraktData } from './api';
+import { fetchAggregatedSeriesMetadata, fetchTraktData } from './api';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -89,5 +89,130 @@ describe('fetchTraktData', () => {
 
     const data = await fetchTraktData(321, null, 'Unknown', 2021, 'Unknown', 'tt321');
     expect(data).toBeNull();
+  });
+});
+
+describe('fetchAggregatedSeriesMetadata', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prioritizes pt-PT overview over pt/en candidates', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/tmdb/tv/42?language=en-US')) {
+        return jsonResponse({ overview: 'A long english overview from TMDb.' });
+      }
+
+      if (url.includes('/api/trakt/shows/10/translations/pt')) {
+        return jsonResponse([{ overview: 'Resumo PT vindo da Trakt.' }]);
+      }
+
+      if (url.includes('/api/trakt/shows/10/translations/en')) {
+        return jsonResponse([{ overview: 'A very complete english overview from Trakt with lots of context.' }]);
+      }
+
+      if (url.includes('/api/tvmaze/resolve/show?')) {
+        return jsonResponse({
+          source: 'tvmaze',
+          match: { method: 'imdb', score: 1 },
+          show: {
+            id: 100,
+            language: 'English',
+            summaryText: 'TVMaze english summary',
+            summaryHtml: null,
+            rating: { average: 8.2 },
+          },
+        });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const aggregated = await fetchAggregatedSeriesMetadata({
+      seriesId: 42,
+      signal: null,
+      tmdbOverviewPt: 'Sinopse em português do TMDb.',
+      traktData: { traktId: 10, ratings: null, trailerKey: null, overview: null, certification: null },
+      fallbackTitle: 'Show',
+      fallbackYear: 2015,
+      fallbackImdbId: 'tt123',
+    });
+
+    expect(aggregated.overview).toBe('Sinopse em português do TMDb.');
+    expect(aggregated.overviewLanguage).toBe('pt-PT');
+    expect(aggregated.overviewSource).toBe('tmdb');
+    expect(aggregated.tvmazeData?.source).toBe('tvmaze');
+  });
+
+  it('uses the most complete english text when no portuguese text exists', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/tmdb/tv/77?language=en-US')) {
+        return jsonResponse({ overview: 'Short english text.' });
+      }
+
+      if (url.includes('/api/trakt/shows/77/translations/pt')) {
+        return jsonResponse([]);
+      }
+
+      if (url.includes('/api/trakt/shows/77/translations/en')) {
+        return jsonResponse([{ overview: 'This english overview from Trakt is much more complete and descriptive than the others.' }]);
+      }
+
+      if (url.includes('/api/tvmaze/resolve/show?')) {
+        return jsonResponse({
+          source: 'tvmaze',
+          match: { method: 'search', score: 0.8 },
+          show: {
+            id: 200,
+            language: 'English',
+            summaryText: 'Medium english summary from TVMaze.',
+            summaryHtml: null,
+            rating: { average: 7.9 },
+          },
+        });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const aggregated = await fetchAggregatedSeriesMetadata({
+      seriesId: 77,
+      signal: null,
+      tmdbOverviewPt: '',
+      traktData: { traktId: 77, ratings: null, trailerKey: null, overview: 'Tiny', certification: 'TV-MA' },
+      fallbackTitle: 'Another Show',
+      fallbackYear: 2011,
+      fallbackImdbId: 'tt777',
+    });
+
+    expect(aggregated.overviewSource).toBe('trakt');
+    expect(aggregated.overviewLanguage).toBe('en');
+    expect(aggregated.overview).toContain('much more complete');
+    expect(aggregated.certification).toBe('TV-MA');
+    expect(aggregated.certificationSource).toBe('trakt');
+  });
+
+  it('keeps rendering metadata when optional providers fail', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('network down');
+    });
+
+    const aggregated = await fetchAggregatedSeriesMetadata({
+      seriesId: 999,
+      signal: null,
+      tmdbOverviewPt: 'Sinopse local em PT.',
+      traktData: null,
+      fallbackTitle: 'Fallback',
+      fallbackYear: 2020,
+      fallbackImdbId: 'tt999',
+    });
+
+    expect(aggregated.overview).toBe('Sinopse local em PT.');
+    expect(aggregated.overviewLanguage).toBe('pt-PT');
+    expect(aggregated.overviewSource).toBe('tmdb');
   });
 });

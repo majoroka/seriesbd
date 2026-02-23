@@ -1,7 +1,18 @@
 import { db } from "./db";
 import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
-import { Series, TMDbSeriesDetails, TMDbCredits, TraktData, TraktSeason, TMDbSeason, TVMazeResolveData } from "./types";
+import {
+    Series,
+    TMDbSeriesDetails,
+    TMDbCredits,
+    TraktData,
+    TraktSeason,
+    TMDbSeason,
+    TVMazeResolveData,
+    AggregatedSeriesMetadata,
+    AggregatedOverviewCandidate,
+    ProviderSource,
+} from "./types";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
@@ -230,6 +241,191 @@ export async function fetchTVMazeResolvedShow(
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return response.json();
+}
+
+const PLACEHOLDER_OVERVIEWS = new Set([
+    '',
+    'sinopse não disponível.',
+    'sinopse nao disponivel.',
+    'overview not available.',
+    'no overview available.',
+    'n/a',
+]);
+
+function normalizeLanguageTag(language: string | null | undefined): string {
+    const raw = String(language || '').trim().toLowerCase().replace('_', '-');
+    if (!raw) return 'und';
+    if (raw === 'portuguese') return 'pt';
+    if (raw === 'english') return 'en';
+    if (raw.startsWith('pt-pt')) return 'pt-PT';
+    if (raw.startsWith('pt')) return 'pt';
+    if (raw.startsWith('en')) return 'en';
+    return raw;
+}
+
+function sanitizeOverview(value: unknown): string {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function isMeaningfulOverview(value: unknown): boolean {
+    const text = sanitizeOverview(value);
+    if (!text) return false;
+    return !PLACEHOLDER_OVERVIEWS.has(text.toLowerCase());
+}
+
+function scoreOverviewCompleteness(value: string): number {
+    const text = sanitizeOverview(value);
+    if (!text) return 0;
+    const sentenceCount = text.split(/[.!?]+/).map((segment) => segment.trim()).filter(Boolean).length;
+    return text.length + Math.min(sentenceCount, 8) * 20;
+}
+
+function languagePriority(language: string): number {
+    const normalized = normalizeLanguageTag(language);
+    if (normalized === 'pt-PT') return 0;
+    if (normalized === 'pt') return 1;
+    if (normalized === 'en') return 2;
+    return 3;
+}
+
+function createOverviewCandidate(source: ProviderSource, language: string, text: string): AggregatedOverviewCandidate {
+    const normalizedText = sanitizeOverview(text);
+    return {
+        source,
+        language,
+        text: normalizedText,
+        score: scoreOverviewCompleteness(normalizedText),
+    };
+}
+
+function pickBestOverviewCandidate(candidates: AggregatedOverviewCandidate[]): AggregatedOverviewCandidate | null {
+    if (candidates.length === 0) return null;
+    const sorted = [...candidates].sort((a, b) => {
+        const priorityDiff = languagePriority(a.language) - languagePriority(b.language);
+        if (priorityDiff !== 0) return priorityDiff;
+        if (b.score !== a.score) return b.score - a.score;
+        return b.text.length - a.text.length;
+    });
+    return sorted[0] || null;
+}
+
+async function fetchTMDbOverviewByLanguage(
+    seriesId: number,
+    language: string,
+    signal: AbortSignal | null
+): Promise<string | null> {
+    const url = `${API_BASE_TMDB}/tv/${seriesId}?language=${encodeURIComponent(language)}`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) return null;
+    const data = await response.json() as { overview?: string | null };
+    return isMeaningfulOverview(data?.overview) ? sanitizeOverview(data?.overview) : null;
+}
+
+async function fetchTraktTranslationOverview(
+    traktId: number,
+    language: 'pt' | 'en',
+    signal: AbortSignal | null
+): Promise<string | null> {
+    const url = `${API_BASE_TRAKT}/shows/${traktId}/translations/${language}`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) return null;
+    const payload = await response.json() as Array<{ overview?: string | null }> | { overview?: string | null };
+    if (Array.isArray(payload)) {
+        const entryWithOverview = payload.find((item) => isMeaningfulOverview(item?.overview));
+        return entryWithOverview?.overview ? sanitizeOverview(entryWithOverview.overview) : null;
+    }
+    return isMeaningfulOverview(payload?.overview) ? sanitizeOverview(payload.overview) : null;
+}
+
+async function safeOptionalRequest<T>(label: string, request: () => Promise<T>): Promise<T | null> {
+    try {
+        return await request();
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn(`[aggregation] ${label} falhou. A continuar com fontes disponíveis.`, error);
+        return null;
+    }
+}
+
+/**
+ * Agrega metadados de série entre TMDb/Trakt/TVMaze com prioridade de idioma:
+ * pt-PT -> pt -> en (escolhendo o texto EN mais completo quando PT faltar).
+ */
+export async function fetchAggregatedSeriesMetadata({
+    seriesId,
+    signal,
+    tmdbOverviewPt,
+    traktData,
+    fallbackTitle,
+    fallbackYear,
+    fallbackImdbId,
+}: {
+    seriesId: number;
+    signal: AbortSignal | null;
+    tmdbOverviewPt?: string | null;
+    traktData?: TraktData | null;
+    fallbackTitle?: string;
+    fallbackYear?: number;
+    fallbackImdbId?: string | null;
+}): Promise<AggregatedSeriesMetadata> {
+    const overviewCandidates: AggregatedOverviewCandidate[] = [];
+
+    if (isMeaningfulOverview(tmdbOverviewPt)) {
+        overviewCandidates.push(createOverviewCandidate('tmdb', 'pt-PT', tmdbOverviewPt as string));
+    }
+
+    const traktId = traktData?.traktId;
+    const [
+        tmdbOverviewEn,
+        traktOverviewPt,
+        traktOverviewEn,
+        tvmazeData,
+    ] = await Promise.all([
+        safeOptionalRequest('TMDb EN overview', () => fetchTMDbOverviewByLanguage(seriesId, 'en-US', signal)),
+        traktId
+            ? safeOptionalRequest('Trakt PT translation', () => fetchTraktTranslationOverview(traktId, 'pt', signal))
+            : Promise.resolve(null),
+        traktId
+            ? safeOptionalRequest('Trakt EN translation', () => fetchTraktTranslationOverview(traktId, 'en', signal))
+            : Promise.resolve(null),
+        safeOptionalRequest('TVMaze resolve show', () => fetchTVMazeResolvedShow(signal, fallbackTitle, fallbackYear, fallbackImdbId)),
+    ]);
+
+    if (isMeaningfulOverview(tmdbOverviewEn)) {
+        overviewCandidates.push(createOverviewCandidate('tmdb', 'en', tmdbOverviewEn as string));
+    }
+
+    if (isMeaningfulOverview(traktOverviewPt)) {
+        overviewCandidates.push(createOverviewCandidate('trakt', 'pt', traktOverviewPt as string));
+    }
+
+    if (isMeaningfulOverview(traktOverviewEn)) {
+        overviewCandidates.push(createOverviewCandidate('trakt', 'en', traktOverviewEn as string));
+    } else if (isMeaningfulOverview(traktData?.overview)) {
+        overviewCandidates.push(createOverviewCandidate('trakt', 'en', traktData?.overview as string));
+    }
+
+    const tvmazeOverview = tvmazeData?.show?.summaryText || tvmazeData?.show?.summaryHtml || '';
+    if (isMeaningfulOverview(tvmazeOverview)) {
+        overviewCandidates.push(
+            createOverviewCandidate('tvmaze', normalizeLanguageTag(tvmazeData?.show?.language), tvmazeOverview)
+        );
+    }
+
+    const selectedOverview = pickBestOverviewCandidate(overviewCandidates);
+    const certification = typeof traktData?.certification === 'string' && traktData.certification.trim()
+        ? traktData.certification.trim()
+        : null;
+
+    return {
+        overview: selectedOverview?.text || null,
+        overviewSource: selectedOverview?.source || null,
+        overviewLanguage: selectedOverview?.language || null,
+        certification,
+        certificationSource: certification ? 'trakt' : null,
+        overviewCandidates,
+        tvmazeData: tvmazeData || null,
+    };
 }
 
 /**

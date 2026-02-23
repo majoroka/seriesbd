@@ -2,7 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata } from './types';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -618,7 +618,14 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     ]);
 }
 
-export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeasonsData: TMDbSeason[], creditsData: TMDbCredits, traktSeriesData: TraktData | null, traktSeasonsData: TraktSeason[] | null) {
+export function renderSeriesDetails(
+    seriesData: TMDbSeriesDetails,
+    allTMDbSeasonsData: TMDbSeason[],
+    creditsData: TMDbCredits,
+    traktSeriesData: TraktData | null,
+    traktSeasonsData: TraktSeason[] | null,
+    aggregatedSeriesData: AggregatedSeriesMetadata | null = null
+) {
     const detailSection = DOM.seriesViewSection;
     detailSection.innerHTML = '';
     const backdropPath = seriesData.backdrop_path ? `https://image.tmdb.org/t/p/w1280${seriesData.backdrop_path}` : '';
@@ -631,7 +638,7 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
     const totalRuntimeMinutes = episodesWithRuntime.reduce((sum, ep) => sum + (ep.runtime ?? 0), 0);
     const averageRuntime = episodesWithRuntime.length > 0 ? Math.round(totalRuntimeMinutes / episodesWithRuntime.length) : (seriesData.episode_run_time?.[0] || 0);
     const runtimeText = averageRuntime > 0 ? `${averageRuntime}m` : '';
-    const originalCertification = traktSeriesData?.certification || '';
+    const originalCertification = aggregatedSeriesData?.certification || traktSeriesData?.certification || '';
     const certification = formatCertification(originalCertification);
     const facts = [{ type: 'text', value: premiereDate }, { type: 'certification', value: certification }, { type: 'text', value: genres }, { type: 'text', value: runtimeText }].filter(f => f.value);
     const factsElements = facts.flatMap((fact, index) => {
@@ -702,7 +709,7 @@ export function renderSeriesDetails(seriesData: TMDbSeriesDetails, allTMDbSeason
     if (!finalTrailerKey) finalTrailerKey = findTMDbTrailer(seriesData.videos);
     const tmdbOverview = seriesData.overview || '';
     const traktOverview = traktSeriesData?.overview || '';
-    const finalOverview = tmdbOverview || traktOverview;
+    const finalOverview = aggregatedSeriesData?.overview || tmdbOverview || traktOverview;
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [

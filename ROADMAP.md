@@ -16,6 +16,7 @@
 - **CSP por Ambiente (P2-01)**: política separada para desenvolvimento (`vite.config.ts`) e produção (`netlify.toml`) para equilibrar DX e segurança.
 - **Observabilidade mínima (P2-02)**: logs com contexto por secção/endpoint/status, métricas básicas de falha e latência, e headers de troubleshooting nas funções proxy.
 - **Integração TVMaze via proxy (P3-01)**: nova Netlify Function (`/api/tvmaze/*`) com CORS/headers normalizados, observabilidade mínima e endpoint de resolução por IMDb com fallback por nome/ano.
+- **Agregação PT-first multi-fonte (P3-02)**: detalhe da série passa a consolidar TMDb/Trakt/TVMaze com prioridade `pt-PT` -> `pt` -> `en` e fallback para EN mais completo quando PT não existe.
 
 ## Backlog técnico (pronto para issues)
 

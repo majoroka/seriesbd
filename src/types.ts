@@ -127,6 +127,25 @@ export interface TVMazeResolveData {
     show: TVMazeShow | null;
 }
 
+export type ProviderSource = 'tmdb' | 'trakt' | 'tvmaze';
+
+export interface AggregatedOverviewCandidate {
+    source: ProviderSource;
+    language: string;
+    text: string;
+    score: number;
+}
+
+export interface AggregatedSeriesMetadata {
+    overview: string | null;
+    overviewSource: ProviderSource | null;
+    overviewLanguage: string | null;
+    certification: string | null;
+    certificationSource: ProviderSource | null;
+    overviewCandidates: AggregatedOverviewCandidate[];
+    tvmazeData: TVMazeResolveData | null;
+}
+
 export interface WatchedState {
     [seriesId: string]: number[];
 }
