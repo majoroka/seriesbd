@@ -4,10 +4,10 @@
     --bg-light: #1e1e1e;
     --bg-card: #252525;
     --bg-hover: #2a2a2a;
-    --primary-accent: #6dbebf;
-    --primary-accent-hover: #5cb0b1;
-    --secondary-accent: #ed6d85;
-    --tvmaze-accent: #386e67;
+    --primary-accent: #54B8F9;
+    --primary-accent-hover: #45A9EA;
+    --secondary-accent: #B73670;
+    --tvmaze-accent: #54928B;
     --danger-color: #ff4d4d;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
@@ -2421,7 +2421,7 @@ body.light-theme .network-logo {
 }
 
 .top-rated-filter-toggle.is-on {
-    background-color: rgba(109, 190, 191, 0.2);
+    background-color: rgba(84, 184, 249, 0.2);
     border-color: var(--primary-accent);
 }
 
@@ -2453,7 +2453,7 @@ body.light-theme .network-logo {
 }
 
 .view-toggle .icon-button:hover {
-    background-color: rgba(109, 190, 191, 0.1); /* Faint cyan on hover */
+    background-color: rgba(84, 184, 249, 0.1);
 }
 
 .view-toggle .icon-button.active {
