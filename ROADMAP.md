@@ -4,7 +4,7 @@
 
 - MVP funcional disponível como PWA offline-first.
 - Biblioteca local com gestão completa (watchlist, arquivo, notas, ratings).
-- Integração com TMDb/Trakt via funções Netlify e cache de temporadas.
+- Integração com TMDb/Trakt/TVMaze via Cloudflare Pages Functions e cache de temporadas.
 - Estatísticas com gráficos e exportações, import/export completo da base local.
 
 ## ✅ Recém-adicionado
@@ -13,9 +13,9 @@
 - **Vista em Grelha**: Adicionada a opção de visualizar as listas de séries em formato de grelha, focada nos posters.
 - **Secção de Tendências**: Introduzidos carrosséis na dashboard para mostrar as séries em tendência diária e semanal.
 - **Melhorias de Responsividade**: Otimizado o layout para ecrãs de diferentes tamanhos, incluindo a nova vista de detalhes e a grelha de estatísticas.
-- **CSP por Ambiente (P2-01)**: política separada para desenvolvimento (`vite.config.ts`) e produção (`netlify.toml`) para equilibrar DX e segurança.
+- **CSP por Ambiente (P2-01)**: política separada para desenvolvimento (`vite.config.ts`) e produção (`public/_headers`) para equilibrar DX e segurança.
 - **Observabilidade mínima (P2-02)**: logs com contexto por secção/endpoint/status, métricas básicas de falha e latência, e headers de troubleshooting nas funções proxy.
-- **Integração TVMaze via proxy (P3-01)**: nova Netlify Function (`/api/tvmaze/*`) com CORS/headers normalizados, observabilidade mínima e endpoint de resolução por IMDb com fallback por nome/ano.
+- **Integração TVMaze via proxy (P3-01)**: nova Cloudflare Pages Function (`/api/tvmaze/*`) com CORS/headers normalizados, observabilidade mínima e endpoint de resolução por IMDb com fallback por nome/ano.
 - **Agregação PT-first multi-fonte (P3-02)**: detalhe da série passa a consolidar TMDb/Trakt/TVMaze com prioridade `pt-PT` -> `pt` -> `en` e fallback para EN mais completo quando PT não existe.
 - **Ratings com 3 anéis (P3-03)**: bloco de avaliações na vista de detalhes passa a mostrar TMDb, Trakt e TVMaze, com anéis mais finos e cor TVMaze `#386e67`.
 - **Matching hardening (P3-04)**: resolução entre fontes agora prioriza IMDb, usa fallback nome+ano com score mínimo e descarta matches fracos para reduzir falsos positivos.
@@ -55,7 +55,7 @@
 4. **P0-04 | Sanitizar respostas de erro na função Trakt**
    - Objetivo: aplicar tratamento de headers também no ramo de erro.
    - Impacto esperado: menos erros de parsing no cliente.
-   - Ficheiros alvo: `netlify/functions/trakt.mjs`.
+   - Ficheiros alvo: `functions/api/trakt/[[path]].js`.
    - Critérios de aceitação:
    - Em respostas 4xx/5xx da Trakt, não são enviados headers incompatíveis (`content-encoding`, `content-length`).
    - A app recebe erro JSON consistente.
@@ -118,17 +118,17 @@
 2. **P2-02 | Observabilidade mínima de erros e performance**
    - Objetivo: identificar regressões rapidamente em produção.
    - Impacto esperado: troubleshooting mais rápido.
-   - Ficheiros alvo: `src/main.ts`, `netlify/functions/*.mjs`.
+   - Ficheiros alvo: `src/main.ts`, `functions/api/*`.
    - Critérios de aceitação:
    - Erros críticos com contexto mínimo (secção, endpoint, status).
    - Métricas básicas de falha por secção dinâmica.
 
 ### P3 - Agregação multi-fonte (TMDb + Trakt + TVMaze)
 
-1. **P3-01 | Integrar TVMaze via Netlify Function**
+1. **P3-01 | Integrar TVMaze via Cloudflare Pages Function**
    - Objetivo: adicionar 3.ª fonte de dados para enriquecer detalhes da série.
    - Impacto esperado: maior cobertura de metadados e ratings.
-   - Ficheiros alvo: `netlify/functions/tvmaze.mjs`, `netlify.toml`.
+   - Ficheiros alvo: `functions/api/tvmaze/[[path]].js`.
    - Critérios de aceitação:
    - Endpoint proxy para TVMaze com CORS/headers normalizados.
    - Lookup por `imdb_id` e fallback por nome/ano.
@@ -197,7 +197,7 @@
 ## Médio prazo
 
 1. **Sincronização multi-dispositivo**
-   - Investigar backend simples (Netlify KV / Supabase) para sincronizar biblioteca opcionalmente.
+   - Investigar backend simples (Cloudflare KV / Supabase) para sincronizar biblioteca opcionalmente.
    - Autenticação leve (OAuth TMDb/Trakt ou magic link) para utilizadores que desejem sync.
 2. **Notificações e alertas**
    - Push notifications para episódios novos (APIs Web Push + background sync).
@@ -222,7 +222,7 @@
 
 ## Iniciativas de suporte
 
-- **CI/CD:** Configurar pipeline Netlify com testes automáticos, lint e upload de coverage.
+- **CI/CD:** Configurar pipeline GitHub Actions + Cloudflare Pages com testes automáticos, lint e upload de coverage.
 - **Observabilidade:** Adicionar captura de erros (Sentry) e métricas de performance Web Vitals.
 - **Analytics:** Instrumentar eventos chave (adicionar série, exportar dados, marcações) com consentimento.
 

@@ -13,14 +13,14 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 - **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
 - **Temas Claro e Escuro**: Escolha o seu tema preferido para uma experiência de visualização mais confortável.
 - **Importação e Exportação**: Faça backup e restaure a sua biblioteca a qualquer momento.
-- **Seguro**: As chaves de API são protegidas através de funções serverless na Netlify, nunca sendo expostas no browser.
+- **Seguro**: As chaves de API são protegidas através de funções serverless na Cloudflare Pages, nunca sendo expostas no browser.
 
 ## Stack tecnológica
 
 - **Frontend:** Vite + TypeScript + HTML/CSS modularizados.
 - **Estado e persistência:** Dexie (IndexedDB) com cache de temporadas e KV store para preferências.
 - **UI e gráficos:** Chart.js, Font Awesome, animações personalizadas em `ui.ts`.
-- **Automação:** Netlify Functions para proxies TMDb/Trakt/TVMaze, vite-plugin-pwa para assets offline.
+- **Automação:** Cloudflare Pages Functions para proxies TMDb/Trakt/TVMaze, vite-plugin-pwa para assets offline.
 - **Testes:** Vitest + Testing Library (ambiente jsdom).
 
 ## Requisitos
@@ -28,7 +28,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 - Node.js 20 LTS (recomendado) e npm.
 - Contas TMDb e Trakt com chaves de API válidas.
 - Conta TVMaze (opcional; usar chave apenas se necessário no teu plano/limites).
-- Netlify CLI (utilizada via `npm run dev`; não é necessário instalar globalmente).
+- Conta Cloudflare (Pages) com repositório GitHub ligado.
 
 ## Configuração e execução locais
 
@@ -39,7 +39,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    npm install
    ```
 
-2. Definir variáveis de ambiente (ficheiro `.env` na raiz do projeto, ou `netlify env:set`):
+2. Definir variáveis de ambiente (ficheiro `.env` na raiz do projeto para desenvolvimento local):
 
    ```env
    TMDB_API_KEY=...
@@ -47,17 +47,15 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    TVMAZE_API_KEY=... # opcional
    ```
 
-3. Iniciar o ambiente de desenvolvimento (Vite + proxies de funções):
+3. Iniciar o ambiente de desenvolvimento local:
 
    ```bash
 
    npm run dev
    ```
 
-   O Netlify CLI expõe a app em `http://localhost:8888` e encaminha:
-   - `/api/tmdb/*` -> `tmdb` function
-   - `/api/trakt/*` -> `trakt` function
-   - `/api/tvmaze/*` -> `tvmaze` function
+   `npm run dev` mantém um fluxo local compatível com os proxies legados.  
+   Em produção/staging, os proxies ativos são os da Cloudflare Pages Functions.
 4. Build de produção:
 
    ```bash
@@ -68,7 +66,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 
 ## Scripts npm
 
-- `npm run dev` – `netlify dev` com Vite, funções e PWA.
+- `npm run dev` – ambiente local compatível com desenvolvimento do frontend e PWA.
 - `npm run build` – build Vite otimizado para `dist/`.
 - `npm run preview` – servidor estático para testar o build.
 - `npm run test` – Vitest em modo WATCH/CLI padrão.
@@ -90,8 +88,10 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 │  ├─ utils.ts           # Helpers (debounce, exportações, animações)
 │  ├─ types.ts           # Tipagens TMDb/Trakt/TVMaze/local
 │  └─ style.css          # Tema e responsividade
+├─ functions/
+│  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze)
 ├─ netlify/
-│  └─ functions/         # Proxies serverless TMDb/Trakt/TVMaze
+│  └─ functions/         # Proxies legados (compatibilidade local)
 └─ vite.config.ts        # Configuração Vite + PWA + Vitest
 ```
 
@@ -115,7 +115,7 @@ npm run test
 - Preferências de utilizador e caches guardadas em IndexedDB (`kvStore`, `seasonCache`).
 - CSP por ambiente:
   - Desenvolvimento: aplicada por `vite.config.ts` (compatível com HMR).
-  - Produção: aplicada por headers no `netlify.toml` (mais restritiva).
+  - Produção: aplicada por `public/_headers` no deploy Cloudflare (mais restritiva).
 - Todas as chamadas externas continuam mediadas por funções serverless.
 
 ## Documentação complementar
@@ -125,17 +125,10 @@ npm run test
 
 ## Deploy
 
-- Netlify é o alvo principal (`netlify.toml` define build, funções e rewrites específicos por provider: `/api/tmdb/*`, `/api/trakt/*` e `/api/tvmaze/*`).
-- Para deploy manual basta executar:
-
-  ```bash
-
-  npm run build
-  netlify deploy --prod
-
-  ```
-
-  (Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY` e `TVMAZE_API_KEY` estão configuradas no ambiente Netlify.)
+- Cloudflare Pages é o alvo principal.
+- `main` publica em `Production` (`seriesbd.pages.dev`).
+- `staging` publica em `Preview` (`staging.seriesbd.pages.dev` e URLs por hash).
+- Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY` e `TVMAZE_API_KEY` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
 
 ## Notas de robustez e troubleshooting
 
@@ -149,5 +142,5 @@ npm run test
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
 - Observabilidade mínima ativa:
   - frontend regista falhas por secção dinâmica com contexto (`secção`, `endpoint`, `status`) e snapshot em `sessionStorage` (`seriesdb.observability.v1`);
-  - funções Netlify devolvem `x-request-id`, `x-upstream-status` e `x-upstream-latency-ms` para troubleshooting.
+  - funções Cloudflare devolvem `x-request-id`, `x-upstream-status` e `x-upstream-latency-ms` para troubleshooting.
 - Em offline, funcionalidades dependentes de `/api/*` (pesquisa remota, tendências/populares/estreias, ratings públicos) podem ficar indisponíveis até voltar a ligação.
