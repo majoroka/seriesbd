@@ -2,12 +2,12 @@
 
 ## Visão geral
 
-O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb, Trakt e TVMaze) são feitas através de funções serverless da Netlify que atuam como proxies e protegem as chaves de API.
+O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb, Trakt e TVMaze) são feitas através de **Cloudflare Pages Functions** que atuam como proxies e protegem as chaves de API.
 
 ```text
-┌───────────┐        ┌────────────────────┐        ┌────────────────────────┐
-│  Browser  │ <────> │ Netlify Functions  │ <────> │ APIs externas (TMDb/Trakt/TVMaze) │
-└───────────┘        └────────────────────┘        └────────────────────────┘
+┌───────────┐        ┌────────────────────────────┐        ┌────────────────────────┐
+│  Browser  │ <────> │ Cloudflare Pages Functions │ <────> │ APIs externas (TMDb/Trakt/TVMaze) │
+└───────────┘        └────────────────────────────┘        └────────────────────────┘
         │
         ▼
 ┌────────────────────┐
@@ -122,19 +122,21 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ## Integração com APIs externas
 
-- **Netlify Functions**
-  - `/netlify/functions/tmdb.mjs` injeta `TMDB_API_KEY`, normaliza headers, trata CORS/Content-Encoding e respeita `language` explícito no query string.
-  - `/netlify/functions/trakt.mjs` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`, `User-Agent`), responde a preflight e deteta bloqueios Cloudflare (retornando `502` em JSON para diagnóstico).
-  - `/netlify/functions/tvmaze.mjs` faz proxy para TVMaze, suporta lookup dedicado (`/resolve/show`) com estratégia IMDb -> nome/ano e inclui observabilidade mínima (`requestId`, status, latência).
-  - `netlify.toml` redireciona rotas específicas para cada provider:
-    - `/api/tmdb/*` -> `/.netlify/functions/tmdb/:splat`
-    - `/api/trakt/*` -> `/.netlify/functions/trakt/:splat`
-    - `/api/tvmaze/*` -> `/.netlify/functions/tvmaze/:splat`
+- **Cloudflare Pages Functions**
+  - `functions/api/tmdb/[[path]].js` injeta `TMDB_API_KEY`, normaliza headers, trata CORS/Content-Encoding e respeita `language` explícito no query string.
+  - `functions/api/trakt/[[path]].js` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`, `User-Agent`), responde a preflight e deteta bloqueios Cloudflare (retornando `502` em JSON para diagnóstico).
+  - `functions/api/tvmaze/[[path]].js` faz proxy para TVMaze, suporta lookup dedicado (`/resolve/show`) com estratégia IMDb -> nome/ano e inclui observabilidade mínima (`requestId`, status, latência).
+  - Rotas públicas mantidas para compatibilidade:
+    - `/api/tmdb/*`
+    - `/api/trakt/*`
+    - `/api/tvmaze/*`
 - **Segurança**
   - Chaves nunca são expostas no frontend.
   - CSP por ambiente:
     - Dev (`vite.config.ts`): política compatível com HMR (`ws/wss`, regras mais permissivas).
-    - Produção (`netlify.toml`): política mais restritiva via headers HTTP.
+    - Produção (`public/_headers`): política mais restritiva via headers HTTP no deploy Cloudflare.
+- **Compatibilidade local**
+  - `npm run dev` usa `netlify dev` e as funções em `netlify/functions/*.mjs` para facilitar desenvolvimento local sem depender do runtime da Cloudflare.
 
 ## PWA e funcionamento offline
 
@@ -153,7 +155,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 - Frontend (`main.ts`) regista falhas por secção dinâmica com contexto mínimo (`section`, `endpoint`, `status`) e mantém snapshot em `sessionStorage` (`seriesdb.observability.v1`).
 - Frontend guarda métricas básicas por secção (execuções, falhas, lentidão e duração média) para diagnóstico rápido em runtime.
-- Netlify Functions (`tmdb.mjs`, `trakt.mjs`, `tvmaze.mjs`) emitem logs estruturados com `requestId`, `endpoint`, `status` e latência upstream.
+- Cloudflare Pages Functions (`functions/api/*`) emitem logs estruturados com `requestId`, `endpoint`, `status` e latência upstream.
 - As respostas proxy incluem headers de troubleshooting: `x-request-id`, `x-upstream-status`, `x-upstream-latency-ms`.
 - Modais de confirmação/erro (`UI.showNotification`, `showConfirmationModal`) mantêm feedback consistente.
 - Animações (`animateValue`, `animateDuration`) melhoram percepção de progresso sem sacrificar desempenho.
