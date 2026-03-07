@@ -26,6 +26,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 ## Requisitos
 
 - Node.js 20 LTS (recomendado) e npm.
+- Projeto Supabase (para autenticação de utilizadores).
 - Contas TMDb e Trakt com chaves de API válidas.
 - Conta TVMaze (opcional; usar chave apenas se necessário no teu plano/limites).
 - Conta Cloudflare (Pages) com repositório GitHub ligado.
@@ -45,6 +46,8 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    TMDB_API_KEY=...
    TRAKT_API_KEY=...
    TVMAZE_API_KEY=... # opcional
+   VITE_SUPABASE_URL=...
+   VITE_SUPABASE_ANON_KEY=...
    ```
 
 3. Iniciar o ambiente de desenvolvimento local:

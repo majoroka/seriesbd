@@ -183,6 +183,29 @@ textarea:focus-visible,
     line-height: 1.4;
 }
 
+.auth-status-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.6rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    background-color: var(--bg-card);
+    display: inline-block;
+}
+
+.auth-status-label.connected {
+    color: var(--primary-accent);
+    border-color: rgba(71, 171, 210, 0.45);
+}
+
+.auth-status-label.error {
+    color: var(--danger-color);
+    border-color: rgba(255, 77, 77, 0.45);
+}
+
 .sidebar-attribution a {
     color: var(--text-secondary);
     text-decoration: underline;
@@ -1139,6 +1162,62 @@ details[open] > .season-summary::before {
     justify-content: center;
     gap: 1rem;
     margin-top: 1.5rem;
+}
+
+.auth-modal-content {
+    max-width: 460px;
+}
+
+.auth-modal-content h2 {
+    margin-bottom: 0.4rem;
+}
+
+.auth-modal-description {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.auth-field label {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.auth-field input {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-main);
+    font-size: 1rem;
+}
+
+.auth-toggle-mode {
+    margin-top: 0.9rem;
+    border: none;
+    background: none;
+    color: var(--primary-accent);
+    font-family: var(--font-main);
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+}
+
+.auth-toggle-mode:hover {
+    text-decoration: underline;
 }
 
 .search-bar-button.secondary {

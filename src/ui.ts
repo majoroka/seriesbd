@@ -164,6 +164,9 @@ function closeTopModal() {
         case 'confirmation-modal':
             closeConfirmationModal(false);
             break;
+        case 'auth-modal':
+            closeAuthModal();
+            break;
         default:
             break;
     }
@@ -257,6 +260,14 @@ export function openLibrarySearchModal() {
 
 export function closeLibrarySearchModal() {
     hideModal(DOM.librarySearchModal);
+}
+
+export function openAuthModal() {
+    showModal(DOM.authModal, DOM.authEmailInput);
+}
+
+export function closeAuthModal() {
+    hideModal(DOM.authModal);
 }
 
 export function openAllRatingsModal() {
