@@ -290,6 +290,13 @@ export function closeSeriesByRatingModal() {
 }
 
 export function showNotification(message: string) {
+    const isAuthModalVisible = DOM.authModal?.getAttribute('aria-hidden') === 'false';
+    if (isAuthModalVisible && DOM.authInlineFeedback) {
+        DOM.authInlineFeedback.textContent = message;
+        DOM.authInlineFeedback.hidden = false;
+        DOM.authInlineFeedback.classList.remove('info');
+        return;
+    }
     DOM.notificationMessage.textContent = message;
     showModal(DOM.notificationModal, DOM.notificationOkBtn);
 }
