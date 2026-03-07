@@ -416,6 +416,25 @@ function closeAuthModal() {
     setAuthFormLoadingState(false);
 }
 
+function clearInMemoryLibraryState() {
+    S.setMyWatchlist([]);
+    S.setMyArchive([]);
+    S.setWatchedState({});
+    S.setUserData({});
+    S.setCurrentSearchResults([]);
+}
+
+function renderLibraryStateFromMemory() {
+    UI.renderWatchlist();
+    UI.renderArchive();
+    UI.renderAllSeries();
+    UI.renderUnseen();
+    UI.renderSearchResults([]);
+    UI.renderNextAired([]);
+    DOM.globalProgressPercentage.textContent = '0%';
+    UI.updateKeyStats();
+}
+
 function setAuthenticatedUi(user: User | null) {
     currentAuthenticatedUserId = user?.id ?? null;
     updateAuthActionButtons(user);
@@ -447,6 +466,8 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
         if (previousUserId) {
             UI.showNotification('Sessão terminada.');
         }
+        clearInMemoryLibraryState();
+        renderLibraryStateFromMemory();
     }
 }
 
@@ -1311,6 +1332,16 @@ async function initializeApp(): Promise<void> {
         if (localStorage.getItem('seriesdb.watchlist')) {
             await S.migrateFromLocalStorage();
         }
+
+        if (isSupabaseConfigured() && !currentAuthenticatedUserId) {
+            const settingsMap = await readLocalSettingsMap();
+            applySettingsMapToUi(settingsMap);
+            clearInMemoryLibraryState();
+            renderLibraryStateFromMemory();
+            UI.showSection('watchlist-section');
+            return;
+        }
+
         const settingsMap = await S.loadStateFromDB();
         applySettingsMapToUi(settingsMap);
         UI.renderWatchlist();
@@ -2166,7 +2197,20 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.authLogoutBtn?.addEventListener('click', async () => {
         DOM.settingsMenu.classList.remove('visible');
         if (!isSupabaseConfigured()) return;
+        if (!currentAuthenticatedUserId) {
+            UI.showNotification('Utilizador sem sessão ativa.');
+            setAuthStatusLabel('Sem sessão iniciada', 'default');
+            return;
+        }
         try {
+            const session = await getCurrentSession();
+            if (!session?.user) {
+                setAuthenticatedUi(null);
+                clearInMemoryLibraryState();
+                renderLibraryStateFromMemory();
+                UI.showNotification('Utilizador sem sessão ativa.');
+                return;
+            }
             await signOutCurrentUser();
         } catch (error) {
             const message = getErrorMessage(error);
@@ -2196,10 +2240,22 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (authFormMode === 'signup') {
                 const response = await signUpWithPassword({ email, password, displayName });
+                const identityCount = Array.isArray((response.data.user as any)?.identities)
+                    ? (response.data.user as any).identities.length
+                    : null;
+                const maybeExistingAccount = identityCount === 0;
+                if (maybeExistingAccount) {
+                    setAuthModalMode('login');
+                    DOM.authEmailInput.value = email;
+                    DOM.authPasswordInput.value = '';
+                    UI.showNotification('Este email já pode estar registado. Tente entrar com a sua password.');
+                    setAuthFormLoadingState(false);
+                    return;
+                }
                 const requiresConfirmation = !response.data.session;
                 closeAuthModal();
                 if (requiresConfirmation) {
-                    UI.showNotification('Conta criada. Verifique o email para confirmar o registo.');
+                    UI.showNotification('Se o email for novo, foi enviado um link de confirmação. Se já existir, use Entrar.');
                 } else {
                     UI.showNotification('Conta criada e sessão iniciada.');
                 }
@@ -2287,6 +2343,8 @@ document.addEventListener('DOMContentLoaded', () => {
         displaySeriesDetails(e.detail.seriesId);
     }) as EventListener);
 
-    initializeAuthState();
-    initializeApp();
+    void (async () => {
+        await initializeAuthState();
+        await initializeApp();
+    })();
 });
