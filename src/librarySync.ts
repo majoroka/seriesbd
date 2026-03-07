@@ -2,6 +2,7 @@ import { db } from './db';
 import * as S from './state';
 import { UserData, UserDataItem, WatchedState, WatchedStateItem, Series } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
+import { normalizeSeriesCollection } from './media';
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = 1;
 export const LOCAL_LIBRARY_MUTATION_AT_KEY = 'seriesdb.localLibraryMutationAt';
@@ -62,11 +63,6 @@ function normalizeUserData(input: unknown): UserData {
   return normalized;
 }
 
-function normalizeSeriesArray(input: unknown): Series[] {
-  if (!Array.isArray(input)) return [];
-  return input as Series[];
-}
-
 function normalizeLibraryPayload(payload: unknown): LibrarySnapshotPayload {
   const record = isObjectLike(payload) ? payload : {};
   return {
@@ -78,8 +74,8 @@ function normalizeLibraryPayload(payload: unknown): LibrarySnapshotPayload {
       typeof record.generatedAt === 'string'
         ? record.generatedAt
         : new Date().toISOString(),
-    watchlist: normalizeSeriesArray(record.watchlist),
-    archive: normalizeSeriesArray(record.archive),
+    watchlist: normalizeSeriesCollection(record.watchlist),
+    archive: normalizeSeriesCollection(record.archive),
     watchedState: normalizeWatchedState(record.watchedState),
     userData: normalizeUserData(record.userData),
   };

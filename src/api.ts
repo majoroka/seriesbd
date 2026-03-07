@@ -13,6 +13,7 @@ import {
     AggregatedOverviewCandidate,
     ProviderSource,
 } from "./types";
+import { normalizeSeries, normalizeSeriesCollection } from "./media";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
@@ -42,7 +43,8 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
     const searchUrl = `${API_BASE_TMDB}/search/tv?query=${encodeURIComponent(query)}&language=pt-PT`;
     const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    const payload = await response.json() as { results: unknown };
+    return { results: normalizeSeriesCollection(payload.results) };
 }
 
 /**
@@ -54,7 +56,8 @@ export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSig
     const url = `${API_BASE_TMDB}/trending/tv/${timeWindow}?language=pt-PT`;
     const response = await fetchWithRetry(url, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    const payload = await response.json() as { results: unknown };
+    return { results: normalizeSeriesCollection(payload.results) };
 }
 
 /**
@@ -66,7 +69,10 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
     const url = `${API_BASE_TMDB}/tv/${seriesId}?append_to_response=videos,external_ids&language=pt-PT`;
     try {
         const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
-        if (response.ok) return await response.json();
+        if (response.ok) {
+            const payload = await response.json() as TMDbSeriesDetails;
+            return normalizeSeries(payload) as TMDbSeriesDetails;
+        }
         if (response.status < 500) throw new Error(`HTTP error! status: ${response.status}`);
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
@@ -81,7 +87,7 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
             throw new Error(`HTTP error! status: ${baseResponse.status}`);
         }
 
-        const baseData = await baseResponse.json() as TMDbSeriesDetails;
+        const baseData = normalizeSeries(await baseResponse.json() as TMDbSeriesDetails) as TMDbSeriesDetails;
         const [videosResult, externalIdsResult] = await Promise.allSettled([
             fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/videos?language=pt-PT`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),
             fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/external_ids`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),
@@ -702,7 +708,12 @@ export async function fetchPopularSeries(page: number): Promise<{ results: Serie
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries top rated.');
     }
-    return response.json();
+    const payload = await response.json() as { results: unknown; page: number; total_pages: number };
+    return {
+        results: normalizeSeriesCollection(payload.results),
+        page: payload.page,
+        total_pages: payload.total_pages,
+    };
 }
 
 /**
@@ -724,5 +735,10 @@ export async function fetchNewPremieres(
     if (!response.ok) {
         throw new Error('Não foi possível buscar as séries em exibição.');
     }
-    return response.json();
+    const payload = await response.json() as { results: unknown; page: number; total_pages: number };
+    return {
+        results: normalizeSeriesCollection(payload.results),
+        page: payload.page,
+        total_pages: payload.total_pages,
+    };
 }

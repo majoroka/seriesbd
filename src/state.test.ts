@@ -64,6 +64,7 @@ import * as S from './state';
 function makeSeries(id: number, name: string): Series {
   return {
     id,
+    media_type: 'series',
     name,
     overview: `${name} overview`,
     poster_path: null,

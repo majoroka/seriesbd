@@ -32,8 +32,11 @@ export interface TMDbSeason extends Season {
     episodes: Episode[];
 }
 
+export type MediaType = 'series' | 'movie' | 'book';
+
 export interface Series {
     id: number;
+    media_type: MediaType;
     name: string;
     original_name?: string;
     overview: string;
