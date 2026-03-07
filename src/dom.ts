@@ -47,6 +47,7 @@ export const authModal = document.getElementById('auth-modal') as HTMLDivElement
 export const authModalCloseBtn = document.getElementById('auth-modal-close-btn') as HTMLButtonElement;
 export const authModalTitle = document.getElementById('auth-modal-title') as HTMLHeadingElement;
 export const authModalDescription = document.getElementById('auth-modal-description') as HTMLParagraphElement;
+export const authInlineFeedback = document.getElementById('auth-inline-feedback') as HTMLParagraphElement;
 export const authForm = document.getElementById('auth-form') as HTMLFormElement;
 export const authDisplayNameGroup = document.getElementById('auth-display-name-group') as HTMLDivElement;
 export const authDisplayNameInput = document.getElementById('auth-display-name') as HTMLInputElement;

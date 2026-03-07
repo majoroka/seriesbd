@@ -38,3 +38,8 @@
   from = "/api/books/*"
   to = "/.netlify/functions/books/:splat"
   status = 200
+
+[[redirects]]
+  from = "/api/auth/display-name-available"
+  to = "/.netlify/functions/auth-display-name-available"
+  status = 200
