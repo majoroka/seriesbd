@@ -46,6 +46,9 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    TMDB_API_KEY=...
    TRAKT_API_KEY=...
    TVMAZE_API_KEY=... # opcional
+   HEARTBEAT_TOKEN=... # opcional, recomendado para proteger /api/heartbeat
+   SUPABASE_URL=... # server-side (Pages Function heartbeat)
+   SUPABASE_SERVICE_ROLE_KEY=... # server-side only
    VITE_SUPABASE_URL=...
    VITE_SUPABASE_ANON_KEY=...
    ```
@@ -92,9 +95,11 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 │  ├─ types.ts           # Tipagens TMDb/Trakt/TVMaze/local
 │  └─ style.css          # Tema e responsividade
 ├─ functions/
-│  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze)
+│  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze, /api/heartbeat)
 ├─ netlify/
 │  └─ functions/         # Proxies legados (compatibilidade local)
+├─ workers/
+│  └─ heartbeat-cron/    # Worker com Cron Trigger para chamar /api/heartbeat
 └─ vite.config.ts        # Configuração Vite + PWA + Vitest
 ```
 
@@ -131,7 +136,10 @@ npm run test
 - Cloudflare Pages é o alvo principal.
 - `main` publica em `Production` (`seriesbd.pages.dev`).
 - `staging` publica em `Preview` (`staging.seriesbd.pages.dev` e URLs por hash).
-- Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY` e `TVMAZE_API_KEY` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
+- Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY`, `TVMAZE_API_KEY` e `HEARTBEAT_TOKEN` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
+- Para o cron de heartbeat:
+  - deploy do worker com `npx wrangler deploy --config workers/heartbeat-cron/wrangler.toml`
+  - configurar `HEARTBEAT_URL` e `HEARTBEAT_TOKEN` no worker (`wrangler secret put ...`)
 
 ## Notas de robustez e troubleshooting
 
