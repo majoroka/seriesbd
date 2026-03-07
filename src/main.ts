@@ -9,7 +9,7 @@ import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
-import { isSupabaseConfigured } from './supabase';
+import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
@@ -40,6 +40,7 @@ const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
 let authFormMode: 'login' | 'signup' = 'login';
 let authFormBusy = false;
+let currentAuthenticatedUserId: string | null = null;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -161,6 +162,145 @@ async function runObservedSection<T>(
     }
 }
 
+type ViewMode = 'list' | 'grid';
+type ThemeMode = 'light' | 'dark' | 'system';
+type SyncedUserSettings = {
+    theme: ThemeMode;
+    watchlist_view_mode: ViewMode;
+    archive_view_mode: ViewMode;
+    unseen_view_mode: ViewMode;
+    all_series_view_mode: ViewMode;
+    exclude_asian_animation: boolean;
+};
+
+function normalizeViewMode(value: unknown, fallback: ViewMode = 'list'): ViewMode {
+    return value === 'grid' ? 'grid' : fallback;
+}
+
+function normalizeThemeMode(value: unknown, fallback: ThemeMode = 'dark'): ThemeMode {
+    if (value === 'light' || value === 'dark' || value === 'system') return value;
+    return fallback;
+}
+
+function normalizeBooleanSetting(value: unknown, fallback: boolean): boolean {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return fallback;
+}
+
+function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
+    const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
+    excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
+        ? true
+        : topRatedFilterSetting === true || topRatedFilterSetting === 'true';
+    updateTopRatedFilterToggleButton();
+
+    UI.applyViewMode(normalizeViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY), 'list'), DOM.watchlistContainer, DOM.watchlistViewToggle);
+    UI.applyViewMode(normalizeViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY), 'list'), DOM.unseenContainer, DOM.unseenViewToggle);
+    UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY), 'list'), DOM.archiveContainer, DOM.archiveViewToggle);
+    UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY), 'list'), DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+
+    const theme = normalizeThemeMode(settingsMap.get(C.THEME_STORAGE_KEY), 'dark');
+    UI.applyTheme(theme === 'system' ? 'dark' : theme);
+}
+
+async function readLocalSettingsMap(): Promise<Map<string, unknown>> {
+    const settings = await db.kvStore.toArray();
+    return new Map(settings.map((item: KVStoreItem) => [item.key, item.value]));
+}
+
+function mapSettingsMapToSyncedPayload(settingsMap: Map<string, unknown>): SyncedUserSettings {
+    return {
+        theme: normalizeThemeMode(settingsMap.get(C.THEME_STORAGE_KEY), 'dark'),
+        watchlist_view_mode: normalizeViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY), 'list'),
+        archive_view_mode: normalizeViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY), 'list'),
+        unseen_view_mode: normalizeViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY), 'list'),
+        all_series_view_mode: normalizeViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY), 'list'),
+        exclude_asian_animation: normalizeBooleanSetting(
+            settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY),
+            true
+        ),
+    };
+}
+
+async function saveSyncedPayloadToLocalDb(payload: SyncedUserSettings): Promise<void> {
+    const kvItems: KVStoreItem[] = [
+        { key: C.THEME_STORAGE_KEY, value: payload.theme === 'system' ? 'dark' : payload.theme },
+        { key: C.WATCHLIST_VIEW_MODE_KEY, value: payload.watchlist_view_mode },
+        { key: C.ARCHIVE_VIEW_MODE_KEY, value: payload.archive_view_mode },
+        { key: C.UNSEEN_VIEW_MODE_KEY, value: payload.unseen_view_mode },
+        { key: C.ALL_SERIES_VIEW_MODE_KEY, value: payload.all_series_view_mode },
+        { key: C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY, value: payload.exclude_asian_animation },
+    ];
+    await db.kvStore.bulkPut(kvItems);
+}
+
+async function pushLocalSettingsToRemote(userId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    const settingsMap = await readLocalSettingsMap();
+    const payload = mapSettingsMapToSyncedPayload(settingsMap);
+    const client = getSupabaseClient();
+    const { error } = await client.from('user_settings').upsert(
+        {
+            user_id: userId,
+            ...payload,
+        },
+        { onConflict: 'user_id' }
+    );
+    if (error) throw error;
+}
+
+async function pullRemoteSettingsToLocal(userId: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+    const client = getSupabaseClient();
+    const { data, error } = await client
+        .from('user_settings')
+        .select('theme, watchlist_view_mode, archive_view_mode, unseen_view_mode, all_series_view_mode, exclude_asian_animation')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return false;
+
+    const normalized: SyncedUserSettings = {
+        theme: normalizeThemeMode(data.theme, 'dark'),
+        watchlist_view_mode: normalizeViewMode(data.watchlist_view_mode, 'list'),
+        archive_view_mode: normalizeViewMode(data.archive_view_mode, 'list'),
+        unseen_view_mode: normalizeViewMode(data.unseen_view_mode, 'list'),
+        all_series_view_mode: normalizeViewMode(data.all_series_view_mode, 'list'),
+        exclude_asian_animation: normalizeBooleanSetting(data.exclude_asian_animation, true),
+    };
+    await saveSyncedPayloadToLocalDb(normalized);
+    return true;
+}
+
+async function syncUserSettingsAfterLogin(userId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    try {
+        const pulledFromRemote = await pullRemoteSettingsToLocal(userId);
+        if (!pulledFromRemote) {
+            await pushLocalSettingsToRemote(userId);
+        }
+        const settingsMap = await readLocalSettingsMap();
+        applySettingsMapToUi(settingsMap);
+        UI.renderWatchlist();
+        UI.renderArchive();
+        UI.renderAllSeries();
+        UI.renderUnseen();
+    } catch (error) {
+        console.error('[settings-sync] Falha ao sincronizar user_settings após login.', error);
+    }
+}
+
+async function syncUserSettingsToRemoteIfNeeded(): Promise<void> {
+    if (!isSupabaseConfigured() || !currentAuthenticatedUserId) return;
+    try {
+        await pushLocalSettingsToRemote(currentAuthenticatedUserId);
+    } catch (error) {
+        console.error('[settings-sync] Falha ao guardar user_settings no Supabase.', error);
+    }
+}
+
 function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'error' = 'default') {
     if (!DOM.authStatusLabel) return;
     DOM.authStatusLabel.textContent = message;
@@ -223,6 +363,7 @@ function closeAuthModal() {
 }
 
 function setAuthenticatedUi(user: User | null) {
+    currentAuthenticatedUserId = user?.id ?? null;
     updateAuthActionButtons(user);
     if (!isSupabaseConfigured()) {
         setAuthStatusLabel('Modo local (Supabase não configurado)', 'default');
@@ -239,6 +380,7 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     setAuthenticatedUi(user);
     if (event === 'SIGNED_IN' && user?.email) {
         UI.showNotification(`Sessão iniciada: ${user.email}`);
+        void syncUserSettingsAfterLogin(user.id);
     } else if (event === 'SIGNED_OUT') {
         UI.showNotification('Sessão terminada.');
     }
@@ -260,7 +402,11 @@ async function initializeAuthState() {
 
     try {
         const session = await getCurrentSession();
-        setAuthenticatedUi(session?.user ?? null);
+        const currentUser = session?.user ?? null;
+        setAuthenticatedUi(currentUser);
+        if (currentUser) {
+            await syncUserSettingsAfterLogin(currentUser.id);
+        }
     } catch (error) {
         console.error('[auth] Falha ao validar sessão inicial.', error);
         setAuthStatusLabel('Erro ao validar sessão', 'error');
@@ -909,6 +1055,7 @@ function setupViewToggle(toggleElement: HTMLElement, container: HTMLElement, sto
         const view = (button as HTMLElement).dataset.view;
         if (view) {
             await db.kvStore.put({ key: storageKey, value: view });
+            await syncUserSettingsToRemoteIfNeeded();
             UI.applyViewMode(view, container, toggleElement);
             renderFunction();
         }
@@ -1077,23 +1224,12 @@ async function initializeApp(): Promise<void> {
         if (localStorage.getItem('seriesdb.watchlist')) {
             await S.migrateFromLocalStorage();
         }
-        const settings = await db.kvStore.toArray();
-        const settingsMap = new Map(settings.map((i: KVStoreItem) => [i.key, i.value]));
-        const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
-        excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
-            ? true
-            : topRatedFilterSetting === true || topRatedFilterSetting === 'true';
-        updateTopRatedFilterToggleButton();
-        await S.loadStateFromDB();
-        UI.applyViewMode(settingsMap.get(C.WATCHLIST_VIEW_MODE_KEY) ?? 'list', DOM.watchlistContainer, DOM.watchlistViewToggle);
-        UI.applyViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY) ?? 'list', DOM.unseenContainer, DOM.unseenViewToggle);
-        UI.applyViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY) ?? 'list', DOM.archiveContainer, DOM.archiveViewToggle);
-        UI.applyViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY) ?? 'list', DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+        const settingsMap = await S.loadStateFromDB();
+        applySettingsMapToUi(settingsMap);
         UI.renderWatchlist();
         UI.renderArchive();
         UI.renderAllSeries();
         UI.renderUnseen();
-        UI.applyTheme(settingsMap.get(C.THEME_STORAGE_KEY) || 'dark');
         setupPwaUpdateNotifications();
         await updateNextAired().catch(err => {
             recordSectionFailure('initialize', '/initialize/update-next-aired', err, { phase: 'initialize' });
@@ -1915,6 +2051,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
         const newTheme = currentTheme === 'light' ? 'dark' : 'light';
         await db.kvStore.put({ key: C.THEME_STORAGE_KEY, value: newTheme });
+        await syncUserSettingsToRemoteIfNeeded();
         UI.applyTheme(newTheme);
     });
     DOM.settingsBtn?.addEventListener('click', (e) => {
@@ -2002,6 +2139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             key: C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY,
             value: excludeAsianAnimationFromTopRated,
         });
+        await syncUserSettingsToRemoteIfNeeded();
         updateTopRatedFilterToggleButton();
         UI.showNotification(
             excludeAsianAnimationFromTopRated
