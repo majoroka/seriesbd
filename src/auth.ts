@@ -38,16 +38,18 @@ export async function signInWithPassword(email: string, password: string): Promi
 
 export async function signUpWithPassword(input: SignUpInput): Promise<AuthResponse> {
   const client = getSupabaseClient();
+  const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
   const payload = {
     email: input.email,
     password: input.password,
-    options: input.displayName?.trim()
-      ? {
-          data: {
+    options: {
+      emailRedirectTo,
+      data: input.displayName?.trim()
+        ? {
             full_name: input.displayName.trim(),
-          },
-        }
-      : undefined,
+          }
+        : undefined,
+    },
   };
   const { data, error } = await client.auth.signUp(payload);
   if (error) throw error;
