@@ -7,6 +7,61 @@ export type SignUpInput = {
   displayName?: string;
 };
 
+export type DisplayNameAvailability = {
+  available: boolean;
+  normalizedName?: string;
+};
+
+function normalizeDisplayName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+export async function checkDisplayNameAvailability(displayName: string): Promise<DisplayNameAvailability> {
+  const normalized = normalizeDisplayName(displayName);
+  if (!normalized) return { available: false, normalizedName: normalized };
+
+  const response = await fetch(`/api/auth/display-name-available?name=${encodeURIComponent(normalized)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof payload === 'object' &&
+      payload !== null &&
+      'error' in payload &&
+      typeof (payload as { error?: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : `HTTP error! status: ${response.status}`;
+    throw new Error(message);
+  }
+
+  const available =
+    typeof payload === 'object' &&
+    payload !== null &&
+    'available' in payload &&
+    (payload as { available?: unknown }).available === true;
+
+  const normalizedName =
+    typeof payload === 'object' &&
+    payload !== null &&
+    'normalizedName' in payload &&
+    typeof (payload as { normalizedName?: unknown }).normalizedName === 'string'
+      ? (payload as { normalizedName: string }).normalizedName
+      : normalized;
+
+  return { available, normalizedName };
+}
+
 export async function getCurrentSession(): Promise<Session | null> {
   if (!isSupabaseConfigured()) return null;
 

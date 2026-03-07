@@ -11,7 +11,14 @@ import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
-import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
+import {
+    checkDisplayNameAvailability,
+    getCurrentSession,
+    signInWithPassword,
+    signOutCurrentUser,
+    signUpWithPassword,
+    subscribeToAuthState,
+} from './auth';
 import {
     LibrarySyncOutcome,
     markLocalLibraryMutation,
@@ -363,6 +370,18 @@ function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'er
     if (mode === 'error') DOM.authStatusLabel.classList.add('error');
 }
 
+function clearAuthInlineFeedback() {
+    DOM.authInlineFeedback.hidden = true;
+    DOM.authInlineFeedback.textContent = '';
+    DOM.authInlineFeedback.classList.remove('info');
+}
+
+function setAuthInlineFeedback(message: string, mode: 'error' | 'info' = 'error') {
+    DOM.authInlineFeedback.textContent = message;
+    DOM.authInlineFeedback.hidden = false;
+    DOM.authInlineFeedback.classList.toggle('info', mode === 'info');
+}
+
 function updateAuthActionButtons(user: User | null) {
     const hasSession = Boolean(user);
     DOM.authLoginBtn.hidden = hasSession;
@@ -397,11 +416,13 @@ function setAuthModalMode(mode: 'login' | 'signup') {
     DOM.authToggleModeBtn.textContent = isSignup
         ? 'Já tens conta? Entrar'
         : 'Ainda não tens conta? Registar';
+    clearAuthInlineFeedback();
 }
 
 function resetAuthForm() {
     DOM.authForm.reset();
     DOM.authDisplayNameInput.value = '';
+    clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
 
@@ -413,6 +434,7 @@ function openAuthModal(mode: 'login' | 'signup') {
 
 function closeAuthModal() {
     UI.closeAuthModal();
+    clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
 
@@ -2225,21 +2247,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = DOM.authEmailInput.value.trim();
         const password = DOM.authPasswordInput.value;
         const displayName = DOM.authDisplayNameInput.value.trim();
+        clearAuthInlineFeedback();
 
         if (!email || !password) {
-            UI.showNotification('Preencha email e password.');
+            setAuthInlineFeedback('Preencha email e password.');
+            setAuthFormLoadingState(false);
+            return;
+        }
+
+        if (authFormMode === 'signup' && !displayName) {
+            setAuthInlineFeedback('Defina um nome a apresentar.');
+            setAuthFormLoadingState(false);
+            return;
+        }
+
+        if (authFormMode === 'signup' && displayName.length < 3) {
+            setAuthInlineFeedback('O nome a apresentar deve ter pelo menos 3 caracteres.');
+            setAuthFormLoadingState(false);
             return;
         }
 
         if (authFormMode === 'signup' && password.length < 8) {
-            UI.showNotification('A password deve ter pelo menos 8 caracteres.');
+            setAuthInlineFeedback('A password deve ter pelo menos 8 caracteres.');
+            setAuthFormLoadingState(false);
             return;
         }
 
         setAuthFormLoadingState(true);
         try {
             if (authFormMode === 'signup') {
-                const response = await signUpWithPassword({ email, password, displayName });
+                const displayNameCheck = await checkDisplayNameAvailability(displayName);
+                if (!displayNameCheck.available) {
+                    setAuthInlineFeedback('Este nome a apresentar já existe. Escolha outro nome.');
+                    setAuthFormLoadingState(false);
+                    return;
+                }
+                const normalizedDisplayName = displayNameCheck.normalizedName?.trim() || displayName;
+                DOM.authDisplayNameInput.value = normalizedDisplayName;
+                const response = await signUpWithPassword({ email, password, displayName: normalizedDisplayName });
                 const identityCount = Array.isArray((response.data.user as any)?.identities)
                     ? (response.data.user as any).identities.length
                     : null;
@@ -2248,7 +2293,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     setAuthModalMode('login');
                     DOM.authEmailInput.value = email;
                     DOM.authPasswordInput.value = '';
-                    UI.showNotification('Este email já pode estar registado. Tente entrar com a sua password.');
+                    setAuthInlineFeedback('Este email já pode estar registado. Tente entrar com a sua password.');
                     setAuthFormLoadingState(false);
                     return;
                 }
@@ -2266,7 +2311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             const message = getErrorMessage(error);
             console.error('[auth] Erro no submit de autenticação.', error);
-            UI.showNotification(`Falha na autenticação: ${message}`);
+            setAuthInlineFeedback(`Falha na autenticação: ${message}`);
             setAuthFormLoadingState(false);
         }
     });

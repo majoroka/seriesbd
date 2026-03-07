@@ -1177,6 +1177,27 @@ details[open] > .season-summary::before {
     margin-bottom: 1rem;
 }
 
+.auth-inline-feedback {
+    margin-bottom: 0.9rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 77, 77, 0.35);
+    background-color: rgba(255, 77, 77, 0.12);
+    color: var(--danger-color);
+    font-size: 0.92rem;
+    line-height: 1.4;
+    padding: 0.55rem 0.7rem;
+}
+
+.auth-inline-feedback.info {
+    background-color: rgba(71, 171, 210, 0.12);
+    border-color: rgba(71, 171, 210, 0.35);
+    color: var(--primary-accent);
+}
+
+.auth-inline-feedback[hidden] {
+    display: none;
+}
+
 .auth-form {
     display: flex;
     flex-direction: column;
