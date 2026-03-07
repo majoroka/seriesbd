@@ -22,6 +22,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "chart.js": "^4.4.2",
     "dexie": "^4.0.4"
   }

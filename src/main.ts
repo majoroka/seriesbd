@@ -7,7 +7,10 @@ import * as S from './state';
 import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
+import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
+import { isSupabaseConfigured } from './supabase';
+import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
@@ -35,6 +38,8 @@ type DetailReturnContext = {
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
+let authFormMode: 'login' | 'signup' = 'login';
+let authFormBusy = false;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -154,6 +159,116 @@ async function runObservedSection<T>(
         recordSectionPerformance(section, durationMs, success);
         persistObservabilitySnapshot();
     }
+}
+
+function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'error' = 'default') {
+    if (!DOM.authStatusLabel) return;
+    DOM.authStatusLabel.textContent = message;
+    DOM.authStatusLabel.classList.remove('connected', 'error');
+    if (mode === 'connected') DOM.authStatusLabel.classList.add('connected');
+    if (mode === 'error') DOM.authStatusLabel.classList.add('error');
+}
+
+function updateAuthActionButtons(user: User | null) {
+    const hasSession = Boolean(user);
+    DOM.authLoginBtn.hidden = hasSession;
+    DOM.authSignupBtn.hidden = hasSession;
+    DOM.authLogoutBtn.hidden = !hasSession;
+}
+
+function setAuthFormLoadingState(isBusy: boolean) {
+    authFormBusy = isBusy;
+    DOM.authSubmitBtn.disabled = isBusy;
+    DOM.authSubmitBtn.textContent = isBusy
+        ? 'A processar...'
+        : (authFormMode === 'login' ? 'Entrar' : 'Criar conta');
+    DOM.authEmailInput.disabled = isBusy;
+    DOM.authPasswordInput.disabled = isBusy;
+    DOM.authDisplayNameInput.disabled = isBusy;
+    DOM.authToggleModeBtn.disabled = isBusy;
+}
+
+function setAuthModalMode(mode: 'login' | 'signup') {
+    authFormMode = mode;
+    const isSignup = mode === 'signup';
+
+    DOM.authModalTitle.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    DOM.authModalDescription.textContent = isSignup
+        ? 'Crie a sua conta para sincronização futura de dados.'
+        : 'Use email e password para iniciar sessão.';
+    DOM.authDisplayNameGroup.hidden = !isSignup;
+    DOM.authDisplayNameInput.required = isSignup;
+    DOM.authPasswordInput.autocomplete = isSignup ? 'new-password' : 'current-password';
+    DOM.authSubmitBtn.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    DOM.authToggleModeBtn.textContent = isSignup
+        ? 'Já tens conta? Entrar'
+        : 'Ainda não tens conta? Registar';
+}
+
+function resetAuthForm() {
+    DOM.authForm.reset();
+    DOM.authDisplayNameInput.value = '';
+    setAuthFormLoadingState(false);
+}
+
+function openAuthModal(mode: 'login' | 'signup') {
+    setAuthModalMode(mode);
+    resetAuthForm();
+    UI.openAuthModal();
+}
+
+function closeAuthModal() {
+    UI.closeAuthModal();
+    setAuthFormLoadingState(false);
+}
+
+function setAuthenticatedUi(user: User | null) {
+    updateAuthActionButtons(user);
+    if (!isSupabaseConfigured()) {
+        setAuthStatusLabel('Modo local (Supabase não configurado)', 'default');
+        return;
+    }
+    if (user?.email) {
+        setAuthStatusLabel(`Sessão ativa: ${user.email}`, 'connected');
+        return;
+    }
+    setAuthStatusLabel('Sem sessão iniciada', 'default');
+}
+
+function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
+    setAuthenticatedUi(user);
+    if (event === 'SIGNED_IN' && user?.email) {
+        UI.showNotification(`Sessão iniciada: ${user.email}`);
+    } else if (event === 'SIGNED_OUT') {
+        UI.showNotification('Sessão terminada.');
+    }
+}
+
+async function initializeAuthState() {
+    if (!isSupabaseConfigured()) {
+        setAuthenticatedUi(null);
+        DOM.authLoginBtn.disabled = true;
+        DOM.authSignupBtn.disabled = true;
+        DOM.authLogoutBtn.disabled = true;
+        return;
+    }
+
+    DOM.authLoginBtn.disabled = false;
+    DOM.authSignupBtn.disabled = false;
+    DOM.authLogoutBtn.disabled = false;
+    setAuthStatusLabel('A validar sessão...', 'default');
+
+    try {
+        const session = await getCurrentSession();
+        setAuthenticatedUi(session?.user ?? null);
+    } catch (error) {
+        console.error('[auth] Falha ao validar sessão inicial.', error);
+        setAuthStatusLabel('Erro ao validar sessão', 'error');
+    }
+
+    subscribeToAuthState((event, session) => {
+        handleAuthStateChange(event, session?.user ?? null);
+    });
 }
 
 async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
@@ -1813,6 +1928,74 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.exportDataBtn?.addEventListener('click', exportData);
     DOM.importDataBtn?.addEventListener('click', importData);
+    DOM.authLoginBtn?.addEventListener('click', () => {
+        DOM.settingsMenu.classList.remove('visible');
+        openAuthModal('login');
+    });
+    DOM.authSignupBtn?.addEventListener('click', () => {
+        DOM.settingsMenu.classList.remove('visible');
+        openAuthModal('signup');
+    });
+    DOM.authLogoutBtn?.addEventListener('click', async () => {
+        DOM.settingsMenu.classList.remove('visible');
+        if (!isSupabaseConfigured()) return;
+        try {
+            await signOutCurrentUser();
+        } catch (error) {
+            const message = getErrorMessage(error);
+            console.error('[auth] Erro ao terminar sessão.', error);
+            UI.showNotification(`Não foi possível terminar sessão: ${message}`);
+        }
+    });
+    DOM.authForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (authFormBusy || !isSupabaseConfigured()) return;
+
+        const email = DOM.authEmailInput.value.trim();
+        const password = DOM.authPasswordInput.value;
+        const displayName = DOM.authDisplayNameInput.value.trim();
+
+        if (!email || !password) {
+            UI.showNotification('Preencha email e password.');
+            return;
+        }
+
+        if (authFormMode === 'signup' && password.length < 8) {
+            UI.showNotification('A password deve ter pelo menos 8 caracteres.');
+            return;
+        }
+
+        setAuthFormLoadingState(true);
+        try {
+            if (authFormMode === 'signup') {
+                const response = await signUpWithPassword({ email, password, displayName });
+                const requiresConfirmation = !response.data.session;
+                closeAuthModal();
+                if (requiresConfirmation) {
+                    UI.showNotification('Conta criada. Verifique o email para confirmar o registo.');
+                } else {
+                    UI.showNotification('Conta criada e sessão iniciada.');
+                }
+            } else {
+                await signInWithPassword(email, password);
+                closeAuthModal();
+            }
+        } catch (error) {
+            const message = getErrorMessage(error);
+            console.error('[auth] Erro no submit de autenticação.', error);
+            UI.showNotification(`Falha na autenticação: ${message}`);
+            setAuthFormLoadingState(false);
+        }
+    });
+    DOM.authToggleModeBtn?.addEventListener('click', () => {
+        if (authFormBusy) return;
+        setAuthModalMode(authFormMode === 'login' ? 'signup' : 'login');
+        DOM.authDisplayNameInput.value = '';
+    });
+    DOM.authModalCloseBtn?.addEventListener('click', closeAuthModal);
+    DOM.authModal?.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === DOM.authModal) closeAuthModal();
+    });
     DOM.toggleAsianAnimationFilterBtn?.addEventListener('click', async () => {
         excludeAsianAnimationFromTopRated = !excludeAsianAnimationFromTopRated;
         await db.kvStore.put({
@@ -1876,5 +2059,6 @@ document.addEventListener('DOMContentLoaded', () => {
         displaySeriesDetails(e.detail.seriesId);
     }) as EventListener);
 
+    initializeAuthState();
     initializeApp();
 });

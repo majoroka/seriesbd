@@ -11,7 +11,7 @@
     <!--
         A CSP é definida por ambiente:
         - desenvolvimento: via `vite.config.ts` (permite HMR com ws/wss e regras mais permissivas)
-        - produção: via `netlify.toml` (mais restritiva)
+        - produção: via `public/_headers` no deploy Cloudflare (mais restritiva)
     -->
     
     <!-- Google Fonts -->
@@ -57,6 +57,10 @@
                                 <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Séries</button></li>
                                 <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Séries</button></li>
                                 <li class="separator"></li>
+                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
+                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
+                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
+                                <li class="separator"></li>
                                 <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
                                 <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
                             </ul>
@@ -64,6 +68,7 @@
                     </div>
                 </div>
                 <div class="sidebar-attribution">
+                    <p id="auth-status-label" class="auth-status-label">Modo local (sem login)</p>
                     <p class="privacy-note">Os seus dados são guardados localmente no seu dispositivo.</p>
                     <p>Dados fornecidos por<br>
                         <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDb</a> &
@@ -361,6 +366,33 @@
                 <button id="confirm-btn" class="search-bar-button">Confirmar</button>
                 <button id="cancel-btn" class="search-bar-button secondary">Cancelar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ========== AUTH MODAL ========== -->
+    <div id="auth-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" aria-hidden="true">
+        <div class="modal-content auth-modal-content" tabindex="-1">
+            <button class="modal-close-btn" id="auth-modal-close-btn">&times;</button>
+            <h2 id="auth-modal-title">Entrar</h2>
+            <p id="auth-modal-description" class="auth-modal-description">Use email e password para autenticação.</p>
+            <form id="auth-form" class="auth-form">
+                <div id="auth-display-name-group" class="auth-field" hidden>
+                    <label for="auth-display-name">Nome a apresentar</label>
+                    <input id="auth-display-name" type="text" maxlength="80" autocomplete="name">
+                </div>
+                <div class="auth-field">
+                    <label for="auth-email">Email</label>
+                    <input id="auth-email" type="email" required autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label for="auth-password">Password</label>
+                    <input id="auth-password" type="password" required minlength="8" autocomplete="current-password">
+                </div>
+                <button id="auth-submit-btn" type="submit" class="search-bar-button">Entrar</button>
+            </form>
+            <button id="auth-toggle-mode-btn" type="button" class="auth-toggle-mode">
+                Ainda não tens conta? Registar
+            </button>
         </div>
     </div>
 
