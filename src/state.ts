@@ -2,6 +2,7 @@ import { db } from './db';
 import * as C from './constants';
 import { showNotification } from './ui';
 import { Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
+import { normalizeSeries, normalizeSeriesCollection } from './media';
 
 // State variables
 export let myWatchlist: Series[] = [];
@@ -29,11 +30,11 @@ function emitStateMutation(reason: string) {
 }
 
 // State update functions
-export function setMyWatchlist(data: Series[]) { myWatchlist = data; }
-export function setMyArchive(data: Series[]) { myArchive = data; }
+export function setMyWatchlist(data: Series[]) { myWatchlist = normalizeSeriesCollection(data); }
+export function setMyArchive(data: Series[]) { myArchive = normalizeSeriesCollection(data); }
 export function setWatchedState(data: WatchedState) { watchedState = data; }
 export function setUserData(data: UserData) { userData = data; }
-export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data; }
+export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data.map(normalizeSeries); }
 export function setCharts(data: { [key: string]: any }) { charts = data; }
 export function getSeries(seriesId: number): Series | undefined { return [...myWatchlist, ...myArchive].find(s => s.id === seriesId); }
 export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
@@ -53,8 +54,9 @@ export function resetSearchAbortController() {
 }
 
 export async function addSeries(series: Series) {
-    myWatchlist.push(series);
-    await db.watchlist.put(series);
+    const normalizedSeries = normalizeSeries(series);
+    myWatchlist.push(normalizedSeries);
+    await db.watchlist.put(normalizedSeries);
     emitStateMutation('addSeries');
 }
 
@@ -73,35 +75,38 @@ export async function removeSeries(seriesId: number) {
 }
 
 export async function archiveSeries(series: Series) {
-    if (!myArchive.some(s => s.id === series.id)) {
-        myArchive.push(series);
+    const normalizedSeries = normalizeSeries(series);
+    if (!myArchive.some(s => s.id === normalizedSeries.id)) {
+        myArchive.push(normalizedSeries);
     }
-    myWatchlist = myWatchlist.filter(s => s.id !== series.id);
+    myWatchlist = myWatchlist.filter(s => s.id !== normalizedSeries.id);
     await db.transaction('rw', db.watchlist, db.archive, async () => {
-        await db.archive.put(series);
-        await db.watchlist.delete(series.id);
+        await db.archive.put(normalizedSeries);
+        await db.watchlist.delete(normalizedSeries.id);
     });
     emitStateMutation('archiveSeries');
 }
 
 export async function unarchiveSeries(series: Series) {
-    if (!myWatchlist.some(s => s.id === series.id)) {
-        myWatchlist.push(series);
+    const normalizedSeries = normalizeSeries(series);
+    if (!myWatchlist.some(s => s.id === normalizedSeries.id)) {
+        myWatchlist.push(normalizedSeries);
     }
-    myArchive = myArchive.filter(s => s.id !== series.id);
+    myArchive = myArchive.filter(s => s.id !== normalizedSeries.id);
     await db.transaction('rw', db.watchlist, db.archive, async () => {
-        await db.watchlist.put(series);
-        await db.archive.delete(series.id);
+        await db.watchlist.put(normalizedSeries);
+        await db.archive.delete(normalizedSeries.id);
     });
     emitStateMutation('unarchiveSeries');
 }
 
 export async function updateSeries(series: Series) {
-    const inWatchlist = myWatchlist.some(s => s.id === series.id);
+    const normalizedSeries = normalizeSeries(series);
+    const inWatchlist = myWatchlist.some(s => s.id === normalizedSeries.id);
     if (inWatchlist) {
-        await db.watchlist.put(series);
+        await db.watchlist.put(normalizedSeries);
     } else {
-        await db.archive.put(series);
+        await db.archive.put(normalizedSeries);
     }
     emitStateMutation('updateSeries');
 }
@@ -185,8 +190,8 @@ export async function migrateFromLocalStorage() {
     console.log("Migrating data from localStorage to IndexedDB...");
     showNotification("A atualizar a base de dados local... Por favor, aguarde.");
     
-    const oldWatchlist: Series[] = JSON.parse(localStorage.getItem('seriesdb.watchlist') || '[]');
-    const oldArchive: Series[] = JSON.parse(localStorage.getItem('seriesdb.archive') || '[]');
+    const oldWatchlist = normalizeSeriesCollection(JSON.parse(localStorage.getItem('seriesdb.watchlist') || '[]'));
+    const oldArchive = normalizeSeriesCollection(JSON.parse(localStorage.getItem('seriesdb.archive') || '[]'));
     const oldWatchedState: WatchedState = JSON.parse(localStorage.getItem('seriesdb.watchedState') || '{}');
     const oldUserData: UserData = JSON.parse(localStorage.getItem('seriesdb.userData') || '{}');
 

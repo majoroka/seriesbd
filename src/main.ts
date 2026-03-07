@@ -10,6 +10,7 @@ import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
+import { normalizeSeriesCollection } from './media';
 import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
 import {
     LibrarySyncOutcome,
@@ -494,6 +495,7 @@ async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
         
         const seriesToAdd: Series = {
             ...series, // Copia as propriedades base (id, name, overview, etc.)
+            media_type: 'series',
             total_episodes: totalEpisodes,
             episode_run_time: details.episode_run_time?.[0] || 30,
             genres: details.genres,
@@ -1183,13 +1185,15 @@ async function importData(): Promise<void> {
             try {
                 const data = JSON.parse(event.target.result as string);
                 if (!data.watchlist || !data.archive || !data.watchedState) throw new Error('Ficheiro de backup inválido ou corrompido.');
+                const normalizedWatchlist = normalizeSeriesCollection(data.watchlist);
+                const normalizedArchive = normalizeSeriesCollection(data.archive);
                 await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData], async () => {
                     await db.watchlist.clear();
                     await db.archive.clear();
                     await db.watchedState.clear();
                     await db.userData.clear();
-                    await db.watchlist.bulkPut(data.watchlist as Series[]);
-                    await db.archive.bulkPut(data.archive);
+                    await db.watchlist.bulkPut(normalizedWatchlist);
+                    await db.archive.bulkPut(normalizedArchive);
                     const watchedItems: WatchedStateItem[] = [];
                     for (const seriesId in data.watchedState) {
                         if (data.watchedState.hasOwnProperty(seriesId) && Array.isArray(data.watchedState[seriesId])) {
