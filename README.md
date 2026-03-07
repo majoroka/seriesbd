@@ -46,6 +46,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
    TMDB_API_KEY=...
    TRAKT_API_KEY=...
    TVMAZE_API_KEY=... # opcional
+   GOOGLE_BOOKS_API_KEY=... # opcional (books)
    HEARTBEAT_TOKEN=... # opcional, recomendado para proteger /api/heartbeat
    SUPABASE_URL=... # server-side (Pages Function heartbeat)
    SUPABASE_SERVICE_ROLE_KEY=... # server-side only
@@ -95,7 +96,7 @@ Aplicação web para organizar e acompanhar séries de televisão usando dados d
 │  ├─ types.ts           # Tipagens TMDb/Trakt/TVMaze/local
 │  └─ style.css          # Tema e responsividade
 ├─ functions/
-│  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze, /api/heartbeat)
+│  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze, /api/books, /api/heartbeat)
 ├─ netlify/
 │  └─ functions/         # Proxies legados (compatibilidade local)
 ├─ workers/
@@ -136,7 +137,7 @@ npm run test
 - Cloudflare Pages é o alvo principal.
 - `main` publica em `Production` (`seriesbd.pages.dev`).
 - `staging` publica em `Preview` (`staging.seriesbd.pages.dev` e URLs por hash).
-- Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY`, `TVMAZE_API_KEY` e `HEARTBEAT_TOKEN` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
+- Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY`, `TVMAZE_API_KEY`, `GOOGLE_BOOKS_API_KEY` e `HEARTBEAT_TOKEN` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
 - Para o cron de heartbeat:
   - deploy do worker com `npx wrangler deploy --config workers/heartbeat-cron/wrangler.toml`
   - configurar `HEARTBEAT_URL` e `HEARTBEAT_TOKEN` no worker (`wrangler secret put ...`)

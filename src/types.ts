@@ -37,6 +37,8 @@ export type MediaType = 'series' | 'movie' | 'book';
 export interface Series {
     id: number;
     media_type: MediaType;
+    source_provider?: 'tmdb_tv' | 'tmdb_movie' | 'google_books' | 'open_library';
+    source_id?: string;
     name: string;
     original_name?: string;
     overview: string;
