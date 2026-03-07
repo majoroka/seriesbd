@@ -113,7 +113,7 @@ describe('state transitions', () => {
     await S.unmarkEpisodesAsWatched(42, [1002]);
 
     expect(S.watchedState[42]).toEqual([1001]);
-    expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([['series:42', 1002]]);
+    expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([[42, 1002]]);
   });
 
   it('does not call bulkDelete when series has no watched episodes', async () => {

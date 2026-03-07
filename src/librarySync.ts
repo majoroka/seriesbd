@@ -156,7 +156,7 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
         media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
         media_type: parsedMedia.media_type,
         media_id: parsedMedia.media_id,
-        seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+        seriesId: parsedMedia.media_id,
         episodeId: numericEpisodeId,
       });
     });
@@ -170,7 +170,7 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
       media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
       media_type: parsedMedia.media_type,
       media_id: parsedMedia.media_id,
-      seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+      seriesId: parsedMedia.media_id,
       rating: data?.rating || 0,
       notes: data?.notes || '',
     });

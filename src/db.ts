@@ -3,10 +3,10 @@ import { Series, WatchedStateItem, UserDataItem, KVStoreItem, SeasonCacheItem } 
 import { createMediaKey, parseMediaKey } from './media';
 
 export class MySubClassedDexie extends Dexie {
-  watchlist!: Table<Series, [string, number]>;
-  archive!: Table<Series, [string, number]>;
-  watchedState!: Table<WatchedStateItem, [string, number]>;
-  userData!: Table<UserDataItem, string>;
+  watchlist!: Table<Series>;
+  archive!: Table<Series>;
+  watchedState!: Table<WatchedStateItem, [number, number]>;
+  userData!: Table<UserDataItem>;
   kvStore!: Table<KVStoreItem>;
   seasonCache!: Table<SeasonCacheItem, [number, number]>;
 
@@ -21,10 +21,10 @@ export class MySubClassedDexie extends Dexie {
       seasonCache: '[seriesId+seasonNumber]',
     });
     this.version(4).stores({
-      watchlist: '[media_type+id], id, media_type',
-      archive: '[media_type+id], id, media_type',
-      watchedState: '[media_key+episodeId], media_key, seriesId, media_type, media_id, episodeId',
-      userData: 'media_key, seriesId, media_type, media_id',
+      watchlist: 'id, media_type, [media_type+id]',
+      archive: 'id, media_type, [media_type+id]',
+      watchedState: '[seriesId+episodeId], media_key, media_type, media_id, episodeId',
+      userData: 'seriesId, media_key, media_type, media_id',
       kvStore: 'key',
       seasonCache: '[seriesId+seasonNumber]',
     }).upgrade(async (tx) => {
@@ -46,11 +46,7 @@ export class MySubClassedDexie extends Dexie {
         record.media_type = parsed.media_type;
         record.media_id = parsed.media_id;
         record.media_key = createMediaKey(parsed.media_type, parsed.media_id);
-        if (parsed.media_type === 'series') {
-          record.seriesId = parsed.media_id;
-        } else {
-          delete record.seriesId;
-        }
+        record.seriesId = parsed.media_id;
       });
 
       await tx.table('userData').toCollection().modify((record: any) => {
@@ -59,11 +55,7 @@ export class MySubClassedDexie extends Dexie {
         record.media_type = parsed.media_type;
         record.media_id = parsed.media_id;
         record.media_key = createMediaKey(parsed.media_type, parsed.media_id);
-        if (parsed.media_type === 'series') {
-          record.seriesId = parsed.media_id;
-        } else {
-          delete record.seriesId;
-        }
+        record.seriesId = parsed.media_id;
       });
     });
   }

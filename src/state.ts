@@ -74,7 +74,7 @@ export async function removeSeries(seriesId: number) {
         await db.watchedState.where({ seriesId: seriesId }).delete();
         await db.userData.where({ seriesId: seriesId }).delete();
         await db.watchedState.where({ media_key: mediaKey }).delete();
-        await db.userData.delete(mediaKey);
+        await db.userData.where({ media_key: mediaKey }).delete();
     });
     myWatchlist = myWatchlist.filter(series => series.id !== seriesId);
     myArchive = myArchive.filter(series => series.id !== seriesId);
@@ -144,10 +144,9 @@ export async function markEpisodesAsWatched(seriesId: number, episodeIds: number
 export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: number[]) {
     const stateKey = toSeriesStateKey(seriesId);
     if (!watchedState[stateKey]) return;
-    const mediaKey = getSeriesMediaKey(seriesId);
     const episodeIdsSet = new Set(episodeIds);
     watchedState[stateKey] = watchedState[stateKey].filter(id => !episodeIdsSet.has(id));
-    const keysToRemove = episodeIds.map(epId => [mediaKey, epId] as [string, number]);
+    const keysToRemove = episodeIds.map(epId => [seriesId, epId] as [number, number]);
     await db.watchedState.bulkDelete(keysToRemove);
     emitStateMutation('unmarkEpisodesAsWatched');
 }
@@ -256,7 +255,7 @@ export async function migrateFromLocalStorage() {
                                 media_key: mediaKey,
                                 media_type: parsedMedia.media_type,
                                 media_id: parsedMedia.media_id,
-                                seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                seriesId: parsedMedia.media_id,
                                 episodeId: epId
                             });
                         }
@@ -276,7 +275,7 @@ export async function migrateFromLocalStorage() {
                         media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
                         media_type: parsedMedia.media_type,
                         media_id: parsedMedia.media_id,
-                        seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                        seriesId: parsedMedia.media_id,
                         rating,
                         notes
                     });

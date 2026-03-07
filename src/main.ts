@@ -1208,7 +1208,7 @@ async function importData(): Promise<void> {
                                             media_key: mediaKey,
                                             media_type: parsedMedia.media_type,
                                             media_id: parsedMedia.media_id,
-                                            seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                            seriesId: parsedMedia.media_id,
                                             episodeId: epId
                                         });
                                     }
@@ -1226,7 +1226,7 @@ async function importData(): Promise<void> {
                                 media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
                                 media_type: parsedMedia.media_type,
                                 media_id: parsedMedia.media_id,
-                                seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                seriesId: parsedMedia.media_id,
                                 rating,
                                 notes
                             });

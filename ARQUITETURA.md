@@ -56,8 +56,8 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 ### `src/db.ts`
 
 - Define o schema Dexie (`MySubClassedDexie`) e assegura versionamento (`version(4)`).
-- Garante chaves compostas (`[media_key+episodeId]`, `[seriesId+seasonNumber]`) para `watchedState` e cache de temporadas.
-- `watchlist` e `archive` usam chave composta `[media_type+id]` para evitar colisões de ID entre tipos de media.
+- Garante chaves compostas (`[seriesId+episodeId]`, `[seriesId+seasonNumber]`) para `watchedState` e cache de temporadas.
+- `watchlist` e `archive` mantêm PK `id` por compatibilidade de migração e adicionam índice composto `[media_type+id]` para preparação multi-media.
 
 ### `src/utils.ts`
 
