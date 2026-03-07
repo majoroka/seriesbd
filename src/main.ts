@@ -377,12 +377,18 @@ function setAuthenticatedUi(user: User | null) {
 }
 
 function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
+    const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
     if (event === 'SIGNED_IN' && user?.email) {
-        UI.showNotification(`Sessão iniciada: ${user.email}`);
-        void syncUserSettingsAfterLogin(user.id);
+        const isSameSessionRefresh = previousUserId === user.id;
+        if (!isSameSessionRefresh) {
+            UI.showNotification(`Sessão iniciada: ${user.email}`);
+            void syncUserSettingsAfterLogin(user.id);
+        }
     } else if (event === 'SIGNED_OUT') {
-        UI.showNotification('Sessão terminada.');
+        if (previousUserId) {
+            UI.showNotification('Sessão terminada.');
+        }
     }
 }
 
