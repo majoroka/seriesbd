@@ -10,7 +10,7 @@ import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
-import { normalizeSeriesCollection } from './media';
+import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
 import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
 import {
     LibrarySyncOutcome,
@@ -1195,25 +1195,41 @@ async function importData(): Promise<void> {
                     await db.watchlist.bulkPut(normalizedWatchlist);
                     await db.archive.bulkPut(normalizedArchive);
                     const watchedItems: WatchedStateItem[] = [];
-                    for (const seriesId in data.watchedState) {
-                        if (data.watchedState.hasOwnProperty(seriesId) && Array.isArray(data.watchedState[seriesId])) {
-                            const sId = parseInt(seriesId, 10);
-                            if (isNaN(sId)) continue;
-                            data.watchedState[seriesId].forEach((episodeId: any) => {
+                    for (const stateKey in data.watchedState) {
+                        if (data.watchedState.hasOwnProperty(stateKey) && Array.isArray(data.watchedState[stateKey])) {
+                            const parsedMedia = parseMediaKey(stateKey);
+                            if (!parsedMedia) continue;
+                            const mediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                            data.watchedState[stateKey].forEach((episodeId: any) => {
                                 if (episodeId !== null && episodeId !== undefined) {
                                     const epId = parseInt(episodeId, 10);
-                                    if (!isNaN(epId)) watchedItems.push({ seriesId: sId, episodeId: epId });
+                                    if (!isNaN(epId)) {
+                                        watchedItems.push({
+                                            media_key: mediaKey,
+                                            media_type: parsedMedia.media_type,
+                                            media_id: parsedMedia.media_id,
+                                            seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                            episodeId: epId
+                                        });
+                                    }
                                 }
                             });
                         }
                     }
                     if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems);
                     const userDataItems: UserDataItem[] = [];
-                    for (const seriesId in (data.userData || {})) {
-                        const sId = parseInt(seriesId, 10);
-                        if (!isNaN(sId)) {
-                            const { rating, notes } = data.userData[seriesId];
-                            userDataItems.push({ seriesId: sId, rating, notes });
+                    for (const stateKey in (data.userData || {})) {
+                        const parsedMedia = parseMediaKey(stateKey);
+                        if (parsedMedia) {
+                            const { rating, notes } = data.userData[stateKey];
+                            userDataItems.push({
+                                media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
+                                media_type: parsedMedia.media_type,
+                                media_id: parsedMedia.media_id,
+                                seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                rating,
+                                notes
+                            });
                         }
                     }
                     if (userDataItems.length > 0) await db.userData.bulkPut(userDataItems);

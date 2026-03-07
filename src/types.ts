@@ -150,18 +150,32 @@ export interface AggregatedSeriesMetadata {
 }
 
 export interface WatchedState {
-    [seriesId: string]: number[];
+    [mediaKey: string]: number[];
 }
 
 export interface UserData {
-    [seriesId: string]: {
+    [mediaKey: string]: {
         rating?: number;
         notes?: string;
     };
 }
 
-export interface WatchedStateItem { seriesId: number; episodeId: number; }
-export interface UserDataItem { seriesId: number; rating?: number; notes?: string; }
+export interface WatchedStateItem {
+    media_key: string;
+    media_type: MediaType;
+    media_id: number;
+    seriesId?: number;
+    episodeId: number;
+}
+
+export interface UserDataItem {
+    media_key: string;
+    media_type: MediaType;
+    media_id: number;
+    seriesId?: number;
+    rating?: number;
+    notes?: string;
+}
 export interface KVStoreItem { key: string; value: any; }
 export interface SeasonCacheItem { seriesId: number; seasonNumber: number; data: TMDbSeason; cachedAt: number; }
 

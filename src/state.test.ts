@@ -12,6 +12,7 @@ const mocked = vi.hoisted(() => {
       clear: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      where: vi.fn(() => ({ equals: vi.fn(() => ({ delete: vi.fn() })) })),
     },
     archive: {
       toArray: vi.fn(),
@@ -19,6 +20,7 @@ const mocked = vi.hoisted(() => {
       clear: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      where: vi.fn(() => ({ equals: vi.fn(() => ({ delete: vi.fn() })) })),
     },
     watchedState: {
       toArray: vi.fn(),
@@ -33,6 +35,7 @@ const mocked = vi.hoisted(() => {
       clear: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      where: vi.fn(() => ({ delete: vi.fn() })),
     },
     kvStore: {
       toArray: vi.fn(),
@@ -102,15 +105,15 @@ describe('state transitions', () => {
 
     expect(S.watchedState[42]).toEqual([1001, 1002]);
     expect(mocked.db.watchedState.bulkPut).toHaveBeenCalledWith([
-      { seriesId: 42, episodeId: 1001 },
-      { seriesId: 42, episodeId: 1002 },
-      { seriesId: 42, episodeId: 1001 },
+      { media_key: 'series:42', media_type: 'series', media_id: 42, seriesId: 42, episodeId: 1001 },
+      { media_key: 'series:42', media_type: 'series', media_id: 42, seriesId: 42, episodeId: 1002 },
+      { media_key: 'series:42', media_type: 'series', media_id: 42, seriesId: 42, episodeId: 1001 },
     ] satisfies WatchedStateItem[]);
 
     await S.unmarkEpisodesAsWatched(42, [1002]);
 
     expect(S.watchedState[42]).toEqual([1001]);
-    expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([[42, 1002]]);
+    expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([['series:42', 1002]]);
   });
 
   it('does not call bulkDelete when series has no watched episodes', async () => {
@@ -125,13 +128,13 @@ describe('state transitions', () => {
     mocked.db.watchlist.toArray.mockResolvedValue(watchlist);
     mocked.db.archive.toArray.mockResolvedValue(archive);
     mocked.db.watchedState.toArray.mockResolvedValue([
-      { seriesId: 1, episodeId: 11 },
-      { seriesId: 1, episodeId: 12 },
-      { seriesId: 2, episodeId: 21 },
+      { media_key: 'series:1', media_type: 'series', media_id: 1, seriesId: 1, episodeId: 11 },
+      { media_key: 'series:1', media_type: 'series', media_id: 1, seriesId: 1, episodeId: 12 },
+      { media_key: 'series:2', media_type: 'series', media_id: 2, seriesId: 2, episodeId: 21 },
     ] satisfies WatchedStateItem[]);
     mocked.db.userData.toArray.mockResolvedValue([
-      { seriesId: 1, rating: 9, notes: 'Top tier' },
-      { seriesId: 2, notes: 'Paused' },
+      { media_key: 'series:1', media_type: 'series', media_id: 1, seriesId: 1, rating: 9, notes: 'Top tier' },
+      { media_key: 'series:2', media_type: 'series', media_id: 2, seriesId: 2, notes: 'Paused' },
     ] satisfies UserDataItem[]);
     mocked.db.kvStore.toArray.mockResolvedValue([
       { key: C.THEME_STORAGE_KEY, value: 'dark' },
@@ -180,11 +183,11 @@ describe('state transitions', () => {
     expect(mocked.db.watchlist.bulkPut).toHaveBeenCalledWith(watchlist);
     expect(mocked.db.archive.bulkPut).toHaveBeenCalledWith(archive);
     expect(mocked.db.watchedState.bulkPut).toHaveBeenCalledWith([
-      { seriesId: 10, episodeId: 101 },
-      { seriesId: 10, episodeId: 102 },
+      { media_key: 'series:10', media_type: 'series', media_id: 10, seriesId: 10, episodeId: 101 },
+      { media_key: 'series:10', media_type: 'series', media_id: 10, seriesId: 10, episodeId: 102 },
     ] satisfies WatchedStateItem[]);
     expect(mocked.db.userData.bulkPut).toHaveBeenCalledWith([
-      { seriesId: 10, rating: 8, notes: 'Good' },
+      { media_key: 'series:10', media_type: 'series', media_id: 10, seriesId: 10, rating: 8, notes: 'Good' },
     ] satisfies UserDataItem[]);
     expect(mocked.db.kvStore.bulkPut).toHaveBeenCalledWith(
       expect.arrayContaining([

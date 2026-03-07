@@ -2,7 +2,7 @@ import { db } from './db';
 import * as C from './constants';
 import { showNotification } from './ui';
 import { Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
-import { normalizeSeries, normalizeSeriesCollection } from './media';
+import { createMediaKey, getSeriesMediaKey, normalizeSeries, normalizeSeriesCollection, parseMediaKey } from './media';
 
 // State variables
 export let myWatchlist: Series[] = [];
@@ -36,7 +36,9 @@ export function setWatchedState(data: WatchedState) { watchedState = data; }
 export function setUserData(data: UserData) { userData = data; }
 export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data.map(normalizeSeries); }
 export function setCharts(data: { [key: string]: any }) { charts = data; }
-export function getSeries(seriesId: number): Series | undefined { return [...myWatchlist, ...myArchive].find(s => s.id === seriesId); }
+export function getSeries(seriesId: number): Series | undefined {
+    return [...myWatchlist, ...myArchive].find(s => s.media_type === 'series' && s.id === seriesId);
+}
 export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
 export function setDetailViewData(data: DetailViewData) { detailViewData = data; }
 export function getDetailViewData(): DetailViewData { return detailViewData; }
@@ -53,6 +55,10 @@ export function resetSearchAbortController() {
     searchAbortController = new AbortController();
 }
 
+function toSeriesStateKey(seriesId: number): string {
+    return String(seriesId);
+}
+
 export async function addSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
     myWatchlist.push(normalizedSeries);
@@ -61,48 +67,53 @@ export async function addSeries(series: Series) {
 }
 
 export async function removeSeries(seriesId: number) {
+    const mediaKey = getSeriesMediaKey(seriesId);
     await db.transaction('rw', db.watchlist, db.archive, db.watchedState, db.userData, async () => {
-        await db.watchlist.delete(seriesId);
-        await db.archive.delete(seriesId);
+        await db.watchlist.where('[media_type+id]').equals(['series', seriesId]).delete();
+        await db.archive.where('[media_type+id]').equals(['series', seriesId]).delete();
         await db.watchedState.where({ seriesId: seriesId }).delete();
-        await db.userData.delete(seriesId);
+        await db.userData.where({ seriesId: seriesId }).delete();
+        await db.watchedState.where({ media_key: mediaKey }).delete();
+        await db.userData.delete(mediaKey);
     });
     myWatchlist = myWatchlist.filter(series => series.id !== seriesId);
     myArchive = myArchive.filter(series => series.id !== seriesId);
-    delete watchedState[String(seriesId)];
-    delete userData[String(seriesId)];
+    delete watchedState[toSeriesStateKey(seriesId)];
+    delete userData[toSeriesStateKey(seriesId)];
+    delete watchedState[mediaKey];
+    delete userData[mediaKey];
     emitStateMutation('removeSeries');
 }
 
 export async function archiveSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
-    if (!myArchive.some(s => s.id === normalizedSeries.id)) {
+    if (!myArchive.some(s => s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id)) {
         myArchive.push(normalizedSeries);
     }
-    myWatchlist = myWatchlist.filter(s => s.id !== normalizedSeries.id);
+    myWatchlist = myWatchlist.filter(s => !(s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id));
     await db.transaction('rw', db.watchlist, db.archive, async () => {
         await db.archive.put(normalizedSeries);
-        await db.watchlist.delete(normalizedSeries.id);
+        await db.watchlist.where('[media_type+id]').equals([normalizedSeries.media_type, normalizedSeries.id]).delete();
     });
     emitStateMutation('archiveSeries');
 }
 
 export async function unarchiveSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
-    if (!myWatchlist.some(s => s.id === normalizedSeries.id)) {
+    if (!myWatchlist.some(s => s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id)) {
         myWatchlist.push(normalizedSeries);
     }
-    myArchive = myArchive.filter(s => s.id !== normalizedSeries.id);
+    myArchive = myArchive.filter(s => !(s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id));
     await db.transaction('rw', db.watchlist, db.archive, async () => {
         await db.watchlist.put(normalizedSeries);
-        await db.archive.delete(normalizedSeries.id);
+        await db.archive.where('[media_type+id]').equals([normalizedSeries.media_type, normalizedSeries.id]).delete();
     });
     emitStateMutation('unarchiveSeries');
 }
 
 export async function updateSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
-    const inWatchlist = myWatchlist.some(s => s.id === normalizedSeries.id);
+    const inWatchlist = myWatchlist.some(s => s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id);
     if (inWatchlist) {
         await db.watchlist.put(normalizedSeries);
     } else {
@@ -112,42 +123,68 @@ export async function updateSeries(series: Series) {
 }
 
 export async function markEpisodesAsWatched(seriesId: number, episodeIds: number[]) {
-    if (!watchedState[seriesId]) {
-        watchedState[seriesId] = [];
+    const stateKey = toSeriesStateKey(seriesId);
+    const mediaKey = getSeriesMediaKey(seriesId);
+    if (!watchedState[stateKey]) {
+        watchedState[stateKey] = [];
     }
-    const newWatchedEpisodes = new Set([...watchedState[seriesId], ...episodeIds]);
-    watchedState[seriesId] = Array.from(newWatchedEpisodes);
-    const itemsToPut = episodeIds.map(epId => ({ seriesId, episodeId: epId }));
+    const newWatchedEpisodes = new Set([...watchedState[stateKey], ...episodeIds]);
+    watchedState[stateKey] = Array.from(newWatchedEpisodes);
+    const itemsToPut = episodeIds.map(epId => ({
+        media_key: mediaKey,
+        media_type: 'series' as const,
+        media_id: seriesId,
+        seriesId,
+        episodeId: epId
+    }));
     await db.watchedState.bulkPut(itemsToPut);
     emitStateMutation('markEpisodesAsWatched');
 }
 
 export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: number[]) {
-    if (!watchedState[seriesId]) return;
+    const stateKey = toSeriesStateKey(seriesId);
+    if (!watchedState[stateKey]) return;
+    const mediaKey = getSeriesMediaKey(seriesId);
     const episodeIdsSet = new Set(episodeIds);
-    watchedState[String(seriesId)] = watchedState[String(seriesId)].filter(id => !episodeIdsSet.has(id));
-    const keysToRemove = episodeIds.map(epId => [seriesId, epId] as [number, number]);
+    watchedState[stateKey] = watchedState[stateKey].filter(id => !episodeIdsSet.has(id));
+    const keysToRemove = episodeIds.map(epId => [mediaKey, epId] as [string, number]);
     await db.watchedState.bulkDelete(keysToRemove);
     emitStateMutation('unmarkEpisodesAsWatched');
 }
 
 export async function updateUserRating(seriesId: number, rating: number) {
-    const notes = userData[String(seriesId)]?.notes || '';
-    if (!userData[seriesId]) {
-        userData[seriesId] = {};
+    const stateKey = toSeriesStateKey(seriesId);
+    const notes = userData[stateKey]?.notes || '';
+    if (!userData[stateKey]) {
+        userData[stateKey] = {};
     }
-    userData[seriesId].rating = rating;
-    await db.userData.put({ seriesId, rating, notes });
+    userData[stateKey].rating = rating;
+    await db.userData.put({
+        media_key: getSeriesMediaKey(seriesId),
+        media_type: 'series',
+        media_id: seriesId,
+        seriesId,
+        rating,
+        notes,
+    });
     emitStateMutation('updateUserRating');
 }
 
 export async function updateUserNotes(seriesId: number, notes: string) {
-    const rating = userData[String(seriesId)]?.rating || 0;
-    if (!userData[seriesId]) {
-        userData[seriesId] = {};
+    const stateKey = toSeriesStateKey(seriesId);
+    const rating = userData[stateKey]?.rating || 0;
+    if (!userData[stateKey]) {
+        userData[stateKey] = {};
     }
-    userData[seriesId].notes = notes;
-    await db.userData.put({ seriesId, rating, notes });
+    userData[stateKey].notes = notes;
+    await db.userData.put({
+        media_key: getSeriesMediaKey(seriesId),
+        media_type: 'series',
+        media_id: seriesId,
+        seriesId,
+        rating,
+        notes,
+    });
     emitStateMutation('updateUserNotes');
 }
 
@@ -155,10 +192,13 @@ async function loadWatchedStateFromDB(): Promise<WatchedState> {
     const records = await db.watchedState.toArray();
     const state: WatchedState = {};
     records.forEach(record => {
-        if (!state[record.seriesId]) {
-            state[record.seriesId] = [];
+        const parsed = parseMediaKey(record.media_key ?? record.seriesId ?? record.media_id);
+        if (!parsed) return;
+        const stateKey = parsed.media_type === 'series' ? String(parsed.media_id) : createMediaKey(parsed.media_type, parsed.media_id);
+        if (!state[stateKey]) {
+            state[stateKey] = [];
         }
-        state[record.seriesId].push(record.episodeId);
+        state[stateKey].push(record.episodeId);
     });
     return state;
 }
@@ -167,7 +207,10 @@ async function loadUserDataFromDB(): Promise<UserData> {
     const records = await db.userData.toArray();
     const data: UserData = {};
     records.forEach(record => {
-        data[record.seriesId] = {
+        const parsed = parseMediaKey(record.media_key ?? record.seriesId ?? record.media_id);
+        if (!parsed) return;
+        const stateKey = parsed.media_type === 'series' ? String(parsed.media_id) : createMediaKey(parsed.media_type, parsed.media_id);
+        data[stateKey] = {
             rating: record.rating || 0,
             notes: record.notes
         };
@@ -200,14 +243,23 @@ export async function migrateFromLocalStorage() {
         if (oldArchive.length > 0) await db.archive.bulkPut(oldArchive);
 
         const watchedItems: WatchedStateItem[] = [];
-        for (const seriesId in oldWatchedState) {
-            if (oldWatchedState.hasOwnProperty(seriesId) && Array.isArray(oldWatchedState[seriesId])) {
-                const sId = parseInt(seriesId, 10);
-                if (isNaN(sId)) continue;
-                oldWatchedState[seriesId].forEach((episodeId: number) => {
+        for (const stateKey in oldWatchedState) {
+            if (oldWatchedState.hasOwnProperty(stateKey) && Array.isArray(oldWatchedState[stateKey])) {
+                const parsedMedia = parseMediaKey(stateKey);
+                if (!parsedMedia) continue;
+                const mediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                oldWatchedState[stateKey].forEach((episodeId: number) => {
                     if (episodeId !== null && episodeId !== undefined) {
                         const epId = parseInt(String(episodeId), 10);
-                        if (!isNaN(epId)) watchedItems.push({ seriesId: sId, episodeId: epId } as WatchedStateItem);
+                        if (!isNaN(epId)) {
+                            watchedItems.push({
+                                media_key: mediaKey,
+                                media_type: parsedMedia.media_type,
+                                media_id: parsedMedia.media_id,
+                                seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                                episodeId: epId
+                            });
+                        }
                     }
                 });
             }
@@ -215,12 +267,19 @@ export async function migrateFromLocalStorage() {
         if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems);
 
         const userDataItems: UserDataItem[] = [];
-        for (const seriesId in oldUserData) {
-            if (oldUserData.hasOwnProperty(seriesId)) {
-                const sId = parseInt(seriesId, 10);
-                if(!isNaN(sId)) {
-                    const { rating, notes } = oldUserData[seriesId];
-                    userDataItems.push({ seriesId: sId, rating, notes });
+        for (const stateKey in oldUserData) {
+            if (oldUserData.hasOwnProperty(stateKey)) {
+                const parsedMedia = parseMediaKey(stateKey);
+                if(parsedMedia) {
+                    const { rating, notes } = oldUserData[stateKey];
+                    userDataItems.push({
+                        media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
+                        media_type: parsedMedia.media_type,
+                        media_id: parsedMedia.media_id,
+                        seriesId: parsedMedia.media_type === 'series' ? parsedMedia.media_id : undefined,
+                        rating,
+                        notes
+                    });
                 }
             }
         }

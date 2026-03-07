@@ -38,6 +38,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 - Armazena o estado "vivo" da aplicação (watchlist, arquivo, episódios vistos, preferências).
 - Encapsula o acesso ao IndexedDB através do Dexie (tabelas `watchlist`, `archive`, `watchedState`, `userData`, `kvStore`, `seasonCache`).
+- O modelo de dados local está preparado para multi-media com `media_type` e `media_key` (`series:<id>`, `movie:<id>`, `book:<id>`), mantendo compatibilidade com dados legados de séries.
 - Fornece operações atómicas (adicionar série, arquivar, atualizar notas, migrar dados do `localStorage`).
 - Expõe `loadStateFromDB()` e `migrateFromLocalStorage()` para iniciar ou atualizar a base local.
 
@@ -54,8 +55,9 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ### `src/db.ts`
 
-- Define o schema Dexie (`MySubClassedDexie`) e assegura versionamento (`version(3)`).
-- Garante chaves compostas (`[seriesId+episodeId]`, `[seriesId+seasonNumber]`) para `watchedState` e cache de temporadas.
+- Define o schema Dexie (`MySubClassedDexie`) e assegura versionamento (`version(4)`).
+- Garante chaves compostas (`[media_key+episodeId]`, `[seriesId+seasonNumber]`) para `watchedState` e cache de temporadas.
+- `watchlist` e `archive` usam chave composta `[media_type+id]` para evitar colisões de ID entre tipos de media.
 
 ### `src/utils.ts`
 
