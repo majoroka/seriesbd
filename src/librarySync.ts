@@ -2,9 +2,9 @@ import { db } from './db';
 import * as S from './state';
 import { UserData, UserDataItem, WatchedState, WatchedStateItem, Series } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
-import { normalizeSeriesCollection } from './media';
+import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
 
-export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = 1;
+export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = 2;
 export const LOCAL_LIBRARY_MUTATION_AT_KEY = 'seriesdb.localLibraryMutationAt';
 
 export type LibrarySnapshotPayload = {
@@ -36,11 +36,9 @@ function isObjectLike(value: unknown): value is Record<string, unknown> {
 function normalizeWatchedState(input: unknown): WatchedState {
   if (!isObjectLike(input)) return {};
   const normalized: WatchedState = {};
-  Object.entries(input).forEach(([seriesId, episodeIds]) => {
+  Object.entries(input).forEach(([mediaKey, episodeIds]) => {
     if (!Array.isArray(episodeIds)) return;
-    const parsedSeriesId = Number(seriesId);
-    if (Number.isNaN(parsedSeriesId)) return;
-    normalized[parsedSeriesId] = episodeIds
+    normalized[mediaKey] = episodeIds
       .map((id) => Number(id))
       .filter((id) => !Number.isNaN(id));
   });
@@ -50,12 +48,11 @@ function normalizeWatchedState(input: unknown): WatchedState {
 function normalizeUserData(input: unknown): UserData {
   if (!isObjectLike(input)) return {};
   const normalized: UserData = {};
-  Object.entries(input).forEach(([seriesId, value]) => {
-    const parsedSeriesId = Number(seriesId);
-    if (Number.isNaN(parsedSeriesId) || !isObjectLike(value)) return;
+  Object.entries(input).forEach(([mediaKey, value]) => {
+    if (!isObjectLike(value)) return;
     const rawRating = value.rating;
     const rawNotes = value.notes;
-    normalized[parsedSeriesId] = {
+    normalized[mediaKey] = {
       rating: typeof rawRating === 'number' ? rawRating : Number(rawRating || 0),
       notes: typeof rawNotes === 'string' ? rawNotes : '',
     };
@@ -149,20 +146,31 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
   const payload = normalizeLibraryPayload(rawPayload);
 
   const watchedItems: WatchedStateItem[] = [];
-  Object.entries(payload.watchedState).forEach(([seriesId, episodeIds]) => {
-    const parsedSeriesId = Number(seriesId);
-    if (Number.isNaN(parsedSeriesId) || !Array.isArray(episodeIds)) return;
+  Object.entries(payload.watchedState).forEach(([stateKey, episodeIds]) => {
+    const parsedMedia = parseMediaKey(stateKey);
+    if (!parsedMedia || !Array.isArray(episodeIds)) return;
     episodeIds.forEach((episodeId) => {
-      watchedItems.push({ seriesId: parsedSeriesId, episodeId: Number(episodeId) });
+      const numericEpisodeId = Number(episodeId);
+      if (Number.isNaN(numericEpisodeId)) return;
+      watchedItems.push({
+        media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
+        media_type: parsedMedia.media_type,
+        media_id: parsedMedia.media_id,
+        seriesId: parsedMedia.media_id,
+        episodeId: numericEpisodeId,
+      });
     });
   });
 
   const userDataItems: UserDataItem[] = [];
-  Object.entries(payload.userData).forEach(([seriesId, data]) => {
-    const parsedSeriesId = Number(seriesId);
-    if (Number.isNaN(parsedSeriesId)) return;
+  Object.entries(payload.userData).forEach(([stateKey, data]) => {
+    const parsedMedia = parseMediaKey(stateKey);
+    if (!parsedMedia) return;
     userDataItems.push({
-      seriesId: parsedSeriesId,
+      media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
+      media_type: parsedMedia.media_type,
+      media_id: parsedMedia.media_id,
+      seriesId: parsedMedia.media_id,
       rating: data?.rating || 0,
       notes: data?.notes || '',
     });
