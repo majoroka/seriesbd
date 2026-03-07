@@ -18,12 +18,14 @@ No painel Supabase:
 
 `supabase/migrations/20260307_000001_init_profiles_user_settings.sql`
 `supabase/migrations/20260307_000002_init_library_snapshots.sql`
+`supabase/migrations/20260307_000003_init_system_heartbeat.sql`
 
 Isto cria:
 
 - `public.profiles`
 - `public.user_settings`
 - `public.library_snapshots`
+- `public.system_heartbeat`
 - trigger automática em `auth.users` para criar linhas iniciais
 - políticas RLS para acesso apenas ao próprio utilizador autenticado
 
@@ -38,6 +40,8 @@ Depois configurar no Cloudflare Pages (`Preview` e `Production`):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-side only; usado pelo endpoint heartbeat)
 
 ## 4) Validação rápida
 

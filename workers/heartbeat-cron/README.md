@@ -14,6 +14,16 @@ Este worker chama o endpoint da app `POST /api/heartbeat` de 3 em 3 dias.
 - `HEARTBEAT_TOKEN` (opcional, mas recomendado)
   - Deve ser igual à variável `HEARTBEAT_TOKEN` no projeto Pages.
 
+## Variáveis no projeto Pages
+
+No projeto `seriesbd` (Pages), definir:
+
+- `HEARTBEAT_TOKEN` (o mesmo do worker)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+O endpoint `/api/heartbeat` usa estas variáveis para gravar em `public.system_heartbeat`.
+
 ## Deploy
 
 No diretório do projeto:
