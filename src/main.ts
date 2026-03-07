@@ -11,6 +11,12 @@ import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { getCurrentSession, signInWithPassword, signOutCurrentUser, signUpWithPassword, subscribeToAuthState } from './auth';
+import {
+    LibrarySyncOutcome,
+    markLocalLibraryMutation,
+    pushLocalLibrarySnapshot,
+    syncLibrarySnapshotAfterLogin,
+} from './librarySync';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
@@ -41,6 +47,8 @@ let detailReturnContext: DetailReturnContext | null = null;
 let authFormMode: 'login' | 'signup' = 'login';
 let authFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
+let librarySyncTimer: number | null = null;
+let isApplyingRemoteLibrarySnapshot = false;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -301,6 +309,51 @@ async function syncUserSettingsToRemoteIfNeeded(): Promise<void> {
     }
 }
 
+async function syncLibrarySnapshotToRemoteIfNeeded(): Promise<void> {
+    if (!isSupabaseConfigured() || !currentAuthenticatedUserId || isApplyingRemoteLibrarySnapshot) return;
+    try {
+        await pushLocalLibrarySnapshot(currentAuthenticatedUserId);
+    } catch (error) {
+        console.error('[library-sync] Falha ao guardar biblioteca no Supabase.', error);
+    }
+}
+
+function scheduleLibrarySnapshotSyncFromLocalMutation(): void {
+    if (isApplyingRemoteLibrarySnapshot) return;
+    void markLocalLibraryMutation();
+    if (!isSupabaseConfigured() || !currentAuthenticatedUserId) return;
+
+    if (librarySyncTimer) {
+        clearTimeout(librarySyncTimer);
+    }
+
+    librarySyncTimer = window.setTimeout(() => {
+        librarySyncTimer = null;
+        void syncLibrarySnapshotToRemoteIfNeeded();
+    }, 1200);
+}
+
+async function syncCloudStateAfterLogin(userId: string): Promise<LibrarySyncOutcome> {
+    await syncUserSettingsAfterLogin(userId);
+
+    let libraryOutcome: LibrarySyncOutcome = 'noop';
+    try {
+        isApplyingRemoteLibrarySnapshot = true;
+        libraryOutcome = await syncLibrarySnapshotAfterLogin(userId);
+    } catch (error) {
+        console.error('[library-sync] Falha ao sincronizar biblioteca após login.', error);
+    } finally {
+        isApplyingRemoteLibrarySnapshot = false;
+    }
+
+    if (libraryOutcome === 'pulled') {
+        await initializeApp();
+        UI.showNotification('Biblioteca sincronizada da cloud.');
+    }
+
+    return libraryOutcome;
+}
+
 function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'error' = 'default') {
     if (!DOM.authStatusLabel) return;
     DOM.authStatusLabel.textContent = message;
@@ -383,9 +436,13 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
             UI.showNotification(`Sessão iniciada: ${user.email}`);
-            void syncUserSettingsAfterLogin(user.id);
+            void syncCloudStateAfterLogin(user.id);
         }
     } else if (event === 'SIGNED_OUT') {
+        if (librarySyncTimer) {
+            clearTimeout(librarySyncTimer);
+            librarySyncTimer = null;
+        }
         if (previousUserId) {
             UI.showNotification('Sessão terminada.');
         }
@@ -411,7 +468,7 @@ async function initializeAuthState() {
         const currentUser = session?.user ?? null;
         setAuthenticatedUi(currentUser);
         if (currentUser) {
-            await syncUserSettingsAfterLogin(currentUser.id);
+            await syncCloudStateAfterLogin(currentUser.id);
         }
     } catch (error) {
         console.error('[auth] Falha ao validar sessão inicial.', error);
@@ -1159,6 +1216,8 @@ async function importData(): Promise<void> {
                 });
                 UI.showNotification('Dados importados com sucesso! A aplicação será atualizada.');
                 await initializeApp();
+                await markLocalLibraryMutation();
+                await syncLibrarySnapshotToRemoteIfNeeded();
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 console.error('Erro ao importar dados:', message);
@@ -1217,6 +1276,8 @@ async function refetchAllMetadata(): Promise<void> {
         await db.watchlist.bulkPut(S.myWatchlist);
         await db.archive.bulkPut(S.myArchive);
         await initializeApp();
+        await markLocalLibraryMutation();
+        await syncLibrarySnapshotToRemoteIfNeeded();
         UI.showNotification('Todos os metadados foram atualizados com sucesso.');
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1677,6 +1738,9 @@ async function loadPremieresSeries(loadMore = false) {
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     UI.initModalAccessibility();
+    document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
+        scheduleLibrarySnapshotSyncFromLocalMutation();
+    });
 
     // Navigation
     DOM.mainNavLinks.forEach(link => {

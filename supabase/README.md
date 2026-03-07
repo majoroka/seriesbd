@@ -17,11 +17,13 @@ No painel Supabase:
 2. Executar o conteúdo de:
 
 `supabase/migrations/20260307_000001_init_profiles_user_settings.sql`
+`supabase/migrations/20260307_000002_init_library_snapshots.sql`
 
 Isto cria:
 
 - `public.profiles`
 - `public.user_settings`
+- `public.library_snapshots`
 - trigger automática em `auth.users` para criar linhas iniciais
 - políticas RLS para acesso apenas ao próprio utilizador autenticado
 

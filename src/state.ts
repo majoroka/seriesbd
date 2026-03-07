@@ -21,6 +21,12 @@ export type DetailViewData = {
     seasons: DetailSeasonMeta[];
 };
 export let detailViewData: DetailViewData = { allEpisodes: [], episodeMap: {}, seasons: [] };
+export const STATE_MUTATION_EVENT_NAME = 'seriesdb:state-mutated';
+
+function emitStateMutation(reason: string) {
+    if (typeof document === 'undefined') return;
+    document.dispatchEvent(new CustomEvent(STATE_MUTATION_EVENT_NAME, { detail: { reason, at: new Date().toISOString() } }));
+}
 
 // State update functions
 export function setMyWatchlist(data: Series[]) { myWatchlist = data; }
@@ -49,6 +55,7 @@ export function resetSearchAbortController() {
 export async function addSeries(series: Series) {
     myWatchlist.push(series);
     await db.watchlist.put(series);
+    emitStateMutation('addSeries');
 }
 
 export async function removeSeries(seriesId: number) {
@@ -62,6 +69,7 @@ export async function removeSeries(seriesId: number) {
     myArchive = myArchive.filter(series => series.id !== seriesId);
     delete watchedState[String(seriesId)];
     delete userData[String(seriesId)];
+    emitStateMutation('removeSeries');
 }
 
 export async function archiveSeries(series: Series) {
@@ -73,6 +81,7 @@ export async function archiveSeries(series: Series) {
         await db.archive.put(series);
         await db.watchlist.delete(series.id);
     });
+    emitStateMutation('archiveSeries');
 }
 
 export async function unarchiveSeries(series: Series) {
@@ -84,6 +93,7 @@ export async function unarchiveSeries(series: Series) {
         await db.watchlist.put(series);
         await db.archive.delete(series.id);
     });
+    emitStateMutation('unarchiveSeries');
 }
 
 export async function updateSeries(series: Series) {
@@ -93,6 +103,7 @@ export async function updateSeries(series: Series) {
     } else {
         await db.archive.put(series);
     }
+    emitStateMutation('updateSeries');
 }
 
 export async function markEpisodesAsWatched(seriesId: number, episodeIds: number[]) {
@@ -103,6 +114,7 @@ export async function markEpisodesAsWatched(seriesId: number, episodeIds: number
     watchedState[seriesId] = Array.from(newWatchedEpisodes);
     const itemsToPut = episodeIds.map(epId => ({ seriesId, episodeId: epId }));
     await db.watchedState.bulkPut(itemsToPut);
+    emitStateMutation('markEpisodesAsWatched');
 }
 
 export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: number[]) {
@@ -111,6 +123,7 @@ export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: numb
     watchedState[String(seriesId)] = watchedState[String(seriesId)].filter(id => !episodeIdsSet.has(id));
     const keysToRemove = episodeIds.map(epId => [seriesId, epId] as [number, number]);
     await db.watchedState.bulkDelete(keysToRemove);
+    emitStateMutation('unmarkEpisodesAsWatched');
 }
 
 export async function updateUserRating(seriesId: number, rating: number) {
@@ -120,6 +133,7 @@ export async function updateUserRating(seriesId: number, rating: number) {
     }
     userData[seriesId].rating = rating;
     await db.userData.put({ seriesId, rating, notes });
+    emitStateMutation('updateUserRating');
 }
 
 export async function updateUserNotes(seriesId: number, notes: string) {
@@ -129,6 +143,7 @@ export async function updateUserNotes(seriesId: number, notes: string) {
     }
     userData[seriesId].notes = notes;
     await db.userData.put({ seriesId, rating, notes });
+    emitStateMutation('updateUserNotes');
 }
 
 async function loadWatchedStateFromDB(): Promise<WatchedState> {
