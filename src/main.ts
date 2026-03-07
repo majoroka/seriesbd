@@ -427,6 +427,7 @@ function resetAuthForm() {
 }
 
 function openAuthModal(mode: 'login' | 'signup') {
+    UI.closeNotificationModal();
     setAuthModalMode(mode);
     resetAuthForm();
     UI.openAuthModal();
@@ -434,6 +435,7 @@ function openAuthModal(mode: 'login' | 'signup') {
 
 function closeAuthModal() {
     UI.closeAuthModal();
+    UI.closeNotificationModal();
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
