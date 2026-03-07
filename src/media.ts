@@ -2,6 +2,9 @@ import { MediaType, Series } from './types';
 
 type SeriesLike = Omit<Series, 'media_type'> & { media_type?: MediaType | null };
 export type MediaKeyParts = { media_type: MediaType; media_id: number };
+const SCOPED_ID_RANGE = 1_000_000_000;
+const MOVIE_ID_OFFSET = 1_000_000_000;
+const BOOK_ID_OFFSET = 2_000_000_000;
 
 function isSeriesLike(value: unknown): value is SeriesLike {
   return typeof value === 'object' && value !== null;
@@ -16,6 +19,30 @@ function normalizeMediaId(value: unknown): number | null {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
+}
+
+function hashStringToPositiveInt(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function toScopedMovieId(tmdbMovieId: number): number {
+  const raw = Math.abs(Math.trunc(Number(tmdbMovieId) || 0));
+  return MOVIE_ID_OFFSET + (raw % SCOPED_ID_RANGE);
+}
+
+export function fromScopedMovieId(scopedMovieId: number): number {
+  const raw = Math.abs(Math.trunc(Number(scopedMovieId) || 0));
+  return raw >= MOVIE_ID_OFFSET ? raw - MOVIE_ID_OFFSET : raw;
+}
+
+export function toScopedBookId(sourceId: string): number {
+  const hash = hashStringToPositiveInt(String(sourceId || 'unknown'));
+  return BOOK_ID_OFFSET + (hash % SCOPED_ID_RANGE);
 }
 
 export function createMediaKey(mediaType: MediaType, mediaId: number): string {

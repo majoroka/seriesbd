@@ -44,7 +44,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ### `src/api.ts`
 
-- Implementa o cliente para TMDb/Trakt/TVMaze consumindo os proxies `/api/tmdb`, `/api/trakt` e `/api/tvmaze`.
+- Implementa o cliente para TMDb/Trakt/TVMaze/Books consumindo os proxies `/api/tmdb`, `/api/trakt`, `/api/tvmaze` e `/api/books`.
 - Garante uniformização de erros e parâmetros (locale `pt-PT`, fallback de `AbortController`).
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
 - Expõe métodos para tendências diárias/semanais, top rated, estreias recentes, detalhes, créditos e vídeos.
@@ -52,6 +52,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - O fallback por nome/ano na Trakt usa score mínimo; matches fracos são descartados para reduzir falsos positivos.
 - `fetchTVMazeResolvedShow` resolve séries no TVMaze por IMDb ID e fallback por nome/ano (`/api/tvmaze/resolve/show`), devolvendo payload normalizado.
 - `fetchAggregatedSeriesMetadata` agrega sinopse/certificação entre fontes com prioridade de idioma `pt-PT` -> `pt` -> `en`, escolhendo EN mais completo quando não existe PT.
+- `searchMovies` e `searchBooks` convertem resultados para o modelo comum com `media_type` e IDs internos scoped para evitar colisões com IDs de séries.
 
 ### `src/db.ts`
 
@@ -128,10 +129,12 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
   - `functions/api/tmdb/[[path]].js` injeta `TMDB_API_KEY`, normaliza headers, trata CORS/Content-Encoding e respeita `language` explícito no query string.
   - `functions/api/trakt/[[path]].js` adiciona cabeçalhos obrigatórios (`trakt-api-version`, `trakt-api-key`, `User-Agent`), responde a preflight e deteta bloqueios Cloudflare (retornando `502` em JSON para diagnóstico).
   - `functions/api/tvmaze/[[path]].js` faz proxy para TVMaze, suporta lookup dedicado (`/resolve/show`) com estratégia IMDb -> nome/ano e inclui observabilidade mínima (`requestId`, status, latência).
+  - `functions/api/books/[[path]].js` agrega Google Books (quando chave disponível) e fallback Open Library, devolvendo payload normalizado para livros.
   - Rotas públicas mantidas para compatibilidade:
     - `/api/tmdb/*`
     - `/api/trakt/*`
     - `/api/tvmaze/*`
+    - `/api/books/*`
 - **Segurança**
   - Chaves nunca são expostas no frontend.
   - CSP por ambiente:

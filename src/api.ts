@@ -13,7 +13,7 @@ import {
     AggregatedOverviewCandidate,
     ProviderSource,
 } from "./types";
-import { normalizeSeries, normalizeSeriesCollection } from "./media";
+import { normalizeSeries, normalizeSeriesCollection, toScopedBookId, toScopedMovieId } from "./media";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
@@ -45,6 +45,62 @@ export async function searchSeries(query: string, signal: AbortSignal): Promise<
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as { results: unknown };
     return { results: normalizeSeriesCollection(payload.results) };
+}
+
+function mapMovieSearchResult(rawMovie: any): Series {
+    const tmdbId = Number(rawMovie?.id || 0);
+    const safeTmdbId = Number.isNaN(tmdbId) ? 0 : tmdbId;
+    const title = String(rawMovie?.title || rawMovie?.name || '').trim();
+    const originalTitle = String(rawMovie?.original_title || rawMovie?.original_name || title).trim();
+
+    return normalizeSeries({
+        id: toScopedMovieId(safeTmdbId),
+        media_type: 'movie',
+        source_provider: 'tmdb_movie',
+        source_id: String(safeTmdbId),
+        name: title || 'Filme sem título',
+        original_name: originalTitle || undefined,
+        overview: String(rawMovie?.overview || ''),
+        poster_path: rawMovie?.poster_path || null,
+        backdrop_path: rawMovie?.backdrop_path || null,
+        first_air_date: String(rawMovie?.release_date || ''),
+        genres: [],
+        vote_average: typeof rawMovie?.vote_average === 'number' ? rawMovie.vote_average : undefined,
+    } as Series);
+}
+
+export async function searchMovies(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
+    const searchUrl = `${API_BASE_TMDB}/search/movie?query=${encodeURIComponent(query)}&language=pt-PT`;
+    const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as { results?: unknown[] };
+    const results = Array.isArray(payload.results) ? payload.results.map(mapMovieSearchResult) : [];
+    return { results };
+}
+
+export async function searchBooks(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
+    const searchUrl = `/api/books/search?query=${encodeURIComponent(query)}`;
+    const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as { results?: unknown[] };
+    const normalizedResults = normalizeSeriesCollection(payload.results);
+    const results = normalizedResults.map((item) => {
+        if (item.media_type !== 'book') {
+            return normalizeSeries({ ...item, media_type: 'book', id: toScopedBookId(String(item.id)) });
+        }
+        return normalizeSeries({ ...item, id: toScopedBookId(String(item.source_id || item.id)) });
+    });
+    return { results };
+}
+
+export async function searchByMediaType(
+    mediaType: 'series' | 'movie' | 'book',
+    query: string,
+    signal: AbortSignal
+): Promise<{ results: Series[] }> {
+    if (mediaType === 'movie') return searchMovies(query, signal);
+    if (mediaType === 'book') return searchBooks(query, signal);
+    return searchSeries(query, signal);
 }
 
 /**
