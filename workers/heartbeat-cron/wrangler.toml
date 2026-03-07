@@ -1,0 +1,9 @@
+name = "seriesbd-heartbeat-cron"
+main = "src/index.ts"
+compatibility_date = "2026-03-07"
+
+[triggers]
+crons = ["0 9 */3 * *"]
+
+[observability]
+enabled = true
