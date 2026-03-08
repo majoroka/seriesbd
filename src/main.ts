@@ -205,6 +205,7 @@ async function runObservedSection<T>(
 type ViewMode = 'list' | 'grid';
 type ThemeMode = 'light' | 'dark' | 'system';
 type AllSeriesStatusFilter = 'all' | 'watchlist' | 'unseen' | 'archive';
+type AllSeriesMediaFilter = 'all' | 'series' | 'movie' | 'book';
 type SyncedUserSettings = {
     theme: ThemeMode;
     watchlist_view_mode: ViewMode;
@@ -234,6 +235,11 @@ function normalizeAllSeriesStatusFilter(value: unknown, fallback: AllSeriesStatu
     return fallback;
 }
 
+function normalizeAllSeriesMediaFilter(value: unknown, fallback: AllSeriesMediaFilter = 'all'): AllSeriesMediaFilter {
+    if (value === 'series' || value === 'movie' || value === 'book' || value === 'all') return value;
+    return fallback;
+}
+
 function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
     excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
@@ -245,6 +251,10 @@ function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY), 'list'), DOM.unseenContainer, DOM.unseenViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY), 'list'), DOM.archiveContainer, DOM.archiveViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY), 'list'), DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+    S.setAllSeriesMediaFilter(normalizeAllSeriesMediaFilter(settingsMap.get(C.ALL_SERIES_MEDIA_FILTER_KEY), 'all'));
+    if (DOM.allSeriesMediaFilter) {
+        DOM.allSeriesMediaFilter.value = S.allSeriesMediaFilter;
+    }
     S.setAllSeriesStatusFilter(normalizeAllSeriesStatusFilter(settingsMap.get(C.ALL_SERIES_STATUS_FILTER_KEY), 'all'));
     if (DOM.allSeriesStatusFilter) {
         DOM.allSeriesStatusFilter.value = S.allSeriesStatusFilter;
@@ -337,6 +347,7 @@ async function syncUserSettingsAfterLogin(userId: string): Promise<void> {
         UI.renderArchive();
         UI.renderAllSeries();
         UI.renderUnseen();
+        UI.renderMediaDashboard();
     } catch (error) {
         console.error('[settings-sync] Falha ao sincronizar user_settings após login.', error);
     }
@@ -487,6 +498,7 @@ function renderLibraryStateFromMemory() {
     UI.renderArchive();
     UI.renderAllSeries();
     UI.renderUnseen();
+    UI.renderMediaDashboard();
     UI.renderSearchResults([]);
     UI.renderNextAired([]);
     DOM.globalProgressPercentage.textContent = '0%';
@@ -607,6 +619,14 @@ async function setAllSeriesStatusFilterPreference(status: AllSeriesStatusFilter)
     await db.kvStore.put({ key: C.ALL_SERIES_STATUS_FILTER_KEY, value: status });
 }
 
+async function setAllSeriesMediaFilterPreference(mediaFilter: AllSeriesMediaFilter): Promise<void> {
+    S.setAllSeriesMediaFilter(mediaFilter);
+    if (DOM.allSeriesMediaFilter) {
+        DOM.allSeriesMediaFilter.value = mediaFilter;
+    }
+    await db.kvStore.put({ key: C.ALL_SERIES_MEDIA_FILTER_KEY, value: mediaFilter });
+}
+
 function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
     return S.getMediaItem(mediaType, mediaId)
         || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId);
@@ -620,6 +640,7 @@ async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promis
     UI.renderUnseen();
     UI.renderArchive();
     UI.renderAllSeries();
+    UI.renderMediaDashboard();
     updateGlobalProgress();
     UI.updateKeyStats();
 }
@@ -1749,7 +1770,7 @@ async function initializeApp(): Promise<void> {
             applySettingsMapToUi(settingsMap);
             clearInMemoryLibraryState();
             renderLibraryStateFromMemory();
-            UI.showSection('watchlist-section');
+            UI.showSection('media-dashboard-section');
             return;
         }
 
@@ -1759,6 +1780,7 @@ async function initializeApp(): Promise<void> {
         UI.renderArchive();
         UI.renderAllSeries();
         UI.renderUnseen();
+        UI.renderMediaDashboard();
         setupPwaUpdateNotifications();
         await updateNextAired().catch(err => {
             recordSectionFailure('initialize', '/initialize/update-next-aired', err, { phase: 'initialize' });
@@ -1779,7 +1801,9 @@ async function initializeApp(): Promise<void> {
         const sectionFromHash = rawSectionFromHash === 'archive-section' ? 'all-series-section' : rawSectionFromHash;
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
-            if (sectionFromHash === 'all-series-section') {
+            if (sectionFromHash === 'media-dashboard-section') {
+                UI.renderMediaDashboard();
+            } else if (sectionFromHash === 'all-series-section') {
                 UI.renderAllSeries();
             } else if (sectionFromHash === 'trending-section') {
                 S.resetSearchAbortController();
@@ -1787,7 +1811,7 @@ async function initializeApp(): Promise<void> {
                 loadTrending('week', 'trending-scroller-week');
             }
         } else {
-            UI.showSection('watchlist-section');
+            UI.showSection('media-dashboard-section');
         }
     } catch (error) {
         recordSectionFailure('initialize', '/initialize/app', error, { phase: 'initialize' });
@@ -2208,6 +2232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.initModalAccessibility();
     document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
         scheduleLibrarySnapshotSyncFromLocalMutation();
+        UI.renderMediaDashboard();
     });
 
     // Navigation
@@ -2216,7 +2241,9 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const targetId = (link as HTMLElement).dataset.target;
             if (targetId) {
-                if (targetId === 'all-series-section') {
+                if (targetId === 'media-dashboard-section') {
+                    UI.renderMediaDashboard();
+                } else if (targetId === 'all-series-section') {
                     UI.renderAllSeries();
                 } else if (targetId === 'trending-section') {
                     S.resetSearchAbortController();
@@ -2255,11 +2282,43 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.renderAllSeries();
     });
 
+    DOM.allSeriesMediaFilter?.addEventListener('change', async (event) => {
+        const { value } = event.target as HTMLSelectElement;
+        const normalizedMediaType = normalizeAllSeriesMediaFilter(value, 'all');
+        await setAllSeriesMediaFilterPreference(normalizedMediaType);
+        S.setAllSeriesGenreFilter('all');
+        if (DOM.allSeriesGenreFilter) {
+            DOM.allSeriesGenreFilter.value = 'all';
+        }
+        UI.renderAllSeries();
+    });
+
     DOM.allSeriesStatusFilter?.addEventListener('change', async (event) => {
         const { value } = event.target as HTMLSelectElement;
         const normalizedStatus = normalizeAllSeriesStatusFilter(value, 'all');
         await setAllSeriesStatusFilterPreference(normalizedStatus);
         UI.renderAllSeries();
+    });
+
+    DOM.backToDashboardFromLibraryBtn?.addEventListener('click', () => {
+        UI.renderMediaDashboard();
+        UI.showSection('media-dashboard-section');
+    });
+
+    DOM.mediaDashboardSection?.addEventListener('click', async (event) => {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLButtonElement>('.dashboard-media-card');
+        if (!card) return;
+        const cardMediaType = normalizeAllSeriesMediaFilter(card.dataset.mediaType, 'all');
+        if (cardMediaType === 'all') return;
+        await setAllSeriesMediaFilterPreference(cardMediaType);
+        await setAllSeriesStatusFilterPreference('all');
+        S.setAllSeriesGenreFilter('all');
+        if (DOM.allSeriesGenreFilter) {
+            DOM.allSeriesGenreFilter.value = 'all';
+        }
+        UI.renderAllSeries();
+        UI.showSection('all-series-section');
     });
 
     // Header Search

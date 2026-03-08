@@ -583,6 +583,11 @@ export function renderArchive() {
 }
 
 type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
+type DashboardMetrics = {
+    total: number;
+    inProgress: number;
+    completed: number;
+};
 
 function resolveLibraryStatus(series: Series): LibraryStatusFilter {
     const mediaType = series.media_type || 'series';
@@ -596,6 +601,65 @@ function resolveLibraryStatus(series: Series): LibraryStatusFilter {
 
     const progressPercent = getMediaProgressPercent(series);
     return progressPercent > 0 && progressPercent < 100 ? 'unseen' : 'watchlist';
+}
+
+function resolveDashboardProgress(series: Series): number {
+    const mediaType = series.media_type || 'series';
+    if (mediaType !== 'series') {
+        return getMediaProgressPercent(series);
+    }
+
+    const watchedCount = S.watchedState[series.id]?.length || 0;
+    const totalEpisodes = series.total_episodes || 0;
+    if (totalEpisodes > 0) {
+        return Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100));
+    }
+    return watchedCount > 0 ? 1 : 0;
+}
+
+function computeDashboardMetrics(mediaType: MediaType): DashboardMetrics {
+    const allLibraryItems = [...S.myWatchlist, ...S.myArchive];
+    const mediaItems = allLibraryItems.filter(item => (item.media_type || 'series') === mediaType);
+    let inProgress = 0;
+    let completed = 0;
+
+    mediaItems.forEach((item) => {
+        const isArchived = S.myArchive.some(archived => archived.media_type === mediaType && archived.id === item.id);
+        if (isArchived) {
+            completed += 1;
+            return;
+        }
+
+        const progress = resolveDashboardProgress(item);
+        if (progress >= 100) {
+            completed += 1;
+            return;
+        }
+        if (progress > 0) {
+            inProgress += 1;
+        }
+    });
+
+    return {
+        total: mediaItems.length,
+        inProgress,
+        completed,
+    };
+}
+
+export function renderMediaDashboard() {
+    if (!DOM.dashboardMediaCards || DOM.dashboardMediaCards.length === 0) return;
+    DOM.dashboardMediaCards.forEach((card) => {
+        const rawType = card.dataset.mediaType || 'series';
+        const mediaType: MediaType = rawType === 'movie' || rawType === 'book' ? rawType : 'series';
+        const metrics = computeDashboardMetrics(mediaType);
+        const total = card.querySelector<HTMLElement>('[data-metric="total"]');
+        const inProgress = card.querySelector<HTMLElement>('[data-metric="in-progress"]');
+        const completed = card.querySelector<HTMLElement>('[data-metric="completed"]');
+        if (total) total.textContent = String(metrics.total);
+        if (inProgress) inProgress.textContent = String(metrics.inProgress);
+        if (completed) completed.textContent = String(metrics.completed);
+    });
 }
 
 function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
@@ -646,6 +710,15 @@ export function renderAllSeries() {
     DOM.allSeriesContainer.innerHTML = '';
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     allSeries.sort((a, b) => a.name.localeCompare(b.name));
+    if (DOM.allSeriesMediaFilter) {
+        const desiredMediaType = S.allSeriesMediaFilter;
+        const allowedMediaTypes = ['all', 'series', 'movie', 'book'];
+        DOM.allSeriesMediaFilter.value = allowedMediaTypes.includes(desiredMediaType) ? desiredMediaType : 'all';
+    }
+    const selectedMediaType = S.allSeriesMediaFilter;
+    const mediaFilteredSeries = selectedMediaType === 'all'
+        ? allSeries
+        : allSeries.filter(series => (series.media_type || 'series') === selectedMediaType);
     if (DOM.allSeriesStatusFilter) {
         const desiredStatus = S.allSeriesStatusFilter;
         const allowedStatuses = ['all', 'watchlist', 'unseen', 'archive'];
@@ -653,8 +726,8 @@ export function renderAllSeries() {
     }
     const selectedStatus = S.allSeriesStatusFilter;
     const statusFilteredSeries = selectedStatus === 'all'
-        ? allSeries
-        : allSeries.filter(series => resolveLibraryStatus(series) === selectedStatus);
+        ? mediaFilteredSeries
+        : mediaFilteredSeries.filter(series => resolveLibraryStatus(series) === selectedStatus);
     updateAllSeriesGenreFilterOptions(statusFilteredSeries);
     const selectedGenreId = S.allSeriesGenreFilter;
     const filteredSeries = selectedGenreId === 'all'
@@ -664,6 +737,8 @@ export function renderAllSeries() {
     if (filteredSeries.length === 0) {
         if (allSeries.length === 0) {
             DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo na sua biblioteca. Adicione conteúdos através da pesquisa.</p>';
+        } else if (mediaFilteredSeries.length === 0) {
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o tipo selecionado.</p>';
         } else if (statusFilteredSeries.length === 0) {
             DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o estado selecionado.</p>';
         } else {
@@ -793,11 +868,14 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
     }
     titleChildren.push(`${series.name} ${releaseYear}`);
-    if (mediaType !== 'series') {
+    if (mediaType !== 'series' && viewMode === 'list') {
         titleChildren.push(' ');
         titleChildren.push(el('span', { class: 'media-type-chip', text: mediaTypeLabel }));
     }
     const titleElement = el('h3', {}, titleChildren);
+    const mediaTypeChipInGrid = viewMode === 'grid' && mediaType !== 'series'
+        ? el('span', { class: 'media-type-chip media-type-chip-grid', text: mediaTypeLabel })
+        : null;
 
     const titleInList = viewMode === 'list' ? titleElement : null;
     const statusInList = viewMode === 'list' ? statusElement : null;
@@ -808,6 +886,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         progressElement,
         overviewElement,
         titleInGrid,
+        mediaTypeChipInGrid,
         statusInGrid
     ]);
     return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [

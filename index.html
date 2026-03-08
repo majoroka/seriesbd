@@ -35,7 +35,8 @@
             <nav class="main-nav">
                 <h2>Biblioteca</h2>
                 <ul>
-                    <li><a href="#" class="nav-link active" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
+                    <li><a href="#" class="nav-link active" data-target="media-dashboard-section"><i class="fas fa-table-cells-large"></i> Dashboard</a></li>
+                    <li><a href="#" class="nav-link" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
                     <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> A Ver</a></li>
                     <li><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Biblioteca</a></li>
                     <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> Próximo Episódio</a></li>
@@ -114,6 +115,51 @@
                     <!-- O conteúdo detalhado da série será carregado aqui -->
                 </section>
 
+                <!-- Media Dashboard Section -->
+                <section class="card media-dashboard" id="media-dashboard-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-table-cells-large"></i> Dashboard</h2>
+                    </div>
+                    <div class="media-dashboard-grid" role="list" aria-label="Secções principais da biblioteca">
+                        <button class="dashboard-media-card" type="button" data-media-type="series" aria-label="Abrir secção de séries">
+                            <div class="dashboard-media-card-header">
+                                <span class="dashboard-media-card-icon"><i class="fas fa-tv" aria-hidden="true"></i></span>
+                                <h3>Séries</h3>
+                            </div>
+                            <p class="dashboard-media-card-subtitle">Acompanhar temporadas, episódios e progresso.</p>
+                            <dl class="dashboard-media-card-metrics">
+                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                            </dl>
+                        </button>
+                        <button class="dashboard-media-card" type="button" data-media-type="movie" aria-label="Abrir secção de filmes">
+                            <div class="dashboard-media-card-header">
+                                <span class="dashboard-media-card-icon"><i class="fas fa-film" aria-hidden="true"></i></span>
+                                <h3>Filmes</h3>
+                            </div>
+                            <p class="dashboard-media-card-subtitle">Gerir vistos, por ver e detalhes rápidos.</p>
+                            <dl class="dashboard-media-card-metrics">
+                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                            </dl>
+                        </button>
+                        <button class="dashboard-media-card" type="button" data-media-type="book" aria-label="Abrir secção de livros">
+                            <div class="dashboard-media-card-header">
+                                <span class="dashboard-media-card-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
+                                <h3>Livros</h3>
+                            </div>
+                            <p class="dashboard-media-card-subtitle">Controlar leitura, progresso e concluídos.</p>
+                            <dl class="dashboard-media-card-metrics">
+                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                            </dl>
+                        </button>
+                    </div>
+                </section>
+
                 <!-- Placeholder sections for other tabs -->
                 <section class="card" id="watchlist-section" style="display: none;">
                     <div class="section-header">
@@ -143,6 +189,16 @@
                     <div class="section-header">
                         <h2><i class="fas fa-list-ul"></i> Biblioteca</h2>
                         <div class="section-header-controls">
+                            <button id="back-to-dashboard-from-library-btn" class="search-bar-button secondary" type="button">Voltar à Dashboard</button>
+                            <div class="genre-filter">
+                                <label for="all-series-media-filter" class="visually-hidden">Filtrar por tipo</label>
+                                <select id="all-series-media-filter" aria-label="Filtrar biblioteca por tipo">
+                                    <option value="all">Todos os tipos</option>
+                                    <option value="series">Séries</option>
+                                    <option value="movie">Filmes</option>
+                                    <option value="book">Livros</option>
+                                </select>
+                            </div>
                             <div class="genre-filter">
                                 <label for="all-series-status-filter" class="visually-hidden">Filtrar por estado</label>
                                 <select id="all-series-status-filter" aria-label="Filtrar biblioteca por estado">
