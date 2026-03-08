@@ -141,7 +141,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
                 ...normalizedDetails,
                 media_type: 'book',
                 source_id: normalizedSourceId,
-                id: toScopedBookId(normalizedSourceId),
+                id: book.id,
             });
         }
     } catch (error) {
@@ -152,7 +152,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
         ...book,
         media_type: 'book',
         source_id: sourceId || String(book.id),
-        id: toScopedBookId(sourceId || String(book.id)),
+        id: book.id,
     });
 }
 
