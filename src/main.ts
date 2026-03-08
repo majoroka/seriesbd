@@ -565,6 +565,30 @@ function getMediaProgressPercent(mediaType: MediaType, mediaId: number): number 
     return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
+async function syncMediaLibrarySectionWithProgress(
+    mediaType: Extract<MediaType, 'movie' | 'book'>,
+    mediaId: number,
+    progressPercent: number
+): Promise<'archived' | 'watchlist' | 'unchanged'> {
+    const mediaItem = S.getMediaItem(mediaType, mediaId);
+    if (!mediaItem) return 'unchanged';
+
+    const isArchived = S.myArchive.some(item => item.media_type === mediaType && item.id === mediaId);
+    const isSeen = progressPercent >= 100;
+
+    if (isSeen && !isArchived) {
+        await S.archiveSeries(mediaItem);
+        return 'archived';
+    }
+
+    if (!isSeen && isArchived) {
+        await S.unarchiveSeries(mediaItem);
+        return 'watchlist';
+    }
+
+    return 'unchanged';
+}
+
 function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
     return S.getMediaItem(mediaType, mediaId)
         || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId);
@@ -2413,6 +2437,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentProgress = getMediaProgressPercent('movie', mediaId);
             const nextProgress = currentProgress >= 100 ? 0 : 100;
             await S.updateMediaProgress('movie', mediaId, nextProgress);
+            const moveResult = await syncMediaLibrarySectionWithProgress('movie', mediaId, nextProgress);
+            if (moveResult === 'archived') {
+                UI.showNotification('Filme marcado como visto e movido para Arquivo.');
+            } else if (moveResult === 'watchlist') {
+                UI.showNotification('Filme marcado como não visto e movido para Quero Ver.');
+            } else {
+                UI.showNotification(nextProgress >= 100 ? 'Filme marcado como visto.' : 'Filme marcado como não visto.');
+            }
             await refreshLibraryViewsAfterMediaChange('movie');
             await displayMediaDetails('movie', mediaId);
             return;
@@ -2424,7 +2456,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const progressInput = DOM.seriesViewSection.querySelector<HTMLInputElement>('#book-progress-range');
             const progressValue = progressInput ? parseInt(progressInput.value, 10) : 0;
             await S.updateMediaProgress('book', mediaId, progressValue);
-            UI.showNotification('Progresso de leitura atualizado.');
+            const moveResult = await syncMediaLibrarySectionWithProgress('book', mediaId, progressValue);
+            if (moveResult === 'archived') {
+                UI.showNotification('Livro concluído e movido para Arquivo.');
+            } else if (moveResult === 'watchlist') {
+                UI.showNotification('Livro movido para Quero Ver.');
+            } else {
+                UI.showNotification('Progresso de leitura atualizado.');
+            }
             await refreshLibraryViewsAfterMediaChange('book');
             await displayMediaDetails('book', mediaId);
             return;
