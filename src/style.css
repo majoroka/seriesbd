@@ -2134,6 +2134,31 @@ body.light-theme .network-logo {
     color: rgba(255, 255, 255, 0.9);
 }
 
+.media-progress-controls {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.book-progress-controls label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+#book-progress-range {
+    width: 240px;
+    max-width: 100%;
+    accent-color: var(--primary-accent);
+}
+
+.book-progress-value {
+    min-width: 50px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+}
+
 .v2-body-content {
     /* This will hold the seasons list */
     padding: 2.5rem; /* Add padding around the body content */
@@ -2966,6 +2991,15 @@ body.light-theme .network-logo {
         padding: 0; /* Remove o padding */
         font-size: 0; /* Esconde o texto "Pesquisar" */
         position: relative; /* Contexto para o ícone */
+    }
+
+    .media-progress-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #book-progress-range {
+        width: 100%;
     }
 
     .search-bar .search-bar-button::before {

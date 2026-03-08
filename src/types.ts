@@ -53,6 +53,9 @@ export interface Series {
         next_episode_to_air: Episode | null;
         status: string;
     };
+    videos?: {
+        results: { key: string; site: string; type: string; official?: boolean }[];
+    };
     _lastUpdated?: string;
     userRating?: number;
 }
@@ -159,6 +162,7 @@ export interface UserData {
     [mediaKey: string]: {
         rating?: number;
         notes?: string;
+        progress_percent?: number;
     };
 }
 
@@ -177,6 +181,7 @@ export interface UserDataItem {
     seriesId?: number;
     rating?: number;
     notes?: string;
+    progress_percent?: number;
 }
 export interface KVStoreItem { key: string; value: any; }
 export interface SeasonCacheItem { seriesId: number; seasonNumber: number; data: TMDbSeason; cachedAt: number; }

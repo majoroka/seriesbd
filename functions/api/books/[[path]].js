@@ -147,6 +147,61 @@ const searchOpenLibraryBooks = async (query) => {
   };
 };
 
+const fetchGoogleBookById = async (sourceId, apiKey) => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) return { ok: false, status: 400, result: null };
+  const url = new URL(`${GOOGLE_BOOKS_BASE_URL}/volumes/${encodeURIComponent(normalizedSourceId)}`);
+  if (apiKey) url.searchParams.set('key', apiKey);
+
+  const response = await fetch(url.toString());
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, status: response.status, result: null };
+  return { ok: true, status: response.status, result: mapGoogleBook(payload) };
+};
+
+const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '') => {
+  const descriptionRaw = payload?.description;
+  const description = typeof descriptionRaw === 'string'
+    ? descriptionRaw
+    : (typeof descriptionRaw?.value === 'string' ? descriptionRaw.value : '');
+  const title = String(payload?.title || fallbackTitle || 'Livro sem titulo');
+  const firstPublished = String(payload?.first_publish_date || '');
+  const coverId = Array.isArray(payload?.covers) ? payload.covers[0] : null;
+
+  return {
+    id: toScopedBookId(`openlibrary:${sourceId}`),
+    media_type: 'book',
+    source_provider: 'open_library',
+    source_id: sourceId,
+    name: title,
+    original_name: String(payload?.subtitle || title || ''),
+    overview: description,
+    poster_path: coverId ? `${OPEN_LIBRARY_COVERS_BASE_URL}/${coverId}-L.jpg` : null,
+    backdrop_path: null,
+    first_air_date: firstPublished,
+    genres: [],
+  };
+};
+
+const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) return { ok: false, status: 400, result: null };
+  let workPath = normalizedSourceId;
+  if (!workPath.startsWith('/')) {
+    workPath = workPath.startsWith('works/') ? `/${workPath}` : `/works/${workPath}`;
+  }
+
+  const url = new URL(`${OPEN_LIBRARY_BASE_URL}${workPath}.json`);
+  const response = await fetch(url.toString());
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, status: response.status, result: null };
+  return {
+    ok: true,
+    status: response.status,
+    result: mapOpenLibraryWorkDetails(payload, normalizedSourceId, fallbackTitle),
+  };
+};
+
 export async function onRequest(context) {
   const { request, env } = context;
   const requestId = createRequestId();
@@ -162,7 +217,7 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const endpointPath = normalizePath(request.url);
 
-    if (endpointPath !== '/search') {
+    if (endpointPath !== '/search' && endpointPath !== '/details') {
       const notFound = addCorsHeaders(
         new Response(JSON.stringify({ error: 'Endpoint not found' }), {
           status: 404,
@@ -176,10 +231,66 @@ export async function onRequest(context) {
       });
     }
 
+    const googleApiKey = env.GOOGLE_BOOKS_API_KEY;
+    if (endpointPath === '/search') {
+      const query = (url.searchParams.get('query') || url.searchParams.get('q') || '').trim();
+      if (!query) {
+        const badRequest = addCorsHeaders(
+          new Response(JSON.stringify({ error: 'Missing query parameter' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+        return addProxyHeaders(badRequest, {
+          requestId,
+          upstreamStatus: 400,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+
+      const google = await searchGoogleBooks(query, googleApiKey);
+      let provider = 'google_books';
+      let upstreamStatus = google.status;
+      let results = google.results;
+
+      if (!google.ok || results.length === 0) {
+        const openLibrary = await searchOpenLibraryBooks(query);
+        provider = 'open_library';
+        upstreamStatus = openLibrary.status;
+        results = openLibrary.results;
+      }
+
+      const response = addCorsHeaders(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            provider,
+            query,
+            results,
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=1800',
+            },
+          }
+        )
+      );
+
+      return addProxyHeaders(response, {
+        requestId,
+        upstreamStatus,
+        durationMs: Date.now() - startedAt,
+      });
+    }
+
+    const sourceId = (url.searchParams.get('source_id') || url.searchParams.get('id') || '').trim();
+    const providerParam = (url.searchParams.get('provider') || '').trim();
     const query = (url.searchParams.get('query') || url.searchParams.get('q') || '').trim();
-    if (!query) {
+    if (!sourceId && !query) {
       const badRequest = addCorsHeaders(
-        new Response(JSON.stringify({ error: 'Missing query parameter' }), {
+        new Response(JSON.stringify({ error: 'Missing source_id or query parameter' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -191,17 +302,44 @@ export async function onRequest(context) {
       });
     }
 
-    const googleApiKey = env.GOOGLE_BOOKS_API_KEY;
-    const google = await searchGoogleBooks(query, googleApiKey);
-    let provider = 'google_books';
-    let upstreamStatus = google.status;
-    let results = google.results;
+    let provider = providerParam === 'open_library' ? 'open_library' : 'google_books';
+    let upstreamStatus = 200;
+    let result = null;
 
-    if (!google.ok || results.length === 0) {
-      const openLibrary = await searchOpenLibraryBooks(query);
+    if (provider === 'google_books' && sourceId) {
+      const googleDetails = await fetchGoogleBookById(sourceId, googleApiKey);
+      upstreamStatus = googleDetails.status;
+      result = googleDetails.result;
+      if (!googleDetails.ok || !result) {
+        provider = 'open_library';
+      }
+    }
+
+    if (provider === 'open_library' && sourceId) {
+      const openLibraryDetails = await fetchOpenLibraryBookDetails(sourceId, query);
+      upstreamStatus = openLibraryDetails.status;
+      result = openLibraryDetails.result;
+    }
+
+    if (!result && query) {
+      const searchFallback = await searchOpenLibraryBooks(query);
+      upstreamStatus = searchFallback.status;
+      result = searchFallback.results[0] || null;
       provider = 'open_library';
-      upstreamStatus = openLibrary.status;
-      results = openLibrary.results;
+    }
+
+    if (!result) {
+      const notFound = addCorsHeaders(
+        new Response(JSON.stringify({ error: 'Book details not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      return addProxyHeaders(notFound, {
+        requestId,
+        upstreamStatus: 404,
+        durationMs: Date.now() - startedAt,
+      });
     }
 
     const response = addCorsHeaders(
@@ -209,8 +347,9 @@ export async function onRequest(context) {
         JSON.stringify({
           ok: true,
           provider,
-          query,
-          results,
+          source_id: sourceId || null,
+          query: query || null,
+          result,
         }),
         {
           status: 200,

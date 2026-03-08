@@ -204,6 +204,7 @@ async function runObservedSection<T>(
 
 type ViewMode = 'list' | 'grid';
 type ThemeMode = 'light' | 'dark' | 'system';
+type AllSeriesStatusFilter = 'all' | 'watchlist' | 'unseen' | 'archive';
 type SyncedUserSettings = {
     theme: ThemeMode;
     watchlist_view_mode: ViewMode;
@@ -228,6 +229,11 @@ function normalizeBooleanSetting(value: unknown, fallback: boolean): boolean {
     return fallback;
 }
 
+function normalizeAllSeriesStatusFilter(value: unknown, fallback: AllSeriesStatusFilter = 'all'): AllSeriesStatusFilter {
+    if (value === 'watchlist' || value === 'unseen' || value === 'archive' || value === 'all') return value;
+    return fallback;
+}
+
 function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
     excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
@@ -239,6 +245,10 @@ function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY), 'list'), DOM.unseenContainer, DOM.unseenViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY), 'list'), DOM.archiveContainer, DOM.archiveViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY), 'list'), DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+    S.setAllSeriesStatusFilter(normalizeAllSeriesStatusFilter(settingsMap.get(C.ALL_SERIES_STATUS_FILTER_KEY), 'all'));
+    if (DOM.allSeriesStatusFilter) {
+        DOM.allSeriesStatusFilter.value = S.allSeriesStatusFilter;
+    }
 
     const theme = normalizeThemeMode(settingsMap.get(C.THEME_STORAGE_KEY), 'dark');
     UI.applyTheme(theme === 'system' ? 'dark' : theme);
@@ -555,6 +565,65 @@ function isMediaInLibrary(mediaType: MediaType, mediaId: number): boolean {
         || S.myArchive.some(s => s.media_type === mediaType && s.id === mediaId);
 }
 
+function getMediaStateKey(mediaType: MediaType, mediaId: number): string {
+    return mediaType === 'series' ? String(mediaId) : createMediaKey(mediaType, mediaId);
+}
+
+function getMediaProgressPercent(mediaType: MediaType, mediaId: number): number {
+    const progress = S.userData[getMediaStateKey(mediaType, mediaId)]?.progress_percent;
+    if (typeof progress !== 'number' || Number.isNaN(progress)) return 0;
+    return Math.max(0, Math.min(100, Math.round(progress)));
+}
+
+async function syncMediaLibrarySectionWithProgress(
+    mediaType: Extract<MediaType, 'movie' | 'book'>,
+    mediaId: number,
+    progressPercent: number
+): Promise<'archived' | 'watchlist' | 'unchanged'> {
+    const mediaItem = S.getMediaItem(mediaType, mediaId);
+    if (!mediaItem) return 'unchanged';
+
+    const isArchived = S.myArchive.some(item => item.media_type === mediaType && item.id === mediaId);
+    const isSeen = progressPercent >= 100;
+
+    if (isSeen && !isArchived) {
+        await S.archiveSeries(mediaItem);
+        return 'archived';
+    }
+
+    if (!isSeen && isArchived) {
+        await S.unarchiveSeries(mediaItem);
+        return 'watchlist';
+    }
+
+    return 'unchanged';
+}
+
+async function setAllSeriesStatusFilterPreference(status: AllSeriesStatusFilter): Promise<void> {
+    S.setAllSeriesStatusFilter(status);
+    if (DOM.allSeriesStatusFilter) {
+        DOM.allSeriesStatusFilter.value = status;
+    }
+    await db.kvStore.put({ key: C.ALL_SERIES_STATUS_FILTER_KEY, value: status });
+}
+
+function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
+    return S.getMediaItem(mediaType, mediaId)
+        || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId);
+}
+
+async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promise<void> {
+    if (mediaType === 'series') {
+        await updateNextAired();
+    }
+    UI.renderWatchlist();
+    UI.renderUnseen();
+    UI.renderArchive();
+    UI.renderAllSeries();
+    updateGlobalProgress();
+    UI.updateKeyStats();
+}
+
 async function addMediaToWatchlist(media: Series | TMDbSeriesDetails) {
     const normalizedMedia = normalizeSeriesCollection([media])[0];
     if (!normalizedMedia) return;
@@ -638,7 +707,8 @@ async function addAndMarkAllAsSeen(seriesData: Series | TMDbSeriesDetails) {
         await S.markEpisodesAsWatched(normalizedMedia.id, allEpisodeIds);
         const movedToArchive = await checkSeriesCompletion(normalizedMedia.id); // Move para o arquivo
         if (movedToArchive) {
-            UI.updateActiveNavLink('archive-section'); // Ativa o separador "Arquivo"
+            await setAllSeriesStatusFilterPreference('archive');
+            UI.updateActiveNavLink('all-series-section');
         }
     }
 }
@@ -983,6 +1053,82 @@ async function displaySeriesDetails(seriesId: number) {
     }
 }
 
+async function displayMovieDetails(media: Series): Promise<void> {
+    S.resetDetailViewAbortController();
+    const signal = S.detailViewAbortController.signal;
+    captureDetailReturnContext();
+    DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes do filme...</p>';
+    UI.showSection('series-view-section');
+
+    const movieDetails = await runObservedSection(
+        'series-details',
+        `/api/tmdb/movie/${media.source_id || media.id}`,
+        () => API.fetchMovieDetails(media.id, signal, media.source_id),
+        { mediaType: 'movie', mediaId: media.id }
+    );
+
+    const isInLibrary = isMediaInLibrary('movie', movieDetails.id);
+    const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
+    const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
+    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived });
+}
+
+async function displayBookDetails(media: Series): Promise<void> {
+    S.resetDetailViewAbortController();
+    const signal = S.detailViewAbortController.signal;
+    captureDetailReturnContext();
+    DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes do livro...</p>';
+    UI.showSection('series-view-section');
+
+    const bookDetails = await runObservedSection(
+        'series-details',
+        `/api/books/details`,
+        () => API.fetchBookDetails(media, signal),
+        { mediaType: 'book', mediaId: media.id }
+    );
+
+    const isInLibrary = isMediaInLibrary('book', bookDetails.id);
+    const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
+    const progressPercent = getMediaProgressPercent('book', bookDetails.id);
+    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived });
+}
+
+async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
+    if (mediaType === 'series') {
+        await displaySeriesDetails(mediaId);
+        return;
+    }
+
+    const media = findMedia(mediaType, mediaId);
+    if (!media) {
+        UI.showNotification('Não foi possível localizar este conteúdo.');
+        return;
+    }
+
+    try {
+        if (mediaType === 'movie') {
+            await displayMovieDetails(media);
+            return;
+        }
+        if (mediaType === 'book') {
+            await displayBookDetails(media);
+            return;
+        }
+    } catch (error) {
+        const typedError = error as Error;
+        if (typedError.name === 'AbortError') return;
+        recordSectionFailure(
+            'series-details',
+            `/media-view/${mediaType}/${mediaId}`,
+            typedError,
+            { phase: 'render', mediaType, mediaId }
+        );
+        persistObservabilitySnapshot();
+        DOM.seriesViewSection.innerHTML = '<p>Não foi possível carregar os detalhes deste conteúdo.</p>';
+        UI.showNotification(`Erro ao carregar detalhes: ${typedError.message}`);
+    }
+}
+
 async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
@@ -1066,7 +1212,8 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
 
     const movedToArchive = await checkSeriesCompletion(seriesId);
     if (movedToArchive) {
-        UI.updateActiveNavLink('archive-section');
+        await setAllSeriesStatusFilterPreference('archive');
+        UI.updateActiveNavLink('all-series-section');
     }
 }
 
@@ -1448,6 +1595,8 @@ async function importData(): Promise<void> {
                             if (!normalizedMedia) continue;
 
                             const valueRecord = rawValue as Record<string, unknown>;
+                            const rawProgress = valueRecord.progress_percent ?? valueRecord.progressPercent;
+                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
                                 media_type: normalizedMedia.media_type,
@@ -1455,6 +1604,7 @@ async function importData(): Promise<void> {
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof valueRecord.rating === 'number' ? valueRecord.rating : undefined,
                                 notes: typeof valueRecord.notes === 'string' ? valueRecord.notes : undefined,
+                                progress_percent: progressPercent,
                             };
                             userDataMap.set(item.media_key, item);
                         }
@@ -1478,6 +1628,8 @@ async function importData(): Promise<void> {
                             const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
                             const normalizedMedia = parseMediaKey(normalizedMediaKey);
                             if (!normalizedMedia) return;
+                            const rawProgress = parsedRecord.progress_percent ?? parsedRecord.progressPercent;
+                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
 
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
@@ -1486,6 +1638,7 @@ async function importData(): Promise<void> {
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof parsedRecord.rating === 'number' ? parsedRecord.rating : undefined,
                                 notes: typeof parsedRecord.notes === 'string' ? parsedRecord.notes : undefined,
+                                progress_percent: progressPercent,
                             };
                             userDataMap.set(item.media_key, item);
                         });
@@ -1619,10 +1772,16 @@ async function initializeApp(): Promise<void> {
         });
         UI.updateKeyStats();
 
-        const sectionFromHash = location.hash.substring(1);
+        const rawSectionFromHash = location.hash.substring(1);
+        if (rawSectionFromHash === 'archive-section') {
+            await setAllSeriesStatusFilterPreference('archive');
+        }
+        const sectionFromHash = rawSectionFromHash === 'archive-section' ? 'all-series-section' : rawSectionFromHash;
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
-            if (sectionFromHash === 'trending-section') {
+            if (sectionFromHash === 'all-series-section') {
+                UI.renderAllSeries();
+            } else if (sectionFromHash === 'trending-section') {
                 S.resetSearchAbortController();
                 loadTrending('day', 'trending-scroller-day');
                 loadTrending('week', 'trending-scroller-week');
@@ -2096,6 +2255,13 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.renderAllSeries();
     });
 
+    DOM.allSeriesStatusFilter?.addEventListener('change', async (event) => {
+        const { value } = event.target as HTMLSelectElement;
+        const normalizedStatus = normalizeAllSeriesStatusFilter(value, 'all');
+        await setAllSeriesStatusFilterPreference(normalizedStatus);
+        UI.renderAllSeries();
+    });
+
     // Header Search
     const setSearchMediaType = (mediaType: MediaType) => {
         selectedSearchMediaType = mediaType;
@@ -2227,18 +2393,112 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seriesItem) {
             const typedSeriesItem = seriesItem as HTMLElement;
             const mediaType = parseMediaType(typedSeriesItem.dataset.mediaType);
-            if (mediaType !== 'series') {
-                const mediaLabel = getMediaTypeLabel(mediaType).toLowerCase();
-                UI.showNotification(`Detalhes de ${mediaLabel} chegam no próximo passo.`);
-                return;
-            }
-            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt(typedSeriesItem.dataset.seriesId!, 10) } }));
+            document.dispatchEvent(new CustomEvent('display-media-details', {
+                detail: {
+                    mediaType,
+                    mediaId: parseInt(typedSeriesItem.dataset.seriesId!, 10)
+                }
+            }));
             return;
         }
 
         const backToPreviousSectionBtn = target.closest('#back-to-previous-section-btn');
         if (backToPreviousSectionBtn) {
             navigateBackFromSeriesDetails();
+            return;
+        }
+
+        const mediaAddBtn = target.closest('#media-add-watchlist-btn');
+        if (mediaAddBtn) {
+            const mediaType = parseMediaType(DOM.seriesViewSection.dataset.mediaType);
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            const media = findMedia(mediaType, mediaId);
+            if (!media) {
+                UI.showNotification('Não foi possível localizar o conteúdo para adicionar.');
+                return;
+            }
+            await addMediaToWatchlist(media);
+            UI.showNotification(`"${media.name}" foi adicionado à biblioteca.`);
+            await refreshLibraryViewsAfterMediaChange(mediaType);
+            await displayMediaDetails(mediaType, mediaId);
+            return;
+        }
+
+        const mediaRemoveBtn = target.closest('#media-remove-from-library-btn');
+        if (mediaRemoveBtn) {
+            const mediaType = parseMediaType(DOM.seriesViewSection.dataset.mediaType);
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            const removedMediaSnapshot = findMedia(mediaType, mediaId);
+            await removeSeriesFromLibrary(mediaId, mediaType, null);
+            if (removedMediaSnapshot) {
+                UI.renderMediaDetails(removedMediaSnapshot, {
+                    progressPercent: 0,
+                    isInLibrary: false,
+                    isArchived: false
+                });
+            } else {
+                navigateBackFromSeriesDetails();
+            }
+            return;
+        }
+
+        const mediaArchiveToggleBtn = target.closest('#media-archive-toggle-btn');
+        if (mediaArchiveToggleBtn) {
+            const mediaType = parseMediaType(DOM.seriesViewSection.dataset.mediaType);
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            const media = S.getMediaItem(mediaType, mediaId);
+            if (!media) {
+                UI.showNotification('Não foi possível localizar o conteúdo na biblioteca.');
+                return;
+            }
+            const isArchived = S.myArchive.some(item => item.media_type === mediaType && item.id === mediaId);
+            if (isArchived) {
+                await S.unarchiveSeries(media);
+                UI.showNotification('Movido para Quero Ver.');
+            } else {
+                await S.archiveSeries(media);
+                UI.showNotification('Movido para Arquivo.');
+            }
+            await refreshLibraryViewsAfterMediaChange(mediaType);
+            await displayMediaDetails(mediaType, mediaId);
+            return;
+        }
+
+        const movieToggleSeenBtn = target.closest('#movie-toggle-seen-btn');
+        if (movieToggleSeenBtn) {
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            const currentProgress = getMediaProgressPercent('movie', mediaId);
+            const nextProgress = currentProgress >= 100 ? 0 : 100;
+            await S.updateMediaProgress('movie', mediaId, nextProgress);
+            const moveResult = await syncMediaLibrarySectionWithProgress('movie', mediaId, nextProgress);
+            if (moveResult === 'archived') {
+                UI.showNotification('Filme marcado como visto e movido para Arquivo.');
+            } else if (moveResult === 'watchlist') {
+                UI.showNotification('Filme marcado como não visto e movido para Quero Ver.');
+            } else {
+                UI.showNotification(nextProgress >= 100 ? 'Filme marcado como visto.' : 'Filme marcado como não visto.');
+            }
+            await refreshLibraryViewsAfterMediaChange('movie');
+            await displayMediaDetails('movie', mediaId);
+            return;
+        }
+
+        const bookSaveProgressBtn = target.closest('#book-progress-save-btn');
+        if (bookSaveProgressBtn) {
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            const progressInput = DOM.seriesViewSection.querySelector<HTMLInputElement>('#book-progress-range');
+            const progressValue = progressInput ? parseInt(progressInput.value, 10) : 0;
+            await S.updateMediaProgress('book', mediaId, progressValue);
+            const moveResult = await syncMediaLibrarySectionWithProgress('book', mediaId, progressValue);
+            if (moveResult === 'archived') {
+                UI.showNotification('Livro concluído e movido para Arquivo.');
+            } else if (moveResult === 'watchlist') {
+                UI.showNotification('Livro movido para Quero Ver.');
+            } else {
+                UI.showNotification('Progresso de leitura atualizado.');
+            }
+            await refreshLibraryViewsAfterMediaChange('book');
+            await displayMediaDetails('book', mediaId);
             return;
         }
 
@@ -2307,6 +2567,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const refreshMediaBtn = target.closest('#media-refresh-details-btn');
+        if (refreshMediaBtn) {
+            const mediaType = parseMediaType(DOM.seriesViewSection.dataset.mediaType);
+            const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
+            if (!Number.isNaN(mediaId)) {
+                UI.showNotification('A atualizar detalhes...');
+                await displayMediaDetails(mediaType, mediaId);
+            }
+            return;
+        }
+
         const markAllBtn = target.closest('#mark-all-seen-btn');
         if (markAllBtn) {
             const seriesId = parseInt((DOM.seriesViewSection as HTMLElement).dataset.seriesId!, 10);
@@ -2329,7 +2600,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateGlobalProgress();
                     UI.updateKeyStats();
 
-                    if (movedToArchive) UI.updateActiveNavLink('archive-section');
+                    if (movedToArchive) {
+                        await setAllSeriesStatusFilterPreference('archive');
+                        UI.updateActiveNavLink('all-series-section');
+                    }
                     UI.showNotification('Todos os episódios foram marcados como vistos.');
                 } else {
                     UI.showNotification('Não foram encontrados episódios para marcar.');
@@ -2381,7 +2655,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const movedToArchive = await checkSeriesCompletion(seriesId);
                     if (movedToArchive) {
-                        UI.updateActiveNavLink('archive-section');
+                        await setAllSeriesStatusFilterPreference('archive');
+                        UI.updateActiveNavLink('all-series-section');
                     } else {
                         UI.renderWatchlist();
                         UI.renderUnseen();
@@ -2440,7 +2715,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const topRatedItem = (e.target as Element).closest('.top-rated-item');
         if (topRatedItem) {
             const seriesId = parseInt((topRatedItem as HTMLElement).dataset.seriesId!, 10);
-            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId } }));
+            const mediaType = parseMediaType((topRatedItem as HTMLElement).dataset.mediaType);
+            document.dispatchEvent(new CustomEvent('display-media-details', { detail: { mediaType, mediaId: seriesId } }));
             UI.closeSeriesByRatingModal();
             UI.closeAllRatingsModal();
         }
@@ -2448,6 +2724,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let notesSaveTimeout: number;
     DOM.dashboard?.addEventListener('input', (e) => {
+        const bookProgressRange = (e.target as Element).closest('#book-progress-range') as HTMLInputElement | null;
+        if (bookProgressRange) {
+            const progressValue = DOM.seriesViewSection.querySelector<HTMLElement>('#book-progress-value');
+            if (progressValue) progressValue.textContent = `${bookProgressRange.value}%`;
+            return;
+        }
+
         const notesTextarea = (e.target as Element).closest('.user-notes-textarea');
         if (notesTextarea) {
             clearTimeout(notesSaveTimeout);
@@ -2635,7 +2918,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Exportar a lista de séries mais bem avaliadas para CSV
         const ratedSeriesWithData = [...S.myWatchlist, ...S.myArchive]
-            .map(series => ({ series, rating: S.userData[series.id]?.rating }))
+            .map(series => {
+                const mediaType = series.media_type || 'series';
+                const mediaKey = mediaType === 'series' ? String(series.id) : createMediaKey(mediaType, series.id);
+                return { series, rating: S.userData[mediaKey]?.rating };
+            })
             .filter((item): item is { series: Series; rating: number } => !!item.rating && item.rating > 0);
 
         ratedSeriesWithData.sort((a, b) => b.rating - a.rating);
@@ -2657,8 +2944,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Listener para o evento personalizado que mostra os detalhes da série
+    document.addEventListener('display-media-details', ((e: CustomEvent) => {
+        const mediaType = parseMediaType(e.detail.mediaType);
+        const mediaId = Number(e.detail.mediaId);
+        if (!Number.isFinite(mediaId)) return;
+        displayMediaDetails(mediaType, mediaId);
+    }) as EventListener);
+
     document.addEventListener('display-series-details', ((e: CustomEvent) => {
-        displaySeriesDetails(e.detail.seriesId);
+        const seriesId = Number(e.detail.seriesId);
+        if (!Number.isFinite(seriesId)) return;
+        displayMediaDetails('series', seriesId);
     }) as EventListener);
 
     void (async () => {

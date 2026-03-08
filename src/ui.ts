@@ -3,6 +3,7 @@ import * as DOM from './dom';
 import * as S from './state';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType } from './types';
+import { createMediaKey } from './media';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -50,6 +51,29 @@ function createPosterImage(
         img.src = fallbackSrc;
     });
     return img;
+}
+
+function getMediaStateKey(series: Series): string {
+    const mediaType = series.media_type || 'series';
+    return mediaType === 'series' ? String(series.id) : createMediaKey(mediaType, series.id);
+}
+
+function getMediaProgressPercent(series: Series): number {
+    const mediaType = series.media_type || 'series';
+    if (mediaType === 'series') {
+        const watchedCount = S.watchedState[series.id]?.length || 0;
+        const totalEpisodes = series.total_episodes || 0;
+        if (totalEpisodes <= 0) return 0;
+        return Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100));
+    }
+    const progress = S.userData[getMediaStateKey(series)]?.progress_percent;
+    if (typeof progress !== 'number' || Number.isNaN(progress)) return 0;
+    return Math.max(0, Math.min(100, progress));
+}
+
+function getMediaRating(series: Series): number {
+    const rating = S.userData[getMediaStateKey(series)]?.rating;
+    return typeof rating === 'number' ? rating : 0;
 }
 
 // UI Update Functions
@@ -370,7 +394,7 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
         const posterPath = buildPosterUrl(
             seriesPoster,
             'w92',
-            'https://via.placeholder.com/45x67.png?text=N/A'
+            '/placeholders/poster.svg'
         );
         let episodeNumber = (episode.season_number !== undefined && episode.episode_number !== undefined) ? `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` : '';
         const itemElement = el('div', { class: 'episode-item-small' }, [
@@ -378,7 +402,7 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
                 posterPath,
                 `Poster de ${seriesName}`,
                 'next-aired-poster',
-                'https://via.placeholder.com/45x67.png?text=N/A'
+                '/placeholders/poster.svg'
             ),
             el('span', { class: 'episode-info', text: `${seriesName} ${episodeNumber}` }),
             el('span', { class: 'episode-date', text: formattedDate })
@@ -397,7 +421,7 @@ export function renderSearchResults(resultsList: Series[]) {
         const posterPath = buildPosterUrl(
             series.poster_path,
             'w185',
-            'https://via.placeholder.com/92x138.png?text=N/A'
+            '/placeholders/poster.svg'
         );
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
         const mediaType = series.media_type || 'series';
@@ -430,7 +454,7 @@ export function renderSearchResults(resultsList: Series[]) {
                 posterPath,
                 `Poster de ${series.name}`,
                 'search-result-poster',
-                'https://via.placeholder.com/92x138.png?text=N/A'
+                '/placeholders/poster.svg'
             ),
             el('div', { class: 'search-result-info' }, [
                 el('h3', {}, [
@@ -462,7 +486,7 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
         const posterPath = buildPosterUrl(
             series.poster_path,
             'w220_and_h330_face',
-            'https://via.placeholder.com/150x225.png?text=N/A'
+            '/placeholders/poster.svg'
         );
         const releaseDate = series.first_air_date ? new Date(series.first_air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Data desconhecida';
         const voteAverage = (series.vote_average || 0).toFixed(1);
@@ -475,7 +499,7 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
                         posterPath,
                         series.name,
                         'poster',
-                        'https://via.placeholder.com/150x225.png?text=N/A'
+                        '/placeholders/poster.svg'
                     )
                 ]),
                 el('div', { class: 'consensus' }, [
@@ -499,9 +523,16 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
 export function renderWatchlist() {
     const viewMode = DOM.watchlistContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.watchlistContainer.innerHTML = '';
-    const seriesToWatch = S.myWatchlist.filter(series => !S.watchedState[series.id] || S.watchedState[series.id].length === 0);
+    const seriesToWatch = S.myWatchlist.filter((series) => {
+        const mediaType = series.media_type || 'series';
+        if (mediaType === 'series') {
+            return !S.watchedState[series.id] || S.watchedState[series.id].length === 0;
+        }
+        if (mediaType === 'movie') return true;
+        return getMediaProgressPercent(series) === 0;
+    });
     if (seriesToWatch.length === 0) {
-        DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhuma série nova para começar. Adicione séries ou veja o separador "A Ver".</p>';
+        DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo novo para começar. Adicione itens ou veja o separador "A Ver".</p>';
         return;
     }
     seriesToWatch.forEach(series => {
@@ -514,12 +545,20 @@ export function renderUnseen() {
     const viewMode = DOM.unseenContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.unseenContainer.innerHTML = '';
     const seriesInProgress = S.myWatchlist.filter(series => {
-        // Uma série está "A Ver" se, e apenas se, tiver pelo menos um episódio visto.
-        const hasWatchedEpisodes = S.watchedState[series.id] && S.watchedState[series.id].length > 0;
-        return hasWatchedEpisodes;
+        const mediaType = series.media_type || 'series';
+        if (mediaType === 'series') {
+            const watchedCount = S.watchedState[series.id]?.length || 0;
+            const totalEpisodes = series.total_episodes || 0;
+            if (totalEpisodes > 0) {
+                return watchedCount > 0 && watchedCount < totalEpisodes;
+            }
+            return watchedCount > 0;
+        }
+        const progressPercent = getMediaProgressPercent(series);
+        return progressPercent > 0 && progressPercent < 100;
     });
     if (seriesInProgress.length === 0) {
-        DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em progresso.</p>';
+        DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo em progresso.</p>';
         return;
     }
     seriesInProgress.forEach(series => {
@@ -529,6 +568,7 @@ export function renderUnseen() {
 }
 
 export function renderArchive() {
+    if (!DOM.archiveContainer) return;
     const viewMode = DOM.archiveContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.archiveContainer.innerHTML = '';
     S.myArchive.sort((a, b) => a.name.localeCompare(b.name));
@@ -540,6 +580,22 @@ export function renderArchive() {
         const seriesItemElement = createSeriesItemElement(series, false, viewMode, false);
         DOM.archiveContainer.appendChild(seriesItemElement);
     });
+}
+
+type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
+
+function resolveLibraryStatus(series: Series): LibraryStatusFilter {
+    const mediaType = series.media_type || 'series';
+    const isArchived = S.myArchive.some(item => item.media_type === mediaType && item.id === series.id);
+    if (isArchived) return 'archive';
+
+    if (mediaType === 'series') {
+        const watchedCount = S.watchedState[series.id]?.length || 0;
+        return watchedCount > 0 ? 'unseen' : 'watchlist';
+    }
+
+    const progressPercent = getMediaProgressPercent(series);
+    return progressPercent > 0 && progressPercent < 100 ? 'unseen' : 'watchlist';
 }
 
 function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
@@ -585,21 +641,33 @@ function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
 }
 
 export function renderAllSeries() {
+    if (!DOM.allSeriesContainer) return;
     const viewMode = DOM.allSeriesContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.allSeriesContainer.innerHTML = '';
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     allSeries.sort((a, b) => a.name.localeCompare(b.name));
-    updateAllSeriesGenreFilterOptions(allSeries);
+    if (DOM.allSeriesStatusFilter) {
+        const desiredStatus = S.allSeriesStatusFilter;
+        const allowedStatuses = ['all', 'watchlist', 'unseen', 'archive'];
+        DOM.allSeriesStatusFilter.value = allowedStatuses.includes(desiredStatus) ? desiredStatus : 'all';
+    }
+    const selectedStatus = S.allSeriesStatusFilter;
+    const statusFilteredSeries = selectedStatus === 'all'
+        ? allSeries
+        : allSeries.filter(series => resolveLibraryStatus(series) === selectedStatus);
+    updateAllSeriesGenreFilterOptions(statusFilteredSeries);
     const selectedGenreId = S.allSeriesGenreFilter;
     const filteredSeries = selectedGenreId === 'all'
-        ? allSeries
-        : allSeries.filter(series => (series.genres || []).some(genre => genre.id === Number(selectedGenreId)));
+        ? statusFilteredSeries
+        : statusFilteredSeries.filter(series => (series.genres || []).some(genre => genre.id === Number(selectedGenreId)));
 
     if (filteredSeries.length === 0) {
         if (allSeries.length === 0) {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série na sua biblioteca. Adicione séries através da pesquisa.</p>';
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo na sua biblioteca. Adicione conteúdos através da pesquisa.</p>';
+        } else if (statusFilteredSeries.length === 0) {
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o estado selecionado.</p>';
         } else {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série encontrada para o género selecionado.</p>';
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o género selecionado.</p>';
         }
         return;
     }
@@ -642,21 +710,24 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const posterPath = buildPosterUrl(
         series.poster_path,
         'w185',
-        'https://via.placeholder.com/92x138.png?text=N/A'
+        '/placeholders/poster.svg'
     );
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const mediaType = series.media_type || 'series';
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
     const watchedCount = S.watchedState[series.id]?.length || 0;
     const totalEpisodes = series.total_episodes || 0;
-    const progressPercentage = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
+    const nonSeriesProgress = getMediaProgressPercent(series);
+    const progressPercentage = mediaType === 'series'
+        ? (totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0)
+        : nonSeriesProgress;
     const isSeriesInProgress = watchedCount > 0 && progressPercentage < 100;
 
     const unwatchedCount = totalEpisodes > 0 ? totalEpisodes - watchedCount : 0;
     let unwatchedBadge = null;
     // Mostra o badge se a flag `showUnwatchedBadge` estiver ativa (secção "A Ver")
     // OU se a série estiver em progresso (para a secção "Todas").
-    if ((showUnwatchedBadge || isSeriesInProgress) && unwatchedCount > 0 && viewMode === 'grid') {
+    if (mediaType === 'series' && (showUnwatchedBadge || isSeriesInProgress) && unwatchedCount > 0 && viewMode === 'grid') {
         unwatchedBadge = el('div', { class: 'unwatched-badge', text: unwatchedCount });
     }
 
@@ -673,14 +744,14 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
             posterPath,
             `Poster de ${series.name}`,
             'watchlist-poster-img',
-            'https://via.placeholder.com/92x138.png?text=N/A'
+            '/placeholders/poster.svg'
         ),
         unwatchedBadge,
         ratingCircle,
     ]);
 
     let progressElement = null;
-    if (!isDiscovery && (watchedCount > 0 || S.myArchive.some(s => s.media_type === mediaType && s.id === series.id))) {
+    if (!isDiscovery && (progressPercentage > 0 || S.myArchive.some(s => s.media_type === mediaType && s.id === series.id))) {
         let progressBarClass = '';
         if (progressPercentage >= 100) progressBarClass = 'complete';
         else if (progressPercentage > 0) progressBarClass = 'in-progress';
@@ -700,7 +771,17 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     if (showStatus) {
         let statusText = '';
         if (S.myArchive.some(s => s.media_type === mediaType && s.id === series.id)) statusText = 'Arquivo';
-        else if (S.myWatchlist.some(s => s.media_type === mediaType && s.id === series.id)) statusText = (watchedCount > 0) ? 'A Ver' : 'Quero Ver';
+        else if (S.myWatchlist.some(s => s.media_type === mediaType && s.id === series.id)) {
+            if (mediaType === 'series') {
+                statusText = (watchedCount > 0) ? 'A Ver' : 'Quero Ver';
+            } else if (progressPercentage >= 100) {
+                statusText = mediaType === 'movie' ? 'Visto' : 'Concluído';
+            } else if (progressPercentage > 0) {
+                statusText = mediaType === 'movie' ? 'A Ver' : 'Em leitura';
+            } else {
+                statusText = mediaType === 'book' ? 'Por ler' : 'Quero Ver';
+            }
+        }
         if (statusText) statusElement = el('span', { class: 'series-status-label', text: statusText });
     }
     const overview = series.overview || 'Sinopse não disponível.';
@@ -735,6 +816,179 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     ]);
 }
 
+export function renderMediaDetails(
+    media: Series,
+    options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean }
+) {
+    const detailSection = DOM.seriesViewSection;
+    detailSection.innerHTML = '';
+
+    const mediaType = media.media_type || 'series';
+    const mediaTypeLabel = getMediaTypeLabel(mediaType);
+    const releaseYear = media.first_air_date ? `(${new Date(media.first_air_date).getFullYear()})` : '';
+    const releaseDate = media.first_air_date
+        ? new Date(media.first_air_date).toLocaleDateString('pt-PT')
+        : 'Data desconhecida';
+    const posterPath = buildPosterUrl(
+        media.poster_path,
+        'w300_and_h450_bestv2',
+        '/placeholders/poster.svg'
+    );
+    const backdropPath = buildPosterUrl(media.backdrop_path, 'w1280', '');
+    const progressPercent = Math.max(0, Math.min(100, Math.round(options.progressPercent || 0)));
+    const genres = (media.genres || []).map((g) => g?.name).filter(Boolean).join(', ') || 'N/A';
+    const publicRating = typeof media.vote_average === 'number' ? media.vote_average.toFixed(1) : 'N/A';
+    const progressLabel = mediaType === 'movie'
+        ? (progressPercent >= 100 ? 'Visto' : 'Não visto')
+        : `${progressPercent}% lido`;
+    const findMediaTrailerKey = () => {
+        const videos = media.videos?.results;
+        if (!Array.isArray(videos) || videos.length === 0) return null;
+        const youtubeVideos = videos.filter((video) => video.site === 'YouTube');
+        if (youtubeVideos.length === 0) return null;
+        const priorities = [
+            (video: { type: string; official?: boolean }) => video.type === 'Trailer' && video.official === true,
+            (video: { type: string }) => video.type === 'Trailer',
+            (video: { type: string; official?: boolean }) => video.type === 'Teaser' && video.official === true,
+            (video: { type: string }) => video.type === 'Teaser',
+            (video: { official?: boolean }) => video.official === true,
+        ];
+        for (const match of priorities) {
+            const found = youtubeVideos.find(match);
+            if (found?.key) return found.key;
+        }
+        return youtubeVideos[0]?.key || null;
+    };
+    const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() : null;
+
+    const actionButtons: (HTMLElement | null)[] = [
+        el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
+            el('i', { class: 'fas fa-arrow-left' }),
+        ]),
+        el('button', { id: 'media-refresh-details-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Atualizar detalhes', 'aria-label': 'Atualizar detalhes' }, [
+            el('i', { class: 'fas fa-sync-alt' }),
+        ]),
+    ];
+
+    if (options.isInLibrary) {
+        actionButtons.push(
+            el('button', {
+                id: 'media-archive-toggle-btn',
+                class: 'v2-action-btn icon-only',
+                type: 'button',
+                title: options.isArchived ? 'Mover para Quero Ver' : 'Mover para Arquivo',
+                'aria-label': options.isArchived ? 'Mover para Quero Ver' : 'Mover para Arquivo'
+            }, [el('i', { class: options.isArchived ? 'fas fa-undo' : 'fas fa-archive' })]),
+            el('button', {
+                id: 'media-remove-from-library-btn',
+                class: 'v2-action-btn icon-only',
+                type: 'button',
+                title: 'Remover da biblioteca',
+                'aria-label': 'Remover da biblioteca'
+            }, [el('i', { class: 'fas fa-trash-alt' })]),
+        );
+    } else {
+        actionButtons.push(
+            el('button', {
+                id: 'media-add-watchlist-btn',
+                class: 'v2-action-btn icon-only',
+                type: 'button',
+                title: 'Adicionar à biblioteca',
+                'aria-label': 'Adicionar à biblioteca'
+            }, [el('i', { class: 'fas fa-plus' })]),
+        );
+    }
+
+    const progressControls = mediaType === 'movie'
+        ? el('div', { class: 'media-progress-controls' }, [
+            el('button', {
+                id: 'movie-toggle-seen-btn',
+                class: 'v2-action-btn',
+                type: 'button',
+                'data-current-progress': String(progressPercent)
+            }, [
+                el('i', { class: progressPercent >= 100 ? 'fas fa-check-circle' : 'far fa-circle' }),
+                progressPercent >= 100 ? ' Marcar como não visto' : ' Marcar como visto'
+            ]),
+        ])
+        : el('div', { class: 'media-progress-controls book-progress-controls' }, [
+            el('label', { for: 'book-progress-range', text: 'Leitura' }),
+            el('input', {
+                id: 'book-progress-range',
+                type: 'range',
+                min: '0',
+                max: '100',
+                step: '1',
+                value: String(progressPercent),
+            }),
+            el('span', { id: 'book-progress-value', class: 'book-progress-value', text: `${progressPercent}%` }),
+            el('button', { id: 'book-progress-save-btn', class: 'v2-action-btn', type: 'button' }, [
+                el('i', { class: 'fas fa-save' }),
+                ' Guardar progresso'
+            ]),
+        ]);
+
+    const header = el('div', { class: 'v2-detail-header media-detail-header', style: backdropPath ? `background-image: url('${backdropPath}');` : '' }, [
+        el('div', { class: 'v2-header-custom-bg' }, [
+            el('div', { class: 'v2-header-content' }, [
+                el('div', { class: 'v2-poster-wrapper media-detail-poster' }, [
+                    createPosterImage(
+                        posterPath,
+                        `Poster de ${media.name}`,
+                        'v2-poster',
+                        '/placeholders/poster.svg'
+                    )
+                ]),
+                el('div', { class: 'v2-details-wrapper' }, [
+                    el('div', { class: 'v2-title' }, [
+                        el('div', { class: 'v2-title-text' }, [
+                            el('h1', {}, [
+                                `${media.name} `,
+                                el('span', { class: 'release-year', text: releaseYear }),
+                                ' ',
+                                el('span', { class: 'media-type-chip', text: mediaTypeLabel })
+                            ])
+                        ]),
+                        el('div', { class: 'v2-header-actions' }, actionButtons)
+                    ]),
+                    el('div', { class: 'v2-facts' }, [
+                        document.createTextNode(releaseDate),
+                        el('span', { class: 'separator-dot', html: ' &bull; ' }),
+                        document.createTextNode(`Avaliação pública: ${publicRating}`),
+                        el('span', { class: 'separator-dot', html: ' &bull; ' }),
+                        document.createTextNode(`Progresso: ${progressLabel}`),
+                    ]),
+                    el('div', { class: 'v2-overview' }, [
+                        el('h3', { text: 'Sinopse' }),
+                        el('p', { text: media.overview || 'Sinopse não disponível.' })
+                    ]),
+                    mediaTrailerKey
+                        ? el('div', { class: 'v2-actions' }, [
+                            el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': mediaTrailerKey }, [
+                                el('i', { class: 'fas fa-play' }),
+                                ' Ver Trailer'
+                            ])
+                        ])
+                        : null,
+                    el('div', { class: 'v2-additional-facts' }, [
+                        el('div', { class: 'v2-metadata-grid' }, [
+                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Tipo' }), el('p', { text: mediaTypeLabel })]),
+                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Géneros' }), el('p', { text: genres })]),
+                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Fonte' }), el('p', { text: media.source_provider || 'N/A' })]),
+                        ])
+                    ]),
+                    progressControls
+                ])
+            ])
+        ])
+    ]);
+
+    detailSection.appendChild(header);
+    detailSection.dataset.seriesId = String(media.id);
+    detailSection.dataset.mediaType = mediaType;
+    detailSection.dataset.mediaId = String(media.id);
+}
+
 export function renderSeriesDetails(
     seriesData: TMDbSeriesDetails,
     allTMDbSeasonsData: TMDbSeason[],
@@ -746,7 +1000,7 @@ export function renderSeriesDetails(
     const detailSection = DOM.seriesViewSection;
     detailSection.innerHTML = '';
     const backdropPath = seriesData.backdrop_path ? `https://image.tmdb.org/t/p/w1280${seriesData.backdrop_path}` : '';
-    const posterPath = seriesData.poster_path ? `https://image.tmdb.org/t/p/w300_and_h450_bestv2${seriesData.poster_path}` : 'https://via.placeholder.com/300x450.png?text=N/A';
+    const posterPath = seriesData.poster_path ? `https://image.tmdb.org/t/p/w300_and_h450_bestv2${seriesData.poster_path}` : '/placeholders/poster.svg';
     const releaseYear = seriesData.first_air_date ? `(${new Date(seriesData.first_air_date).getFullYear()})` : '';
     const premiereDate = seriesData.first_air_date ? new Date(seriesData.first_air_date).toLocaleDateString('pt-PT') : '';
     const genres = seriesData.genres?.map(g => g.name).join(', ') || '';
@@ -1053,8 +1307,8 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
             stillPathSmall = `https://image.tmdb.org/t/p/w185${seriesPosterPath}`;
             stillPathLarge = `https://image.tmdb.org/t/p/w780${seriesPosterPath}`;
         } else {
-            stillPathSmall = 'https://via.placeholder.com/185x104.png?text=N/A';
-            stillPathLarge = 'https://via.placeholder.com/780x439.png?text=N/A';
+            stillPathSmall = '/placeholders/still.svg';
+            stillPathLarge = '/placeholders/still.svg';
         }
         const runtimeText = episode.runtime ? `${episode.runtime} min` : 'N/A';
         const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview || 'Sinopse não disponível.', 'data-still-path-large': stillPathLarge }, [
@@ -1135,6 +1389,10 @@ export function updateKeyStats(animate = false): { totalSeries: number, activeSe
     let totalWatchTimeMinutes = 0;
     let activeSeriesCount = 0;
     allUserSeries.forEach(series => {
+        if ((series.media_type || 'series') !== 'series') {
+            if (getMediaProgressPercent(series) > 0) activeSeriesCount++;
+            return;
+        }
         const watchedCount = S.watchedState[series.id]?.length || 0;
         const isInArchive = S.myArchive.some(s => s.id === series.id);
         if (watchedCount > 0 || isInArchive) activeSeriesCount++;
@@ -1411,8 +1669,8 @@ function renderTopRatedSeries() {
     if (existingBtn) existingBtn.remove();
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const ratedSeries: (Series & { userRating: number })[] = allSeries.map(series => {
-        const seriesUserData = S.userData[series.id];
-        if (seriesUserData && seriesUserData.rating && seriesUserData.rating > 0) return { ...series, userRating: seriesUserData.rating };
+        const userRating = getMediaRating(series);
+        if (userRating > 0) return { ...series, userRating };
         return null;
     }).filter((s): s is Series & { userRating: number } => s !== null);
     ratedSeries.sort((a, b) => (b.userRating ?? 0) - (a.userRating ?? 0) || a.name.localeCompare(b.name));
@@ -1426,14 +1684,14 @@ function renderTopRatedSeries() {
         const posterPath = buildPosterUrl(
             series?.poster_path,
             'w92',
-            'https://via.placeholder.com/40x59.png?text=N/A'
+            '/placeholders/poster.svg'
         );
-        const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series?.id), title: `Ver detalhes de ${series?.name}` }, [
+        const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series?.id), 'data-media-type': series.media_type || 'series', title: `Ver detalhes de ${series?.name}` }, [
             createPosterImage(
                 posterPath,
                 `Poster de ${series?.name}`,
                 'top-rated-item-poster',
-                'https://via.placeholder.com/40x59.png?text=N/A'
+                '/placeholders/poster.svg'
             ),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series?.name })]),
             el('div', { class: 'top-rated-item-rating' }, [el('i', { class: 'fas fa-star' }), el('span', { text: String(series?.userRating) })])
@@ -1451,7 +1709,7 @@ function renderRatingsSummary() {
     const allSeries: Series[] = [...S.myWatchlist, ...S.myArchive];
     const ratingsMap: { [key: number]: number } = {};
     allSeries.forEach(series => {
-        const rating = S.userData[series.id]?.rating;
+        const rating = getMediaRating(series);
         if (rating && rating > 0) {
             if (!ratingsMap[rating]) ratingsMap[rating] = 0;
             ratingsMap[rating]++;
@@ -1479,7 +1737,7 @@ function renderRatedSeriesByRating(rating: number) {
     const container = DOM.seriesByRatingModalResults;
     container.innerHTML = '';
     const allSeries = [...S.myWatchlist, ...S.myArchive];
-    const ratedSeries = allSeries.filter(series => S.userData[series.id]?.rating === rating).sort((a, b) => a.name.localeCompare(b.name));
+    const ratedSeries = allSeries.filter(series => getMediaRating(series) === rating).sort((a, b) => a.name.localeCompare(b.name));
     if (ratedSeries.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">Nenhuma série com esta classificação.</p>';
         return;
@@ -1488,14 +1746,14 @@ function renderRatedSeriesByRating(rating: number) {
         const posterPath = buildPosterUrl(
             series.poster_path,
             'w92',
-            'https://via.placeholder.com/40x59.png?text=N/A'
+            '/placeholders/poster.svg'
         );
-        const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series.id), title: `Ver detalhes de ${series.name}` }, [
+        const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series.id), 'data-media-type': series.media_type || 'series', title: `Ver detalhes de ${series.name}` }, [
             createPosterImage(
                 posterPath,
                 `Poster de ${series.name}`,
                 'top-rated-item-poster',
-                'https://via.placeholder.com/40x59.png?text=N/A'
+                '/placeholders/poster.svg'
             ),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series.name })]),
             el('div', { class: 'top-rated-item-rating' }, [el('i', { class: 'fas fa-star' }), el('span', { text: rating })])
@@ -1533,7 +1791,7 @@ export function performModalLibrarySearch() {
         const posterPath = buildPosterUrl(
             series.poster_path,
             'w92',
-            'https://via.placeholder.com/40x59.png?text=N/A'
+            '/placeholders/poster.svg'
         );
         const mediaType = series.media_type || 'series';
         const mediaTypeLabel = getMediaTypeLabel(mediaType);
@@ -1542,7 +1800,7 @@ export function performModalLibrarySearch() {
                 posterPath,
                 `Poster de ${series.name}`,
                 '',
-                'https://via.placeholder.com/40x59.png?text=N/A'
+                '/placeholders/poster.svg'
             ),
             el('p', {}, [
                 series.name,
@@ -1551,12 +1809,7 @@ export function performModalLibrarySearch() {
             ])
         ]);
         item.addEventListener('click', () => {
-            if (mediaType !== 'series') {
-                showNotification(`Detalhes de ${mediaTypeLabel.toLowerCase()} chegam no próximo passo.`);
-                closeLibrarySearchModal();
-                return;
-            }
-            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: series.id } }));
+            document.dispatchEvent(new CustomEvent('display-media-details', { detail: { mediaType, mediaId: series.id } }));
             closeLibrarySearchModal();
         });
         DOM.librarySearchModalResults.appendChild(item);
