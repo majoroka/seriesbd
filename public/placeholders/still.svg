@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 439" role="img" aria-label="Imagem indisponivel">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d2230" />
+      <stop offset="100%" stop-color="#121722" />
+    </linearGradient>
+  </defs>
+  <rect width="780" height="439" fill="url(#bg)" />
+  <rect x="24" y="24" width="732" height="391" rx="12" fill="none" stroke="#3e4a62" stroke-width="3" />
+  <g fill="#8b94a7" font-family="Montserrat, Arial, sans-serif" text-anchor="middle">
+    <text x="390" y="220" font-size="52" font-weight="700">N/A</text>
+    <text x="390" y="258" font-size="20" font-weight="500">Imagem indisponivel</text>
+  </g>
+</svg>
