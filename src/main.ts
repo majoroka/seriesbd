@@ -10,7 +10,7 @@ import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
-import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
+import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
@@ -1237,9 +1237,25 @@ function setupViewToggle(toggleElement: HTMLElement, container: HTMLElement, sto
 async function exportData(): Promise<void> {
     DOM.settingsMenu.classList.remove('visible');
     try {
+        const watchedStateRecords = await db.watchedState.toArray();
+        const userDataRecords = await db.userData.toArray();
         const backupData = {
-            version: 2,
+            version: 3,
+            format: 'seriesdb-multimedia-v1',
             timestamp: new Date().toISOString(),
+            library: {
+                watchlist: S.myWatchlist,
+                archive: S.myArchive,
+            },
+            state: {
+                watchedState: S.watchedState,
+                userData: S.userData,
+            },
+            records: {
+                watchedState: watchedStateRecords,
+                userData: userDataRecords,
+            },
+            // Compatibilidade com versões antigas do import.
             watchlist: S.myWatchlist,
             archive: S.myArchive,
             watchedState: S.watchedState,
@@ -1291,9 +1307,202 @@ async function importData(): Promise<void> {
             if (!event.target?.result) return;
             try {
                 const data = JSON.parse(event.target.result as string);
-                if (!data.watchlist || !data.archive || !data.watchedState) throw new Error('Ficheiro de backup inválido ou corrompido.');
-                const normalizedWatchlist = normalizeSeriesCollection(data.watchlist);
-                const normalizedArchive = normalizeSeriesCollection(data.archive);
+                const rawWatchlist = Array.isArray(data?.library?.watchlist)
+                    ? data.library.watchlist
+                    : data?.watchlist;
+                const rawArchive = Array.isArray(data?.library?.archive)
+                    ? data.library.archive
+                    : data?.archive;
+                if (!Array.isArray(rawWatchlist) || !Array.isArray(rawArchive)) {
+                    throw new Error('Ficheiro de backup inválido ou corrompido.');
+                }
+
+                const remappedMediaKeys = new Map<string, string>();
+                const normalizeImportedLibrary = (rawCollection: unknown): Series[] => {
+                    const normalizedCollection = normalizeSeriesCollection(rawCollection);
+                    const dedupedByMediaKey = new Map<string, Series>();
+
+                    normalizedCollection.forEach((entry) => {
+                        const mediaType = parseMediaType(entry.media_type);
+                        const originalId = Number(entry.id);
+                        if (!Number.isFinite(originalId)) return;
+                        const originalMediaId = Math.trunc(originalId);
+                        let normalizedMediaId = originalMediaId;
+
+                        if (mediaType === 'movie') {
+                            const isScopedMovieId = normalizedMediaId >= 1_000_000_000 && normalizedMediaId < 2_000_000_000;
+                            if (!isScopedMovieId) {
+                                const sourceNumericId = Number(entry.source_id);
+                                const movieSourceId = Number.isFinite(sourceNumericId) ? Math.trunc(sourceNumericId) : normalizedMediaId;
+                                normalizedMediaId = toScopedMovieId(movieSourceId);
+                            }
+                        } else if (mediaType === 'book') {
+                            const isScopedBookId = normalizedMediaId >= 2_000_000_000 && normalizedMediaId < 3_000_000_000;
+                            if (!isScopedBookId) {
+                                normalizedMediaId = toScopedBookId(entry.source_id || String(normalizedMediaId));
+                            }
+                        }
+
+                        const normalizedEntry: Series = {
+                            ...entry,
+                            media_type: mediaType,
+                            id: normalizedMediaId,
+                        };
+
+                        const originalKey = createMediaKey(mediaType, originalMediaId);
+                        const normalizedKey = createMediaKey(mediaType, normalizedMediaId);
+                        if (originalKey !== normalizedKey) {
+                            remappedMediaKeys.set(originalKey, normalizedKey);
+                        }
+
+                        dedupedByMediaKey.set(normalizedKey, normalizedEntry);
+                    });
+
+                    return Array.from(dedupedByMediaKey.values());
+                };
+
+                const normalizeImportedWatchedItems = (
+                    watchedStateObject: unknown,
+                    watchedStateRecords: unknown
+                ): WatchedStateItem[] => {
+                    const watchedItemsMap = new Map<string, WatchedStateItem>();
+
+                    if (watchedStateObject && typeof watchedStateObject === 'object') {
+                        for (const [stateKey, rawEpisodes] of Object.entries(watchedStateObject as Record<string, unknown>)) {
+                            if (!Array.isArray(rawEpisodes)) continue;
+                            const parsedMedia = parseMediaKey(stateKey);
+                            if (!parsedMedia) continue;
+
+                            const sourceMediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                            const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
+                            const normalizedMedia = parseMediaKey(normalizedMediaKey);
+                            if (!normalizedMedia) continue;
+
+                            rawEpisodes.forEach((episodeId) => {
+                                if (episodeId === null || episodeId === undefined) return;
+                                const parsedEpisodeId = Number.parseInt(String(episodeId), 10);
+                                if (Number.isNaN(parsedEpisodeId)) return;
+
+                                const item: WatchedStateItem = {
+                                    media_key: normalizedMediaKey,
+                                    media_type: normalizedMedia.media_type,
+                                    media_id: normalizedMedia.media_id,
+                                    seriesId: normalizedMedia.media_id,
+                                    episodeId: parsedEpisodeId,
+                                };
+                                watchedItemsMap.set(`${item.media_key}:${item.episodeId}`, item);
+                            });
+                        }
+                    }
+
+                    if (Array.isArray(watchedStateRecords)) {
+                        watchedStateRecords.forEach((record) => {
+                            if (!record || typeof record !== 'object') return;
+                            const parsedRecord = record as Record<string, unknown>;
+                            const rawMediaKey = typeof parsedRecord.media_key === 'string' ? parsedRecord.media_key : null;
+                            let parsedMedia = rawMediaKey ? parseMediaKey(rawMediaKey) : null;
+                            if (!parsedMedia) {
+                                const mediaId = Number(parsedRecord.media_id ?? parsedRecord.seriesId);
+                                if (!Number.isFinite(mediaId)) return;
+                                parsedMedia = {
+                                    media_type: parseMediaType(parsedRecord.media_type as string),
+                                    media_id: Math.trunc(mediaId),
+                                };
+                            }
+
+                            const sourceMediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                            const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
+                            const normalizedMedia = parseMediaKey(normalizedMediaKey);
+                            if (!normalizedMedia) return;
+
+                            const parsedEpisodeId = Number.parseInt(String(parsedRecord.episodeId), 10);
+                            if (Number.isNaN(parsedEpisodeId)) return;
+
+                            const item: WatchedStateItem = {
+                                media_key: normalizedMediaKey,
+                                media_type: normalizedMedia.media_type,
+                                media_id: normalizedMedia.media_id,
+                                seriesId: normalizedMedia.media_id,
+                                episodeId: parsedEpisodeId,
+                            };
+                            watchedItemsMap.set(`${item.media_key}:${item.episodeId}`, item);
+                        });
+                    }
+
+                    return Array.from(watchedItemsMap.values());
+                };
+
+                const normalizeImportedUserDataItems = (
+                    userDataObject: unknown,
+                    userDataRecords: unknown
+                ): UserDataItem[] => {
+                    const userDataMap = new Map<string, UserDataItem>();
+
+                    if (userDataObject && typeof userDataObject === 'object') {
+                        for (const [stateKey, rawValue] of Object.entries(userDataObject as Record<string, unknown>)) {
+                            const parsedMedia = parseMediaKey(stateKey);
+                            if (!parsedMedia || !rawValue || typeof rawValue !== 'object') continue;
+                            const sourceMediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                            const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
+                            const normalizedMedia = parseMediaKey(normalizedMediaKey);
+                            if (!normalizedMedia) continue;
+
+                            const valueRecord = rawValue as Record<string, unknown>;
+                            const item: UserDataItem = {
+                                media_key: normalizedMediaKey,
+                                media_type: normalizedMedia.media_type,
+                                media_id: normalizedMedia.media_id,
+                                seriesId: normalizedMedia.media_id,
+                                rating: typeof valueRecord.rating === 'number' ? valueRecord.rating : undefined,
+                                notes: typeof valueRecord.notes === 'string' ? valueRecord.notes : undefined,
+                            };
+                            userDataMap.set(item.media_key, item);
+                        }
+                    }
+
+                    if (Array.isArray(userDataRecords)) {
+                        userDataRecords.forEach((record) => {
+                            if (!record || typeof record !== 'object') return;
+                            const parsedRecord = record as Record<string, unknown>;
+                            const rawMediaKey = typeof parsedRecord.media_key === 'string' ? parsedRecord.media_key : null;
+                            let parsedMedia = rawMediaKey ? parseMediaKey(rawMediaKey) : null;
+                            if (!parsedMedia) {
+                                const mediaId = Number(parsedRecord.media_id ?? parsedRecord.seriesId);
+                                if (!Number.isFinite(mediaId)) return;
+                                parsedMedia = {
+                                    media_type: parseMediaType(parsedRecord.media_type as string),
+                                    media_id: Math.trunc(mediaId),
+                                };
+                            }
+                            const sourceMediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
+                            const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
+                            const normalizedMedia = parseMediaKey(normalizedMediaKey);
+                            if (!normalizedMedia) return;
+
+                            const item: UserDataItem = {
+                                media_key: normalizedMediaKey,
+                                media_type: normalizedMedia.media_type,
+                                media_id: normalizedMedia.media_id,
+                                seriesId: normalizedMedia.media_id,
+                                rating: typeof parsedRecord.rating === 'number' ? parsedRecord.rating : undefined,
+                                notes: typeof parsedRecord.notes === 'string' ? parsedRecord.notes : undefined,
+                            };
+                            userDataMap.set(item.media_key, item);
+                        });
+                    }
+
+                    return Array.from(userDataMap.values());
+                };
+
+                const normalizedWatchlist = normalizeImportedLibrary(rawWatchlist);
+                const normalizedArchive = normalizeImportedLibrary(rawArchive);
+                const importedWatchedState = data?.state?.watchedState ?? data?.progress?.watchedState ?? data?.watchedState;
+                const importedWatchedRecords = data?.records?.watchedState ?? data?.watchedStateRecords ?? data?.user_progress;
+                const importedUserData = data?.state?.userData ?? data?.progress?.userData ?? data?.userData;
+                const importedUserDataRecords = data?.records?.userData ?? data?.userDataRecords ?? data?.user_notes_ratings;
+                const watchedItems = normalizeImportedWatchedItems(importedWatchedState, importedWatchedRecords);
+                const userDataItems = normalizeImportedUserDataItems(importedUserData, importedUserDataRecords);
+
                 await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData], async () => {
                     await db.watchlist.clear();
                     await db.archive.clear();
@@ -1301,44 +1510,7 @@ async function importData(): Promise<void> {
                     await db.userData.clear();
                     await db.watchlist.bulkPut(normalizedWatchlist);
                     await db.archive.bulkPut(normalizedArchive);
-                    const watchedItems: WatchedStateItem[] = [];
-                    for (const stateKey in data.watchedState) {
-                        if (data.watchedState.hasOwnProperty(stateKey) && Array.isArray(data.watchedState[stateKey])) {
-                            const parsedMedia = parseMediaKey(stateKey);
-                            if (!parsedMedia) continue;
-                            const mediaKey = createMediaKey(parsedMedia.media_type, parsedMedia.media_id);
-                            data.watchedState[stateKey].forEach((episodeId: any) => {
-                                if (episodeId !== null && episodeId !== undefined) {
-                                    const epId = parseInt(episodeId, 10);
-                                    if (!isNaN(epId)) {
-                                        watchedItems.push({
-                                            media_key: mediaKey,
-                                            media_type: parsedMedia.media_type,
-                                            media_id: parsedMedia.media_id,
-                                            seriesId: parsedMedia.media_id,
-                                            episodeId: epId
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                    }
                     if (watchedItems.length > 0) await db.watchedState.bulkPut(watchedItems);
-                    const userDataItems: UserDataItem[] = [];
-                    for (const stateKey in (data.userData || {})) {
-                        const parsedMedia = parseMediaKey(stateKey);
-                        if (parsedMedia) {
-                            const { rating, notes } = data.userData[stateKey];
-                            userDataItems.push({
-                                media_key: createMediaKey(parsedMedia.media_type, parsedMedia.media_id),
-                                media_type: parsedMedia.media_type,
-                                media_id: parsedMedia.media_id,
-                                seriesId: parsedMedia.media_id,
-                                rating,
-                                notes
-                            });
-                        }
-                    }
                     if (userDataItems.length > 0) await db.userData.bulkPut(userDataItems);
                 });
                 UI.showNotification('Dados importados com sucesso! A aplicação será atualizada.');
