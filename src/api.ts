@@ -86,10 +86,33 @@ export async function fetchMovieDetails(
     const fallbackTmdbId = fromScopedMovieId(scopedMovieId);
     const parsedSourceId = Number(sourceId);
     const tmdbMovieId = Number.isFinite(parsedSourceId) ? Math.trunc(parsedSourceId) : fallbackTmdbId;
-    const detailsUrl = `${API_BASE_TMDB}/movie/${tmdbMovieId}?language=pt-PT`;
+    const detailsUrl = `${API_BASE_TMDB}/movie/${tmdbMovieId}?append_to_response=videos&language=pt-PT`;
     const response = await fetchWithRetry(detailsUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as any;
+    const initialVideos = Array.isArray(payload?.videos?.results) ? payload.videos.results : [];
+    let mergedVideos = [...initialVideos];
+    const hasYouTubeVideo = mergedVideos.some((video: any) => video?.site === 'YouTube');
+
+    if (!hasYouTubeVideo) {
+        try {
+            const fallbackVideosResponse = await fetchWithRetry(
+                `${API_BASE_TMDB}/movie/${tmdbMovieId}/videos?language=en-US`,
+                { signal },
+                RETRY_STANDARD.retries,
+                RETRY_STANDARD.backoff
+            );
+            if (fallbackVideosResponse.ok) {
+                const fallbackVideosPayload = await fallbackVideosResponse.json() as { results?: any[] };
+                const fallbackVideos = Array.isArray(fallbackVideosPayload?.results) ? fallbackVideosPayload.results : [];
+                mergedVideos = [...mergedVideos, ...fallbackVideos].filter((video, index, arr) =>
+                    arr.findIndex((candidate) => candidate?.key === video?.key) === index
+                );
+            }
+        } catch (error) {
+            console.warn('[movies] Falha ao carregar vídeos fallback en-US.', error);
+        }
+    }
 
     return normalizeSeries({
         id: toScopedMovieId(tmdbMovieId),
@@ -105,6 +128,7 @@ export async function fetchMovieDetails(
         genres: Array.isArray(payload?.genres) ? payload.genres : [],
         vote_average: typeof payload?.vote_average === 'number' ? payload.vote_average : undefined,
         episode_run_time: typeof payload?.runtime === 'number' ? payload.runtime : undefined,
+        videos: { results: mergedVideos },
     } as Series);
 }
 

@@ -53,6 +53,9 @@ export interface Series {
         next_episode_to_air: Episode | null;
         status: string;
     };
+    videos?: {
+        results: { key: string; site: string; type: string; official?: boolean }[];
+    };
     _lastUpdated?: string;
     userRating?: number;
 }

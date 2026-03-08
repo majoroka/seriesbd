@@ -812,6 +812,25 @@ export function renderMediaDetails(
     const progressLabel = mediaType === 'movie'
         ? (progressPercent >= 100 ? 'Visto' : 'Não visto')
         : `${progressPercent}% lido`;
+    const findMediaTrailerKey = () => {
+        const videos = media.videos?.results;
+        if (!Array.isArray(videos) || videos.length === 0) return null;
+        const youtubeVideos = videos.filter((video) => video.site === 'YouTube');
+        if (youtubeVideos.length === 0) return null;
+        const priorities = [
+            (video: { type: string; official?: boolean }) => video.type === 'Trailer' && video.official === true,
+            (video: { type: string }) => video.type === 'Trailer',
+            (video: { type: string; official?: boolean }) => video.type === 'Teaser' && video.official === true,
+            (video: { type: string }) => video.type === 'Teaser',
+            (video: { official?: boolean }) => video.official === true,
+        ];
+        for (const match of priorities) {
+            const found = youtubeVideos.find(match);
+            if (found?.key) return found.key;
+        }
+        return youtubeVideos[0]?.key || null;
+    };
+    const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() : null;
 
     const actionButtons: (HTMLElement | null)[] = [
         el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
@@ -914,6 +933,14 @@ export function renderMediaDetails(
                         el('h3', { text: 'Sinopse' }),
                         el('p', { text: media.overview || 'Sinopse não disponível.' })
                     ]),
+                    mediaTrailerKey
+                        ? el('div', { class: 'v2-actions' }, [
+                            el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': mediaTrailerKey }, [
+                                el('i', { class: 'fas fa-play' }),
+                                ' Ver Trailer'
+                            ])
+                        ])
+                        : null,
                     el('div', { class: 'v2-additional-facts' }, [
                         el('div', { class: 'v2-metadata-grid' }, [
                             el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Tipo' }), el('p', { text: mediaTypeLabel })]),
