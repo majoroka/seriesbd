@@ -1,18 +1,16 @@
-const JSON_HEADERS = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Cache-Control': 'no-store',
-};
-const HEARTBEAT_TABLE = 'system_heartbeat';
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  handleOptions,
+  jsonResponse,
+  logEvent,
+} from './_shared/security.js';
 
-function jsonResponse(payload, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      ...JSON_HEADERS,
-      ...extraHeaders,
-    },
-  });
-}
+const HEARTBEAT_TABLE = 'system_heartbeat';
+const ROUTE_KEY = 'heartbeat';
 
 function isAuthorized(request, expectedToken) {
   if (!expectedToken) return true;
@@ -87,16 +85,47 @@ async function persistHeartbeatRecord(env, record) {
 export async function onRequest(context) {
   const { request, env } = context;
   const method = request.method.toUpperCase();
+  const requestId = createRequestId(ROUTE_KEY);
+  const startedAt = Date.now();
+  const corsConfig = {
+    methods: 'GET, POST, OPTIONS',
+    headers: 'Content-Type, x-heartbeat-token',
+  };
+
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
+  if (optionsResponse) return optionsResponse;
 
   if (method !== 'GET' && method !== 'POST') {
-    return jsonResponse({ ok: false, error: 'Method not allowed' }, 405, {
-      Allow: 'GET, POST',
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, {
+      Allow: 'GET, POST, OPTIONS',
+    }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
     });
+  }
+
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 30, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   const expectedToken = env.HEARTBEAT_TOKEN;
   if (!isAuthorized(request, expectedToken)) {
-    return jsonResponse({ ok: false, error: 'Unauthorized heartbeat request' }, 401);
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Unauthorized heartbeat request' }, 401), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 401,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   const body = await readRequestBody(request);
@@ -104,16 +133,23 @@ export async function onRequest(context) {
 
   try {
     const persistence = await persistHeartbeatRecord(env, record);
-    return jsonResponse({
+    const response = addCorsHeaders(jsonResponse({
       ok: true,
       source: 'cloudflare-pages-function',
       timestamp: new Date().toISOString(),
       method,
       ...persistence,
+    }), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 200,
+      durationMs: Date.now() - startedAt,
     });
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const details = error instanceof Error ? error.message : String(error);
-    return jsonResponse(
+    logEvent('error', 'heartbeat.persist.error', { requestId, error: details });
+    const response = addCorsHeaders(jsonResponse(
       {
         ok: false,
         source: 'cloudflare-pages-function',
@@ -121,7 +157,13 @@ export async function onRequest(context) {
         details,
       },
       500
-    );
+    ), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 500,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
 }
