@@ -13,7 +13,7 @@ import {
     AggregatedOverviewCandidate,
     ProviderSource,
 } from "./types";
-import { normalizeSeries, normalizeSeriesCollection, toScopedBookId, toScopedMovieId } from "./media";
+import { fromScopedMovieId, normalizeSeries, normalizeSeriesCollection, toScopedBookId, toScopedMovieId } from "./media";
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
@@ -78,6 +78,36 @@ export async function searchMovies(query: string, signal: AbortSignal): Promise<
     return { results };
 }
 
+export async function fetchMovieDetails(
+    scopedMovieId: number,
+    signal: AbortSignal | null,
+    sourceId?: string
+): Promise<Series> {
+    const fallbackTmdbId = fromScopedMovieId(scopedMovieId);
+    const parsedSourceId = Number(sourceId);
+    const tmdbMovieId = Number.isFinite(parsedSourceId) ? Math.trunc(parsedSourceId) : fallbackTmdbId;
+    const detailsUrl = `${API_BASE_TMDB}/movie/${tmdbMovieId}?language=pt-PT`;
+    const response = await fetchWithRetry(detailsUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as any;
+
+    return normalizeSeries({
+        id: toScopedMovieId(tmdbMovieId),
+        media_type: 'movie',
+        source_provider: 'tmdb_movie',
+        source_id: String(tmdbMovieId),
+        name: String(payload?.title || payload?.name || 'Filme sem título'),
+        original_name: String(payload?.original_title || payload?.original_name || payload?.title || ''),
+        overview: String(payload?.overview || ''),
+        poster_path: payload?.poster_path || null,
+        backdrop_path: payload?.backdrop_path || null,
+        first_air_date: String(payload?.release_date || ''),
+        genres: Array.isArray(payload?.genres) ? payload.genres : [],
+        vote_average: typeof payload?.vote_average === 'number' ? payload.vote_average : undefined,
+        episode_run_time: typeof payload?.runtime === 'number' ? payload.runtime : undefined,
+    } as Series);
+}
+
 export async function searchBooks(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
     const searchUrl = `/api/books/search?query=${encodeURIComponent(query)}`;
     const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
@@ -91,6 +121,39 @@ export async function searchBooks(query: string, signal: AbortSignal): Promise<{
         return normalizeSeries({ ...item, id: toScopedBookId(String(item.source_id || item.id)) });
     });
     return { results };
+}
+
+export async function fetchBookDetails(book: Series, signal: AbortSignal | null): Promise<Series> {
+    const sourceId = String(book.source_id || '').trim();
+    const provider = String(book.source_provider || '').trim();
+    const detailsUrl = `/api/books/details?source_id=${encodeURIComponent(sourceId)}&provider=${encodeURIComponent(provider)}&query=${encodeURIComponent(book.name || '')}`;
+
+    try {
+        const response = await fetchWithRetry(detailsUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const payload = await response.json() as { result?: unknown };
+        const rawResult = payload?.result;
+        if (rawResult && typeof rawResult === 'object') {
+            const normalizedDetails = normalizeSeries(rawResult as Series);
+            const normalizedSourceId = String((normalizedDetails.source_id || sourceId || book.id));
+            return normalizeSeries({
+                ...book,
+                ...normalizedDetails,
+                media_type: 'book',
+                source_id: normalizedSourceId,
+                id: toScopedBookId(normalizedSourceId),
+            });
+        }
+    } catch (error) {
+        console.warn('[books] Falha ao carregar detalhe remoto. A usar dados locais.', error);
+    }
+
+    return normalizeSeries({
+        ...book,
+        media_type: 'book',
+        source_id: sourceId || String(book.id),
+        id: toScopedBookId(sourceId || String(book.id)),
+    });
 }
 
 export async function searchByMediaType(
@@ -127,7 +190,7 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
         const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
         if (response.ok) {
             const payload = await response.json() as TMDbSeriesDetails;
-            return normalizeSeries(payload) as TMDbSeriesDetails;
+            return { ...payload, media_type: 'series' };
         }
         if (response.status < 500) throw new Error(`HTTP error! status: ${response.status}`);
     } catch (error) {
@@ -143,7 +206,8 @@ export async function fetchSeriesDetails(seriesId: number, signal: AbortSignal |
             throw new Error(`HTTP error! status: ${baseResponse.status}`);
         }
 
-        const baseData = normalizeSeries(await baseResponse.json() as TMDbSeriesDetails) as TMDbSeriesDetails;
+        const basePayload = await baseResponse.json() as TMDbSeriesDetails;
+        const baseData: TMDbSeriesDetails = { ...basePayload, media_type: 'series' };
         const [videosResult, externalIdsResult] = await Promise.allSettled([
             fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/videos?language=pt-PT`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),
             fetchWithRetry(`${API_BASE_TMDB}/tv/${seriesId}/external_ids`, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff),

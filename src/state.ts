@@ -62,6 +62,10 @@ function toSeriesStateKey(seriesId: number): string {
     return String(seriesId);
 }
 
+function toStateKey(mediaType: MediaType, mediaId: number): string {
+    return mediaType === 'series' ? toSeriesStateKey(mediaId) : createMediaKey(mediaType, mediaId);
+}
+
 export async function addSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
     myWatchlist.push(normalizedSeries);
@@ -165,6 +169,7 @@ export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: numb
 export async function updateUserRating(seriesId: number, rating: number) {
     const stateKey = toSeriesStateKey(seriesId);
     const notes = userData[stateKey]?.notes || '';
+    const progressPercent = userData[stateKey]?.progress_percent;
     if (!userData[stateKey]) {
         userData[stateKey] = {};
     }
@@ -176,6 +181,7 @@ export async function updateUserRating(seriesId: number, rating: number) {
         seriesId,
         rating,
         notes,
+        progress_percent: progressPercent,
     });
     emitStateMutation('updateUserRating');
 }
@@ -183,6 +189,7 @@ export async function updateUserRating(seriesId: number, rating: number) {
 export async function updateUserNotes(seriesId: number, notes: string) {
     const stateKey = toSeriesStateKey(seriesId);
     const rating = userData[stateKey]?.rating || 0;
+    const progressPercent = userData[stateKey]?.progress_percent;
     if (!userData[stateKey]) {
         userData[stateKey] = {};
     }
@@ -194,8 +201,35 @@ export async function updateUserNotes(seriesId: number, notes: string) {
         seriesId,
         rating,
         notes,
+        progress_percent: progressPercent,
     });
     emitStateMutation('updateUserNotes');
+}
+
+export async function updateMediaProgress(mediaType: MediaType, mediaId: number, progressPercent: number) {
+    const normalizedProgress = Number.isFinite(progressPercent)
+        ? Math.max(0, Math.min(100, Math.round(progressPercent)))
+        : 0;
+    const stateKey = toStateKey(mediaType, mediaId);
+    const currentEntry = userData[stateKey] || {};
+    const rating = currentEntry.rating || 0;
+    const notes = currentEntry.notes || '';
+
+    userData[stateKey] = {
+        ...currentEntry,
+        progress_percent: normalizedProgress,
+    };
+
+    await db.userData.put({
+        media_key: createMediaKey(mediaType, mediaId),
+        media_type: mediaType,
+        media_id: mediaId,
+        seriesId: mediaId,
+        rating,
+        notes,
+        progress_percent: normalizedProgress,
+    });
+    emitStateMutation('updateMediaProgress');
 }
 
 async function loadWatchedStateFromDB(): Promise<WatchedState> {
@@ -222,7 +256,8 @@ async function loadUserDataFromDB(): Promise<UserData> {
         const stateKey = parsed.media_type === 'series' ? String(parsed.media_id) : createMediaKey(parsed.media_type, parsed.media_id);
         data[stateKey] = {
             rating: record.rating || 0,
-            notes: record.notes
+            notes: record.notes,
+            progress_percent: typeof record.progress_percent === 'number' ? record.progress_percent : undefined,
         };
     });
     return data;
@@ -288,7 +323,10 @@ export async function migrateFromLocalStorage() {
                         media_id: parsedMedia.media_id,
                         seriesId: parsedMedia.media_id,
                         rating,
-                        notes
+                        notes,
+                        progress_percent: typeof oldUserData[stateKey]?.progress_percent === 'number'
+                            ? oldUserData[stateKey].progress_percent
+                            : undefined,
                     });
                 }
             }
