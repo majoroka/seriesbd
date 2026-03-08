@@ -1,7 +1,7 @@
 import { db } from './db';
 import * as C from './constants';
 import { showNotification } from './ui';
-import { Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
+import { MediaType, Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
 import { createMediaKey, getSeriesMediaKey, normalizeSeries, normalizeSeriesCollection, parseMediaKey } from './media';
 
 // State variables
@@ -39,6 +39,9 @@ export function setCharts(data: { [key: string]: any }) { charts = data; }
 export function getSeries(seriesId: number): Series | undefined {
     return [...myWatchlist, ...myArchive].find(s => s.media_type === 'series' && s.id === seriesId);
 }
+export function getMediaItem(mediaType: MediaType, mediaId: number): Series | undefined {
+    return [...myWatchlist, ...myArchive].find(s => s.media_type === mediaType && s.id === mediaId);
+}
 export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
 export function setDetailViewData(data: DetailViewData) { detailViewData = data; }
 export function getDetailViewData(): DetailViewData { return detailViewData; }
@@ -67,22 +70,30 @@ export async function addSeries(series: Series) {
 }
 
 export async function removeSeries(seriesId: number) {
-    const mediaKey = getSeriesMediaKey(seriesId);
+    await removeMedia('series', seriesId);
+}
+
+export async function removeMedia(mediaType: MediaType, mediaId: number) {
+    const mediaKey = createMediaKey(mediaType, mediaId);
     await db.transaction('rw', db.watchlist, db.archive, db.watchedState, db.userData, async () => {
-        await db.watchlist.where('[media_type+id]').equals(['series', seriesId]).delete();
-        await db.archive.where('[media_type+id]').equals(['series', seriesId]).delete();
-        await db.watchedState.where({ seriesId: seriesId }).delete();
-        await db.userData.where({ seriesId: seriesId }).delete();
+        await db.watchlist.where('[media_type+id]').equals([mediaType, mediaId]).delete();
+        await db.archive.where('[media_type+id]').equals([mediaType, mediaId]).delete();
         await db.watchedState.where({ media_key: mediaKey }).delete();
         await db.userData.where({ media_key: mediaKey }).delete();
+        if (mediaType === 'series') {
+            await db.watchedState.where({ seriesId: mediaId }).delete();
+            await db.userData.where({ seriesId: mediaId }).delete();
+        }
     });
-    myWatchlist = myWatchlist.filter(series => series.id !== seriesId);
-    myArchive = myArchive.filter(series => series.id !== seriesId);
-    delete watchedState[toSeriesStateKey(seriesId)];
-    delete userData[toSeriesStateKey(seriesId)];
+    myWatchlist = myWatchlist.filter(series => !(series.media_type === mediaType && series.id === mediaId));
+    myArchive = myArchive.filter(series => !(series.media_type === mediaType && series.id === mediaId));
+    if (mediaType === 'series') {
+        delete watchedState[toSeriesStateKey(mediaId)];
+        delete userData[toSeriesStateKey(mediaId)];
+    }
     delete watchedState[mediaKey];
     delete userData[mediaKey];
-    emitStateMutation('removeSeries');
+    emitStateMutation('removeMedia');
 }
 
 export async function archiveSeries(series: Series) {

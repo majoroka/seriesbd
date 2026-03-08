@@ -86,6 +86,12 @@
             <header class="main-header">
                 <div class="search-bar">
                     <i class="fas fa-search"></i>
+                    <label for="search-media-type" class="visually-hidden">Tipo de conteúdo</label>
+                    <select id="search-media-type" aria-label="Tipo de conteúdo para pesquisar">
+                        <option value="series" selected>Séries</option>
+                        <option value="movie">Filmes</option>
+                        <option value="book">Livros</option>
+                    </select>
                     <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série...">
                     <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
                 </div>

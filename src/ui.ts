@@ -2,7 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType } from './types';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -17,6 +17,12 @@ let confirmationResolve: ((value: boolean) => void) | null = null;
 const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[] = [];
 let modalA11yInitialized = false;
+
+function getMediaTypeLabel(mediaType: MediaType): string {
+    if (mediaType === 'movie') return 'Filme';
+    if (mediaType === 'book') return 'Livro';
+    return 'Série';
+}
 
 // UI Update Functions
 export function showSection(targetId: string) {
@@ -347,24 +353,47 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
 export function renderSearchResults(resultsList: Series[]) {
     DOM.searchResultsContainer.innerHTML = '';
     if (resultsList.length === 0) {
-        DOM.searchResultsContainer.appendChild(el('p', { text: 'Nenhuma série encontrada.' }));
+        DOM.searchResultsContainer.appendChild(el('p', { text: 'Nenhum resultado encontrado.' }));
         return;
     }
     resultsList.forEach(series => {
         const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
-        const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
+        const mediaType = series.media_type || 'series';
+        const mediaTypeLabel = getMediaTypeLabel(mediaType);
+        const isInLibrary = S.myWatchlist.some(s => s.media_type === mediaType && s.id === series.id)
+            || S.myArchive.some(s => s.media_type === mediaType && s.id === series.id);
+        const allowMarkAllSeen = mediaType === 'series';
         
         const actionButtons = isInLibrary 
             ? el('div', { class: 'search-result-actions' }, [el('span', { class: 'in-library-label' }, ['Na Biblioteca ', el('i', { class: 'fas fa-check-circle' })])])
             : el('div', { class: 'search-result-actions' }, [
-                el('button', { class: 'v2-action-btn icon-only add-series-quick-btn', 'data-series-id': String(series.id), title: 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
-                el('button', { class: 'v2-action-btn icon-only mark-all-seen-quick-btn', 'data-series-id': String(series.id), title: 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })])
+                el('button', {
+                    class: 'v2-action-btn icon-only add-series-quick-btn',
+                    'data-series-id': String(series.id),
+                    'data-media-type': mediaType,
+                    title: `Adicionar ${mediaTypeLabel.toLowerCase()} à Biblioteca`
+                }, [el('i', { class: 'fas fa-plus' })]),
+                allowMarkAllSeen
+                    ? el('button', {
+                        class: 'v2-action-btn icon-only mark-all-seen-quick-btn',
+                        'data-series-id': String(series.id),
+                        'data-media-type': mediaType,
+                        title: 'Adicionar e Marcar Tudo Como Visto'
+                    }, [el('i', { class: 'fas fa-check-double' })])
+                    : null
             ]);
 
-        const item = el('div', { class: 'search-result-item', 'data-series-id': String(series.id) }, [
+        const item = el('div', { class: 'search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
             el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'search-result-poster', loading: 'lazy' }),
-            el('div', { class: 'search-result-info' }, [ el('h3', { text: `${series.name} ${releaseYear}` }), el('p', { text: series.overview || 'Sinopse não disponível.' }) ]),
+            el('div', { class: 'search-result-info' }, [
+                el('h3', {}, [
+                    `${series.name} ${releaseYear}`,
+                    mediaType !== 'series' ? ' ' : null,
+                    mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null
+                ]),
+                el('p', { text: series.overview || 'Sinopse não disponível.' })
+            ]),
             actionButtons
         ]);
         DOM.searchResultsContainer.appendChild(item);
@@ -557,6 +586,8 @@ export function renderPremieresSeries(seriesList: Series[], startingRank: number
 function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false, rank?: number): HTMLElement {
     const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
+    const mediaType = series.media_type || 'series';
+    const mediaTypeLabel = getMediaTypeLabel(mediaType);
     const watchedCount = S.watchedState[series.id]?.length || 0;
     const totalEpisodes = series.total_episodes || 0;
     const progressPercentage = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
@@ -585,7 +616,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     ]);
 
     let progressElement = null;
-    if (!isDiscovery && (watchedCount > 0 || S.myArchive.some(s => s.id === series.id))) {
+    if (!isDiscovery && (watchedCount > 0 || S.myArchive.some(s => s.media_type === mediaType && s.id === series.id))) {
         let progressBarClass = '';
         if (progressPercentage >= 100) progressBarClass = 'complete';
         else if (progressPercentage > 0) progressBarClass = 'in-progress';
@@ -604,8 +635,8 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     let statusElement = null;
     if (showStatus) {
         let statusText = '';
-        if (S.myArchive.some(s => s.id === series.id)) statusText = 'Arquivo';
-        else if (S.myWatchlist.some(s => s.id === series.id)) statusText = (watchedCount > 0) ? 'A Ver' : 'Quero Ver';
+        if (S.myArchive.some(s => s.media_type === mediaType && s.id === series.id)) statusText = 'Arquivo';
+        else if (S.myWatchlist.some(s => s.media_type === mediaType && s.id === series.id)) statusText = (watchedCount > 0) ? 'A Ver' : 'Quero Ver';
         if (statusText) statusElement = el('span', { class: 'series-status-label', text: statusText });
     }
     const overview = series.overview || 'Sinopse não disponível.';
@@ -617,6 +648,10 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
     }
     titleChildren.push(`${series.name} ${releaseYear}`);
+    if (mediaType !== 'series') {
+        titleChildren.push(' ');
+        titleChildren.push(el('span', { class: 'media-type-chip', text: mediaTypeLabel }));
+    }
     const titleElement = el('h3', {}, titleChildren);
 
     const titleInList = viewMode === 'list' ? titleElement : null;
@@ -630,7 +665,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleInGrid,
         statusInGrid
     ]);
-    return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id) }, [
+    return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
         posterElement,
         watchlistInfo,
     ]);
@@ -1408,17 +1443,28 @@ export function performModalLibrarySearch() {
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const filteredSeries = allSeries.filter(series => series.name.toLowerCase().includes(searchTerm));
     if (filteredSeries.length === 0) {
-        DOM.librarySearchModalResults.innerHTML = '<p>Nenhuma série encontrada.</p>';
+        DOM.librarySearchModalResults.innerHTML = '<p>Nenhum conteúdo encontrado.</p>';
         return;
     }
     filteredSeries.sort((a, b) => a.name.localeCompare(b.name));
     filteredSeries.forEach(series => {
         const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/40x59.png?text=N/A';
-        const item = el('div', { class: 'library-search-result-item', 'data-series-id': String(series.id) }, [
+        const mediaType = series.media_type || 'series';
+        const mediaTypeLabel = getMediaTypeLabel(mediaType);
+        const item = el('div', { class: 'library-search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
             el('img', { src: posterPath, alt: `Poster de ${series.name}`, loading: 'lazy' }),
-            el('p', { text: series.name })
+            el('p', {}, [
+                series.name,
+                mediaType !== 'series' ? ' ' : null,
+                mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null,
+            ])
         ]);
         item.addEventListener('click', () => {
+            if (mediaType !== 'series') {
+                showNotification(`Detalhes de ${mediaTypeLabel.toLowerCase()} chegam no próximo passo.`);
+                closeLibrarySearchModal();
+                return;
+            }
             document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: series.id } }));
             closeLibrarySearchModal();
         });

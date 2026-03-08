@@ -3,6 +3,7 @@ export const nextAiredListContainer = document.querySelector('.next-aired .episo
 export const mainNavLinks = document.querySelectorAll('.main-nav .nav-link') as NodeListOf<HTMLAnchorElement>;
 export const mainContentSections = document.querySelectorAll('.dashboard .card') as NodeListOf<HTMLElement>;
 export const openLibrarySearchBtn = document.getElementById('open-library-search-btn') as HTMLButtonElement;
+export const searchMediaTypeSelect = document.getElementById('search-media-type') as HTMLSelectElement;
 export const addSeriesHeaderInput = document.getElementById('add-series-header-input') as HTMLInputElement;
 export const addSeriesHeaderButton = document.getElementById('add-series-header-button') as HTMLButtonElement;
 export const globalProgressPercentage = document.getElementById('global-progress-percentage') as HTMLSpanElement;
