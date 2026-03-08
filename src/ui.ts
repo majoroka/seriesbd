@@ -568,6 +568,7 @@ export function renderUnseen() {
 }
 
 export function renderArchive() {
+    if (!DOM.archiveContainer) return;
     const viewMode = DOM.archiveContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.archiveContainer.innerHTML = '';
     S.myArchive.sort((a, b) => a.name.localeCompare(b.name));
@@ -579,6 +580,22 @@ export function renderArchive() {
         const seriesItemElement = createSeriesItemElement(series, false, viewMode, false);
         DOM.archiveContainer.appendChild(seriesItemElement);
     });
+}
+
+type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
+
+function resolveLibraryStatus(series: Series): LibraryStatusFilter {
+    const mediaType = series.media_type || 'series';
+    const isArchived = S.myArchive.some(item => item.media_type === mediaType && item.id === series.id);
+    if (isArchived) return 'archive';
+
+    if (mediaType === 'series') {
+        const watchedCount = S.watchedState[series.id]?.length || 0;
+        return watchedCount > 0 ? 'unseen' : 'watchlist';
+    }
+
+    const progressPercent = getMediaProgressPercent(series);
+    return progressPercent > 0 && progressPercent < 100 ? 'unseen' : 'watchlist';
 }
 
 function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
@@ -624,21 +641,33 @@ function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
 }
 
 export function renderAllSeries() {
+    if (!DOM.allSeriesContainer) return;
     const viewMode = DOM.allSeriesContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.allSeriesContainer.innerHTML = '';
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     allSeries.sort((a, b) => a.name.localeCompare(b.name));
-    updateAllSeriesGenreFilterOptions(allSeries);
+    if (DOM.allSeriesStatusFilter) {
+        const desiredStatus = S.allSeriesStatusFilter;
+        const allowedStatuses = ['all', 'watchlist', 'unseen', 'archive'];
+        DOM.allSeriesStatusFilter.value = allowedStatuses.includes(desiredStatus) ? desiredStatus : 'all';
+    }
+    const selectedStatus = S.allSeriesStatusFilter;
+    const statusFilteredSeries = selectedStatus === 'all'
+        ? allSeries
+        : allSeries.filter(series => resolveLibraryStatus(series) === selectedStatus);
+    updateAllSeriesGenreFilterOptions(statusFilteredSeries);
     const selectedGenreId = S.allSeriesGenreFilter;
     const filteredSeries = selectedGenreId === 'all'
-        ? allSeries
-        : allSeries.filter(series => (series.genres || []).some(genre => genre.id === Number(selectedGenreId)));
+        ? statusFilteredSeries
+        : statusFilteredSeries.filter(series => (series.genres || []).some(genre => genre.id === Number(selectedGenreId)));
 
     if (filteredSeries.length === 0) {
         if (allSeries.length === 0) {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série na sua biblioteca. Adicione séries através da pesquisa.</p>';
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo na sua biblioteca. Adicione conteúdos através da pesquisa.</p>';
+        } else if (statusFilteredSeries.length === 0) {
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o estado selecionado.</p>';
         } else {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhuma série encontrada para o género selecionado.</p>';
+            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o género selecionado.</p>';
         }
         return;
     }

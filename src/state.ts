@@ -14,6 +14,8 @@ export let userData: UserData = {};
 export let detailViewAbortController = new AbortController();
 export let searchAbortController = new AbortController();
 export let allSeriesGenreFilter = 'all';
+export type AllSeriesStatusFilter = 'all' | 'watchlist' | 'unseen' | 'archive';
+export let allSeriesStatusFilter: AllSeriesStatusFilter = 'all';
 export type DetailEpisodeMeta = { id: number; season_number: number; episode_number: number; };
 export type DetailSeasonMeta = { season_number: number; episode_count: number; };
 export type DetailViewData = {
@@ -43,6 +45,13 @@ export function getMediaItem(mediaType: MediaType, mediaId: number): Series | un
     return [...myWatchlist, ...myArchive].find(s => s.media_type === mediaType && s.id === mediaId);
 }
 export function setAllSeriesGenreFilter(value: string) { allSeriesGenreFilter = value; }
+export function setAllSeriesStatusFilter(value: string) {
+    if (value === 'watchlist' || value === 'unseen' || value === 'archive') {
+        allSeriesStatusFilter = value;
+        return;
+    }
+    allSeriesStatusFilter = 'all';
+}
 export function setDetailViewData(data: DetailViewData) { detailViewData = data; }
 export function getDetailViewData(): DetailViewData { return detailViewData; }
 export function resetDetailViewData() { detailViewData = { allEpisodes: [], episodeMap: {}, seasons: [] }; }

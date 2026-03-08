@@ -37,7 +37,6 @@
                 <ul>
                     <li><a href="#" class="nav-link active" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
                     <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> A Ver</a></li>
-                    <li><a href="#" class="nav-link" data-target="archive-section"><i class="fas fa-archive"></i> Arquivo</a></li>
                     <li><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Todas</a></li>
                     <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> Próximo Episódio</a></li>
                     <li class="separator"><a href="#" class="nav-link" data-target="trending-section"><i class="fas fa-fire"></i> Tendências</a></li>
@@ -140,22 +139,19 @@
                         <!-- Conteúdo dos episódios não vistos será carregado aqui. -->
                     </div>
                 </section>
-                <section class="card" id="archive-section" style="display: none;">
-                    <div class="section-header">
-                        <h2><i class="fas fa-archive"></i> Arquivo</h2>
-                        <div class="view-toggle" id="archive-view-toggle">
-                            <button class="icon-button active" data-view="list" aria-label="Mudar para vista de lista"><i class="fas fa-bars"></i></button>
-                            <button class="icon-button" data-view="grid" aria-label="Mudar para vista de mosaico"><i class="fas fa-th"></i></button>
-                        </div>
-                    </div>
-                    <div id="archive-container" class="series-list-container">
-                        <!-- Conteúdo do arquivo será carregado aqui. -->
-                    </div>
-                </section>
                 <section class="card" id="all-series-section" style="display: none;">
                     <div class="section-header">
                         <h2><i class="fas fa-list-ul"></i> Todas</h2>
                         <div class="section-header-controls">
+                            <div class="genre-filter">
+                                <label for="all-series-status-filter" class="visually-hidden">Filtrar por estado</label>
+                                <select id="all-series-status-filter" aria-label="Filtrar biblioteca por estado">
+                                    <option value="all">Todos os estados</option>
+                                    <option value="watchlist">Quero Ver</option>
+                                    <option value="unseen">A Ver</option>
+                                    <option value="archive">Arquivo</option>
+                                </select>
+                            </div>
                             <div class="genre-filter">
                                 <label for="all-series-genre-filter" class="visually-hidden">Filtrar por género</label>
                                 <select id="all-series-genre-filter" aria-label="Filtrar séries por género">

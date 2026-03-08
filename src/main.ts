@@ -204,6 +204,7 @@ async function runObservedSection<T>(
 
 type ViewMode = 'list' | 'grid';
 type ThemeMode = 'light' | 'dark' | 'system';
+type AllSeriesStatusFilter = 'all' | 'watchlist' | 'unseen' | 'archive';
 type SyncedUserSettings = {
     theme: ThemeMode;
     watchlist_view_mode: ViewMode;
@@ -228,6 +229,11 @@ function normalizeBooleanSetting(value: unknown, fallback: boolean): boolean {
     return fallback;
 }
 
+function normalizeAllSeriesStatusFilter(value: unknown, fallback: AllSeriesStatusFilter = 'all'): AllSeriesStatusFilter {
+    if (value === 'watchlist' || value === 'unseen' || value === 'archive' || value === 'all') return value;
+    return fallback;
+}
+
 function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     const topRatedFilterSetting = settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY);
     excludeAsianAnimationFromTopRated = topRatedFilterSetting === undefined
@@ -239,6 +245,10 @@ function applySettingsMapToUi(settingsMap: Map<string, unknown>) {
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.UNSEEN_VIEW_MODE_KEY), 'list'), DOM.unseenContainer, DOM.unseenViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ARCHIVE_VIEW_MODE_KEY), 'list'), DOM.archiveContainer, DOM.archiveViewToggle);
     UI.applyViewMode(normalizeViewMode(settingsMap.get(C.ALL_SERIES_VIEW_MODE_KEY), 'list'), DOM.allSeriesContainer, DOM.allSeriesViewToggle);
+    S.setAllSeriesStatusFilter(normalizeAllSeriesStatusFilter(settingsMap.get(C.ALL_SERIES_STATUS_FILTER_KEY), 'all'));
+    if (DOM.allSeriesStatusFilter) {
+        DOM.allSeriesStatusFilter.value = S.allSeriesStatusFilter;
+    }
 
     const theme = normalizeThemeMode(settingsMap.get(C.THEME_STORAGE_KEY), 'dark');
     UI.applyTheme(theme === 'system' ? 'dark' : theme);
@@ -589,6 +599,14 @@ async function syncMediaLibrarySectionWithProgress(
     return 'unchanged';
 }
 
+async function setAllSeriesStatusFilterPreference(status: AllSeriesStatusFilter): Promise<void> {
+    S.setAllSeriesStatusFilter(status);
+    if (DOM.allSeriesStatusFilter) {
+        DOM.allSeriesStatusFilter.value = status;
+    }
+    await db.kvStore.put({ key: C.ALL_SERIES_STATUS_FILTER_KEY, value: status });
+}
+
 function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
     return S.getMediaItem(mediaType, mediaId)
         || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId);
@@ -689,7 +707,8 @@ async function addAndMarkAllAsSeen(seriesData: Series | TMDbSeriesDetails) {
         await S.markEpisodesAsWatched(normalizedMedia.id, allEpisodeIds);
         const movedToArchive = await checkSeriesCompletion(normalizedMedia.id); // Move para o arquivo
         if (movedToArchive) {
-            UI.updateActiveNavLink('archive-section'); // Ativa o separador "Arquivo"
+            await setAllSeriesStatusFilterPreference('archive');
+            UI.updateActiveNavLink('all-series-section');
         }
     }
 }
@@ -1193,7 +1212,8 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
 
     const movedToArchive = await checkSeriesCompletion(seriesId);
     if (movedToArchive) {
-        UI.updateActiveNavLink('archive-section');
+        await setAllSeriesStatusFilterPreference('archive');
+        UI.updateActiveNavLink('all-series-section');
     }
 }
 
@@ -1752,10 +1772,16 @@ async function initializeApp(): Promise<void> {
         });
         UI.updateKeyStats();
 
-        const sectionFromHash = location.hash.substring(1);
+        const rawSectionFromHash = location.hash.substring(1);
+        if (rawSectionFromHash === 'archive-section') {
+            await setAllSeriesStatusFilterPreference('archive');
+        }
+        const sectionFromHash = rawSectionFromHash === 'archive-section' ? 'all-series-section' : rawSectionFromHash;
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
-            if (sectionFromHash === 'trending-section') {
+            if (sectionFromHash === 'all-series-section') {
+                UI.renderAllSeries();
+            } else if (sectionFromHash === 'trending-section') {
                 S.resetSearchAbortController();
                 loadTrending('day', 'trending-scroller-day');
                 loadTrending('week', 'trending-scroller-week');
@@ -2229,6 +2255,13 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.renderAllSeries();
     });
 
+    DOM.allSeriesStatusFilter?.addEventListener('change', async (event) => {
+        const { value } = event.target as HTMLSelectElement;
+        const normalizedStatus = normalizeAllSeriesStatusFilter(value, 'all');
+        await setAllSeriesStatusFilterPreference(normalizedStatus);
+        UI.renderAllSeries();
+    });
+
     // Header Search
     const setSearchMediaType = (mediaType: MediaType) => {
         selectedSearchMediaType = mediaType;
@@ -2567,7 +2600,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateGlobalProgress();
                     UI.updateKeyStats();
 
-                    if (movedToArchive) UI.updateActiveNavLink('archive-section');
+                    if (movedToArchive) {
+                        await setAllSeriesStatusFilterPreference('archive');
+                        UI.updateActiveNavLink('all-series-section');
+                    }
                     UI.showNotification('Todos os episódios foram marcados como vistos.');
                 } else {
                     UI.showNotification('Não foram encontrados episódios para marcar.');
@@ -2619,7 +2655,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const movedToArchive = await checkSeriesCompletion(seriesId);
                     if (movedToArchive) {
-                        UI.updateActiveNavLink('archive-section');
+                        await setAllSeriesStatusFilterPreference('archive');
+                        UI.updateActiveNavLink('all-series-section');
                     } else {
                         UI.renderWatchlist();
                         UI.renderUnseen();
