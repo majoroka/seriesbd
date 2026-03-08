@@ -24,6 +24,19 @@ function getMediaTypeLabel(mediaType: MediaType): string {
     return 'Série';
 }
 
+function buildPosterUrl(
+    posterPath: string | null | undefined,
+    tmdbSize: string,
+    fallback: string
+): string {
+    if (!posterPath) return fallback;
+    const normalizedPath = String(posterPath).trim();
+    if (!normalizedPath) return fallback;
+    if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+    if (normalizedPath.startsWith('//')) return `https:${normalizedPath}`;
+    return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
+}
+
 // UI Update Functions
 export function showSection(targetId: string) {
     DOM.mainContentSections.forEach(section => {
@@ -339,7 +352,11 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
         const { seriesName, seriesPoster, episode } = item;
         const airDate = new Date(episode.air_date).getTime();
         let formattedDate = !isNaN(airDate) ? new Date(airDate).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Data inválida';
-        const posterPath = seriesPoster ? `https://image.tmdb.org/t/p/w92${seriesPoster}` : 'https://via.placeholder.com/45x67.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            seriesPoster,
+            'w92',
+            'https://via.placeholder.com/45x67.png?text=N/A'
+        );
         let episodeNumber = (episode.season_number !== undefined && episode.episode_number !== undefined) ? `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` : '';
         const itemElement = el('div', { class: 'episode-item-small' }, [
             el('img', { src: posterPath, alt: `Poster de ${seriesName}`, class: 'next-aired-poster', loading: 'lazy' }),
@@ -357,7 +374,11 @@ export function renderSearchResults(resultsList: Series[]) {
         return;
     }
     resultsList.forEach(series => {
-        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            series.poster_path,
+            'w185',
+            'https://via.placeholder.com/92x138.png?text=N/A'
+        );
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
         const mediaType = series.media_type || 'series';
         const mediaTypeLabel = getMediaTypeLabel(mediaType);
@@ -413,7 +434,11 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
     const scroller = el('div', { class: 'column_content flex scroller loaded' });
 
     seriesList.forEach(series => {
-        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w220_and_h330_face${series.poster_path}` : 'https://via.placeholder.com/150x225.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            series.poster_path,
+            'w220_and_h330_face',
+            'https://via.placeholder.com/150x225.png?text=N/A'
+        );
         const releaseDate = series.first_air_date ? new Date(series.first_air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Data desconhecida';
         const voteAverage = (series.vote_average || 0).toFixed(1);
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
@@ -584,7 +609,11 @@ export function renderPremieresSeries(seriesList: Series[], startingRank: number
 }
 
 function createSeriesItemElement(series: Series, showStatus = false, viewMode = 'list', showUnwatchedBadge = false, showRatingCircle = false, isDiscovery = false, rank?: number): HTMLElement {
-    const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w185${series.poster_path}` : 'https://via.placeholder.com/92x138.png?text=N/A';
+    const posterPath = buildPosterUrl(
+        series.poster_path,
+        'w185',
+        'https://via.placeholder.com/92x138.png?text=N/A'
+    );
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const mediaType = series.media_type || 'series';
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
@@ -1359,7 +1388,11 @@ function renderTopRatedSeries() {
         return;
     }
     topRated.forEach(series => {
-        const posterPath = series?.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/40x59.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            series?.poster_path,
+            'w92',
+            'https://via.placeholder.com/40x59.png?text=N/A'
+        );
         const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series?.id), title: `Ver detalhes de ${series?.name}` }, [
             el('img', { src: posterPath, alt: `Poster de ${series?.name}`, class: 'top-rated-item-poster', loading: 'lazy' }),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series?.name })]),
@@ -1412,7 +1445,11 @@ function renderRatedSeriesByRating(rating: number) {
         return;
     }
     ratedSeries.forEach(series => {
-        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/40x59.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            series.poster_path,
+            'w92',
+            'https://via.placeholder.com/40x59.png?text=N/A'
+        );
         const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series.id), title: `Ver detalhes de ${series.name}` }, [
             el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'top-rated-item-poster', loading: 'lazy' }),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series.name })]),
@@ -1448,7 +1485,11 @@ export function performModalLibrarySearch() {
     }
     filteredSeries.sort((a, b) => a.name.localeCompare(b.name));
     filteredSeries.forEach(series => {
-        const posterPath = series.poster_path ? `https://image.tmdb.org/t/p/w92${series.poster_path}` : 'https://via.placeholder.com/40x59.png?text=N/A';
+        const posterPath = buildPosterUrl(
+            series.poster_path,
+            'w92',
+            'https://via.placeholder.com/40x59.png?text=N/A'
+        );
         const mediaType = series.media_type || 'series';
         const mediaTypeLabel = getMediaTypeLabel(mediaType);
         const item = el('div', { class: 'library-search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
