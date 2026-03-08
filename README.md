@@ -2,6 +2,8 @@
 
 Aplicação web para organizar e acompanhar séries de televisão usando dados do TMDb, Trakt e TVMaze. Permite gerir uma biblioteca pessoal, marcar episódios como vistos, acompanhar estreias e tendências e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
+Plano de execução e estado dos sprints: [SPRINTS.md](./SPRINTS.md).
+
 - ## Funcionalidades principais
 
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.

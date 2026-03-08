@@ -8,7 +8,7 @@ import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from '.
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
-import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem } from './types';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
 import {
@@ -57,6 +57,7 @@ let authFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
+let selectedSearchMediaType: MediaType = 'series';
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -73,6 +74,29 @@ function getErrorStatus(error: unknown): number | null {
     if (!statusMatch) return null;
     const parsed = Number(statusMatch[1]);
     return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseMediaType(value: string | null | undefined): MediaType {
+    if (value === 'movie' || value === 'book' || value === 'series') return value;
+    return 'series';
+}
+
+function getMediaTypeLabel(mediaType: MediaType): string {
+    if (mediaType === 'movie') return 'Filmes';
+    if (mediaType === 'book') return 'Livros';
+    return 'Séries';
+}
+
+function getSearchPlaceholder(mediaType: MediaType): string {
+    if (mediaType === 'movie') return 'Pesquisar para adicionar filme...';
+    if (mediaType === 'book') return 'Pesquisar para adicionar livro...';
+    return 'Pesquisar para adicionar série...';
+}
+
+function getSearchEmptyMessage(mediaType: MediaType): string {
+    if (mediaType === 'movie') return 'Escreva na barra de pesquisa para encontrar novos filmes.';
+    if (mediaType === 'book') return 'Escreva na barra de pesquisa para encontrar novos livros.';
+    return 'Escreva na barra de pesquisa para encontrar novas séries.';
 }
 
 function persistObservabilitySnapshot() {
@@ -526,84 +550,117 @@ async function initializeAuthState() {
     });
 }
 
-async function addSeriesToWatchlist(series: Series | TMDbSeriesDetails) {
-    const isInLibrary = S.myWatchlist.some(s => s.id === series.id) || S.myArchive.some(s => s.id === series.id);
-    if (!isInLibrary) {
-        // Se já for TMDbSeriesDetails, usa-o, senão, busca os detalhes.
-        const details: TMDbSeriesDetails = 'seasons' in series ? series : await API.fetchSeriesDetails(series.id, null);
+function isMediaInLibrary(mediaType: MediaType, mediaId: number): boolean {
+    return S.myWatchlist.some(s => s.media_type === mediaType && s.id === mediaId)
+        || S.myArchive.some(s => s.media_type === mediaType && s.id === mediaId);
+}
 
-        const totalEpisodes = details.seasons
-            ? details.seasons
-                .filter((season) => season.season_number !== 0)
-                .reduce((acc, season) => acc + season.episode_count, 0)
-            : 0;
-        
-        const seriesToAdd: Series = {
-            ...series, // Copia as propriedades base (id, name, overview, etc.)
-            media_type: 'series',
-            total_episodes: totalEpisodes,
-            episode_run_time: details.episode_run_time?.[0] || 30,
-            genres: details.genres,
-            _details: {
-                status: details.status,
-                next_episode_to_air: details.next_episode_to_air,
-            },
+async function addMediaToWatchlist(media: Series | TMDbSeriesDetails) {
+    const normalizedMedia = normalizeSeriesCollection([media])[0];
+    if (!normalizedMedia) return;
+
+    const mediaType = normalizedMedia.media_type || 'series';
+    const isInLibrary = isMediaInLibrary(mediaType, normalizedMedia.id);
+    if (isInLibrary) {
+        console.warn('O conteúdo já se encontra na biblioteca.');
+        return;
+    }
+
+    if (mediaType !== 'series') {
+        const mediaToAdd: Series = {
+            ...normalizedMedia,
             _lastUpdated: new Date().toISOString(),
         };
-
-        await S.addSeries(seriesToAdd);
-
+        await S.addSeries(mediaToAdd);
         UI.renderWatchlist();
         UI.renderUnseen();
-        await updateNextAired();
         UI.renderAllSeries();
         updateGlobalProgress();
         UI.updateKeyStats();
-        console.log('Série adicionada a "Quero Ver":', seriesToAdd);
-    } else {
-        console.warn('A série já se encontra na biblioteca.');
+        console.log('Conteúdo adicionado a "Quero Ver":', mediaToAdd);
+        return;
     }
+
+    // Se já for TMDbSeriesDetails, usa-o, senão, busca os detalhes.
+    const details: TMDbSeriesDetails = 'seasons' in media ? media : await API.fetchSeriesDetails(media.id, null);
+    const totalEpisodes = details.seasons
+        ? details.seasons
+            .filter((season) => season.season_number !== 0)
+            .reduce((acc, season) => acc + season.episode_count, 0)
+        : 0;
+
+    const seriesToAdd: Series = {
+        ...normalizedMedia,
+        media_type: 'series',
+        total_episodes: totalEpisodes,
+        episode_run_time: details.episode_run_time?.[0] || 30,
+        genres: details.genres,
+        _details: {
+            status: details.status,
+            next_episode_to_air: details.next_episode_to_air,
+        },
+        _lastUpdated: new Date().toISOString(),
+    };
+
+    await S.addSeries(seriesToAdd);
+    UI.renderWatchlist();
+    UI.renderUnseen();
+    await updateNextAired();
+    UI.renderAllSeries();
+    updateGlobalProgress();
+    UI.updateKeyStats();
+    console.log('Série adicionada a "Quero Ver":', seriesToAdd);
 }
 
 async function addAndMarkAllAsSeen(seriesData: Series | TMDbSeriesDetails) {
-    const isInLibrary = S.myWatchlist.some(s => s.id === seriesData.id) || S.myArchive.some(s => s.id === seriesData.id);
+    const normalizedMedia = normalizeSeriesCollection([seriesData])[0];
+    if (!normalizedMedia) return;
+    if (normalizedMedia.media_type !== 'series') {
+        await addMediaToWatchlist(normalizedMedia);
+        return;
+    }
+
+    const isInLibrary = isMediaInLibrary('series', normalizedMedia.id);
     if (isInLibrary) {
         console.warn('A série já se encontra na biblioteca.');
         return;
     }
 
     // Adiciona a série (a função já busca detalhes se necessário)
-    await addSeriesToWatchlist(seriesData);
+    await addMediaToWatchlist(seriesData);
 
     // Busca os detalhes completos para obter a lista de episódios
-    const fullDetails = await API.fetchSeriesDetails(seriesData.id, null);
+    const fullDetails = await API.fetchSeriesDetails(normalizedMedia.id, null);
     const allSeasons = await Promise.all(fullDetails.seasons.filter(s => s.season_number !== 0).map(s => API.getSeasonDetailsWithCache(fullDetails.id, s.season_number, null)));
     const allEpisodeIds = allSeasons.flatMap(season => season.episodes.map(ep => ep.id));
 
     if (allEpisodeIds.length > 0) {
-        await S.markEpisodesAsWatched(seriesData.id, allEpisodeIds);
-        const movedToArchive = await checkSeriesCompletion(seriesData.id); // Move para o arquivo
+        await S.markEpisodesAsWatched(normalizedMedia.id, allEpisodeIds);
+        const movedToArchive = await checkSeriesCompletion(normalizedMedia.id); // Move para o arquivo
         if (movedToArchive) {
             UI.updateActiveNavLink('archive-section'); // Ativa o separador "Arquivo"
         }
     }
 }
 
-async function removeSeriesFromLibrary(seriesId: number, element: HTMLElement | null) {
-    const seriesToRemove = S.getSeries(seriesId);
-    const seriesName = seriesToRemove ? seriesToRemove.name : `a série selecionada`;
+async function removeSeriesFromLibrary(seriesId: number, mediaType: MediaType = 'series', element: HTMLElement | null) {
+    const mediaToRemove = S.getMediaItem(mediaType, seriesId);
+    const fallbackLabel = mediaType === 'movie' ? 'o filme selecionado' : mediaType === 'book' ? 'o livro selecionado' : 'a série selecionada';
+    const mediaName = mediaToRemove ? mediaToRemove.name : fallbackLabel;
 
-    if (await UI.showConfirmationModal(`Tem a certeza que quer remover "${seriesName}" da sua biblioteca? Esta ação não pode ser desfeita.`)) {
+    if (await UI.showConfirmationModal(`Tem a certeza que quer remover "${mediaName}" da sua biblioteca? Esta ação não pode ser desfeita.`)) {
         const performRemovalLogic = async () => {
-            await S.removeSeries(seriesId);
-            await updateNextAired();
+            await S.removeMedia(mediaType, seriesId);
+            if (mediaType === 'series') {
+                await updateNextAired();
+            }
             UI.renderWatchlist();
             UI.renderArchive();
             UI.renderAllSeries();
             UI.renderUnseen();
             updateGlobalProgress();
             UI.updateKeyStats();
-            console.log(`Série ${seriesId} removida da biblioteca.`);
+            console.log(`Conteúdo ${mediaType}:${seriesId} removido da biblioteca.`);
         };
 
         if (element) {
@@ -617,7 +674,7 @@ async function removeSeriesFromLibrary(seriesId: number, element: HTMLElement | 
 
 async function updateNextAired() {
     DOM.nextAiredListContainer.innerHTML = '<p>A verificar próximos episódios...</p>';
-    let allUserSeries = [...S.myWatchlist, ...S.myArchive];
+    let allUserSeries = [...S.myWatchlist, ...S.myArchive].filter(series => series.media_type === 'series');
     const now = new Date().getTime();
     const oneDay = 24 * 60 * 60 * 1000;
 
@@ -724,7 +781,7 @@ async function setupDetailViewActions(seriesData: TMDbSeriesDetails) {
 
     if (isAlreadyInLibrary) {
         const removeBtn = libraryActions.querySelector<HTMLButtonElement>('#v2-remove-series-btn');
-        removeBtn?.addEventListener('click', () => removeSeriesFromLibrary(seriesData.id, null), { once: true });
+        removeBtn?.addEventListener('click', () => removeSeriesFromLibrary(seriesData.id, 'series', null), { once: true });
     } else {
         const addToWatchlistBtn = discoverActions.querySelector<HTMLButtonElement>('#add-to-watchlist-btn');
         const addAndMarkAllBtn = discoverActions.querySelector<HTMLButtonElement>('#add-and-mark-all-seen-btn');
@@ -929,7 +986,7 @@ async function displaySeriesDetails(seriesId: number) {
 async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
-        await addSeriesToWatchlist(seriesData);
+        await addMediaToWatchlist(seriesData);
         UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
         await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
     } catch (error) {
@@ -953,11 +1010,16 @@ async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HT
 }
 
 async function handleQuickAdd(series: Series, button: HTMLButtonElement) {
-    await addSeriesToWatchlist(series);
+    await addMediaToWatchlist(series);
     UI.markButtonAsAdded(button, 'Adicionado');
 }
 
 async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonElement) {
+    if (series.media_type !== 'series') {
+        await addMediaToWatchlist(series);
+        UI.markButtonAsAdded(button, 'Adicionado');
+        return;
+    }
     await addAndMarkAllAsSeen(series);
     UI.markButtonAsAdded(button, 'Visto');
 }
@@ -1863,17 +1925,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Header Search
+    const setSearchMediaType = (mediaType: MediaType) => {
+        selectedSearchMediaType = mediaType;
+        DOM.addSeriesHeaderInput.placeholder = getSearchPlaceholder(mediaType);
+    };
+
+    setSearchMediaType(parseMediaType(DOM.searchMediaTypeSelect?.value));
+
     const performSearch = () => {
         const query = DOM.addSeriesHeaderInput.value.trim();
+        const mediaType = selectedSearchMediaType;
+        const endpoint = mediaType === 'series'
+            ? '/api/tmdb/search/tv'
+            : mediaType === 'movie'
+                ? '/api/tmdb/search/movie'
+                : '/api/books/search';
+        const mediaLabel = getMediaTypeLabel(mediaType).toLowerCase();
         if (query.length > 1) {
             S.resetSearchAbortController();
             DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
             UI.showSection('add-series-section');
             runObservedSection(
                 'search',
-                '/api/tmdb/search/tv',
-                () => API.searchSeries(query, S.searchAbortController.signal),
-                { queryLength: query.length }
+                endpoint,
+                () => API.searchByMediaType(mediaType, query, S.searchAbortController.signal),
+                { queryLength: query.length, mediaType }
             )
                 .then(data => {
                     S.setCurrentSearchResults(data.results);
@@ -1883,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (error.name === 'AbortError') {
                         console.log('Search aborted');
                     } else {
-                        console.error('Erro ao pesquisar séries:', error);
+                        console.error(`Erro ao pesquisar ${mediaLabel}:`, error);
                         renderRemoteErrorWithRetry(
                             DOM.searchResultsContainer,
                             () => performSearch(),
@@ -1895,11 +1971,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
         } else if (query.length === 0) {
-            DOM.searchResultsContainer.innerHTML = '<p>Escreva na barra de pesquisa para encontrar novas séries.</p>';
+            DOM.searchResultsContainer.innerHTML = `<p>${getSearchEmptyMessage(mediaType)}</p>`;
         }
     };
 
     const debouncedSearch = debounce(performSearch, 300);
+
+    DOM.searchMediaTypeSelect?.addEventListener('change', () => {
+        setSearchMediaType(parseMediaType(DOM.searchMediaTypeSelect.value));
+        if (DOM.addSeriesHeaderInput.value.trim().length > 1) {
+            debouncedSearch.cancel();
+            performSearch();
+        }
+    });
 
     DOM.addSeriesHeaderInput.addEventListener('input', () => {
         S.resetSearchAbortController();
@@ -1935,14 +2019,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const removeBtn = target.closest('.remove-btn');
         if (removeBtn) {
             e.stopPropagation(); // Impede que o clique "borbulhe" para o watchlist-item
-            removeSeriesFromLibrary(parseInt((removeBtn as HTMLElement).dataset.seriesId!, 10), removeBtn.closest('.watchlist-item'));
+            const parentItem = removeBtn.closest('.watchlist-item') as HTMLElement | null;
+            const mediaType = parseMediaType(parentItem?.dataset.mediaType);
+            removeSeriesFromLibrary(
+                parseInt((removeBtn as HTMLElement).dataset.seriesId!, 10),
+                mediaType,
+                parentItem
+            );
             return;
         }
 
         const addSeriesQuickBtn = target.closest('.add-series-quick-btn');
         if (addSeriesQuickBtn) {
             const seriesId = parseInt((addSeriesQuickBtn as HTMLElement).dataset.seriesId!, 10);
-            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
+            const mediaType = parseMediaType((addSeriesQuickBtn as HTMLElement).dataset.mediaType);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId && s.media_type === mediaType);
             if (seriesToAdd) {
                 await handleQuickAdd(seriesToAdd, addSeriesQuickBtn as HTMLButtonElement);
             }
@@ -1952,7 +2043,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const markAllSeenQuickBtn = target.closest('.mark-all-seen-quick-btn');
         if (markAllSeenQuickBtn) {
             const seriesId = parseInt((markAllSeenQuickBtn as HTMLElement).dataset.seriesId!, 10);
-            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId);
+            const mediaType = parseMediaType((markAllSeenQuickBtn as HTMLElement).dataset.mediaType);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId && s.media_type === mediaType);
             if (seriesToAdd) {
                 await handleQuickAddAndMarkAllSeen(seriesToAdd, markAllSeenQuickBtn as HTMLButtonElement);
             }
@@ -1961,7 +2053,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item');
         if (seriesItem) {
-            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt((seriesItem as HTMLElement).dataset.seriesId!, 10) } }));
+            const typedSeriesItem = seriesItem as HTMLElement;
+            const mediaType = parseMediaType(typedSeriesItem.dataset.mediaType);
+            if (mediaType !== 'series') {
+                const mediaLabel = getMediaTypeLabel(mediaType).toLowerCase();
+                UI.showNotification(`Detalhes de ${mediaLabel} chegam no próximo passo.`);
+                return;
+            }
+            document.dispatchEvent(new CustomEvent('display-series-details', { detail: { seriesId: parseInt(typedSeriesItem.dataset.seriesId!, 10) } }));
             return;
         }
 

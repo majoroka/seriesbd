@@ -265,6 +265,18 @@ textarea:focus-visible,
     flex-grow: 1;
 }
 
+#search-media-type {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.35rem 0.55rem;
+    min-width: 108px;
+}
+
 .search-bar-button {
     padding: 0.4rem 0.8rem;
     border-radius: 5px;
@@ -745,6 +757,21 @@ details[open] > .season-summary::before {
 
 .search-result-info h3 {
     margin-bottom: 0.5rem;
+}
+
+.media-type-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--primary-accent);
+    color: var(--primary-accent);
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.45rem;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
 .search-result-info p {
@@ -2925,6 +2952,11 @@ body.light-theme .network-logo {
     /* Ajusta a barra de pesquisa para mobile */
     .search-bar {
         width: 100%; /* Ocupa a largura toda */
+    }
+
+    #search-media-type {
+        min-width: 94px;
+        font-size: 0.82rem;
     }
 
     /* Transforma o botão de pesquisa num ícone de lupa */
