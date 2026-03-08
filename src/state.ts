@@ -16,6 +16,8 @@ export let searchAbortController = new AbortController();
 export let allSeriesGenreFilter = 'all';
 export type AllSeriesStatusFilter = 'all' | 'watchlist' | 'unseen' | 'archive';
 export let allSeriesStatusFilter: AllSeriesStatusFilter = 'all';
+export type AllSeriesMediaFilter = 'all' | MediaType;
+export let allSeriesMediaFilter: AllSeriesMediaFilter = 'all';
 export type DetailEpisodeMeta = { id: number; season_number: number; episode_number: number; };
 export type DetailSeasonMeta = { season_number: number; episode_count: number; };
 export type DetailViewData = {
@@ -51,6 +53,13 @@ export function setAllSeriesStatusFilter(value: string) {
         return;
     }
     allSeriesStatusFilter = 'all';
+}
+export function setAllSeriesMediaFilter(value: string) {
+    if (value === 'series' || value === 'movie' || value === 'book') {
+        allSeriesMediaFilter = value;
+        return;
+    }
+    allSeriesMediaFilter = 'all';
 }
 export function setDetailViewData(data: DetailViewData) { detailViewData = data; }
 export function getDetailViewData(): DetailViewData { return detailViewData; }
