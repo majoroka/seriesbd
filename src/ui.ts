@@ -37,6 +37,21 @@ function buildPosterUrl(
     return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
 }
 
+function createPosterImage(
+    src: string,
+    alt: string,
+    className: string,
+    fallbackSrc: string
+): HTMLImageElement {
+    const img = el('img', { src, alt, class: className, loading: 'lazy' }) as HTMLImageElement;
+    img.addEventListener('error', () => {
+        if (img.dataset.fallbackApplied === '1') return;
+        img.dataset.fallbackApplied = '1';
+        img.src = fallbackSrc;
+    });
+    return img;
+}
+
 // UI Update Functions
 export function showSection(targetId: string) {
     DOM.mainContentSections.forEach(section => {
@@ -359,7 +374,12 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
         );
         let episodeNumber = (episode.season_number !== undefined && episode.episode_number !== undefined) ? `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` : '';
         const itemElement = el('div', { class: 'episode-item-small' }, [
-            el('img', { src: posterPath, alt: `Poster de ${seriesName}`, class: 'next-aired-poster', loading: 'lazy' }),
+            createPosterImage(
+                posterPath,
+                `Poster de ${seriesName}`,
+                'next-aired-poster',
+                'https://via.placeholder.com/45x67.png?text=N/A'
+            ),
             el('span', { class: 'episode-info', text: `${seriesName} ${episodeNumber}` }),
             el('span', { class: 'episode-date', text: formattedDate })
         ]);
@@ -406,7 +426,12 @@ export function renderSearchResults(resultsList: Series[]) {
             ]);
 
         const item = el('div', { class: 'search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
-            el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'search-result-poster', loading: 'lazy' }),
+            createPosterImage(
+                posterPath,
+                `Poster de ${series.name}`,
+                'search-result-poster',
+                'https://via.placeholder.com/92x138.png?text=N/A'
+            ),
             el('div', { class: 'search-result-info' }, [
                 el('h3', {}, [
                     `${series.name} ${releaseYear}`,
@@ -446,7 +471,12 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
         const card = el('div', { class: 'trending-card', 'data-series-id': String(series.id) }, [
             el('div', { class: 'image' }, [
                 el('div', { class: 'wrapper' }, [
-                    el('img', { loading: 'lazy', class: 'poster', src: posterPath, alt: series.name })
+                    createPosterImage(
+                        posterPath,
+                        series.name,
+                        'poster',
+                        'https://via.placeholder.com/150x225.png?text=N/A'
+                    )
                 ]),
                 el('div', { class: 'consensus' }, [
                     el('div', {
@@ -639,7 +669,12 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     }
 
     const posterElement = el('div', { class: 'watchlist-poster-wrapper' }, [
-        el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'watchlist-poster-img', loading: 'lazy' }),
+        createPosterImage(
+            posterPath,
+            `Poster de ${series.name}`,
+            'watchlist-poster-img',
+            'https://via.placeholder.com/92x138.png?text=N/A'
+        ),
         unwatchedBadge,
         ratingCircle,
     ]);
@@ -1394,7 +1429,12 @@ function renderTopRatedSeries() {
             'https://via.placeholder.com/40x59.png?text=N/A'
         );
         const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series?.id), title: `Ver detalhes de ${series?.name}` }, [
-            el('img', { src: posterPath, alt: `Poster de ${series?.name}`, class: 'top-rated-item-poster', loading: 'lazy' }),
+            createPosterImage(
+                posterPath,
+                `Poster de ${series?.name}`,
+                'top-rated-item-poster',
+                'https://via.placeholder.com/40x59.png?text=N/A'
+            ),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series?.name })]),
             el('div', { class: 'top-rated-item-rating' }, [el('i', { class: 'fas fa-star' }), el('span', { text: String(series?.userRating) })])
         ]);
@@ -1451,7 +1491,12 @@ function renderRatedSeriesByRating(rating: number) {
             'https://via.placeholder.com/40x59.png?text=N/A'
         );
         const itemElement = el('div', { class: 'top-rated-item', 'data-series-id': String(series.id), title: `Ver detalhes de ${series.name}` }, [
-            el('img', { src: posterPath, alt: `Poster de ${series.name}`, class: 'top-rated-item-poster', loading: 'lazy' }),
+            createPosterImage(
+                posterPath,
+                `Poster de ${series.name}`,
+                'top-rated-item-poster',
+                'https://via.placeholder.com/40x59.png?text=N/A'
+            ),
             el('div', { class: 'top-rated-item-info' }, [el('p', { text: series.name })]),
             el('div', { class: 'top-rated-item-rating' }, [el('i', { class: 'fas fa-star' }), el('span', { text: rating })])
         ]);
@@ -1493,7 +1538,12 @@ export function performModalLibrarySearch() {
         const mediaType = series.media_type || 'series';
         const mediaTypeLabel = getMediaTypeLabel(mediaType);
         const item = el('div', { class: 'library-search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
-            el('img', { src: posterPath, alt: `Poster de ${series.name}`, loading: 'lazy' }),
+            createPosterImage(
+                posterPath,
+                `Poster de ${series.name}`,
+                '',
+                'https://via.placeholder.com/40x59.png?text=N/A'
+            ),
             el('p', {}, [
                 series.name,
                 mediaType !== 'series' ? ' ' : null,
