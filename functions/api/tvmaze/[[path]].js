@@ -1,38 +1,21 @@
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  getErrorMessage,
+  handleOptions,
+  isPathSafe,
+  jsonResponse,
+  logEvent,
+  resolveEndpointPath,
+  sanitizeOriginHeaders,
+  sanitizeSearchParams,
+} from '../_shared/security.js';
+
 const TVMAZE_BASE_URL = 'https://api.tvmaze.com';
-const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
-
-const createRequestId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `tvmaze_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-};
-
-const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
-
-const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
-  response.headers.set('x-request-id', requestId);
-  response.headers.set('x-upstream-status', String(upstreamStatus));
-  response.headers.set('x-upstream-latency-ms', String(durationMs));
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const addCorsHeaders = (response) => {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-api-key, authorization');
-  response.headers.set('Access-Control-Max-Age', '86400');
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const sanitizeOriginHeaders = (sourceHeaders) => {
-  const headers = new Headers(sourceHeaders);
-  headers.delete('content-encoding');
-  headers.delete('content-length');
-  headers.delete('Content-Encoding');
-  headers.delete('Content-Length');
-  return headers;
-};
+const ROUTE_KEY = 'tvmaze';
 
 const stripHtml = (value) => {
   if (!value) return '';
@@ -67,14 +50,6 @@ const buildTvMazeUrl = (endpointPath, sourceSearchParams, apiKey) => {
   }
 
   return url.toString();
-};
-
-const parseEndpointPath = (rawPathname) => {
-  let endpointPath = rawPathname;
-  if (endpointPath.startsWith('/api/tvmaze')) {
-    endpointPath = endpointPath.substring('/api/tvmaze'.length);
-  }
-  return endpointPath || '/';
 };
 
 const fetchTvMaze = async (endpointPath, params, apiKey) => {
@@ -160,7 +135,8 @@ const resolveShow = async (searchParams, requestId, apiKey) => {
 
     if (response.status !== 404) {
       const errorBody = await response.text();
-      console.warn('[tvmaze function] lookup by imdb failed with non-404', {
+      logEvent('warn', 'proxy.tvmaze_lookup_non_404', {
+        route: ROUTE_KEY,
         requestId,
         imdbId,
         status: response.status,
@@ -234,43 +210,74 @@ const resolveShow = async (searchParams, requestId, apiKey) => {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const requestId = createRequestId();
+  const requestId = createRequestId(ROUTE_KEY);
   const startedAt = Date.now();
+  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type, x-api-key, authorization' };
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
+  if (optionsResponse) return optionsResponse;
 
-  if (request.method === 'OPTIONS') {
-    const optionsResponse = addCorsHeaders(new Response(null, { status: 204 }));
-    optionsResponse.headers.set('x-request-id', requestId);
-    return optionsResponse;
+  if (request.method.toUpperCase() !== 'GET') {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, OPTIONS' }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 100, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   try {
     const apiKey = env.TVMAZE_API_KEY;
     const url = new URL(request.url);
-    const endpointPath = parseEndpointPath(url.pathname);
+    const endpointPath = resolveEndpointPath(request.url, '/api/tvmaze');
+    if (!isPathSafe(endpointPath)) {
+      const badPath = addCorsHeaders(jsonResponse({ ok: false, error: 'Invalid endpoint path' }, 400), corsConfig);
+      addProxyHeaders(badPath, {
+        requestId,
+        upstreamStatus: 400,
+        durationMs: Date.now() - startedAt,
+      });
+      return applyRateLimitHeaders(badPath, rateLimit);
+    }
 
-    console.log('[tvmaze function] Proxy request', {
+    const safeParams = sanitizeSearchParams(url.searchParams, { maxParams: 20, maxValueLength: 500 });
+
+    logEvent('info', 'proxy.request', {
+      route: ROUTE_KEY,
       requestId,
-      method: request.method,
+      method: request.method.toUpperCase(),
       endpoint: endpointPath,
       hasApiKey: Boolean(apiKey),
     });
 
     if (endpointPath === '/resolve/show') {
-      const resolveResponse = await resolveShow(url.searchParams, requestId, apiKey);
+      const resolveResponse = await resolveShow(safeParams, requestId, apiKey);
       const durationMs = Date.now() - startedAt;
       addProxyHeaders(resolveResponse, {
         requestId,
         upstreamStatus: resolveResponse.status,
         durationMs,
       });
-      return addCorsHeaders(resolveResponse);
+      addCorsHeaders(resolveResponse, corsConfig);
+      return applyRateLimitHeaders(resolveResponse, rateLimit);
     }
 
-    const { url: tvmazeUrl, response: apiResponse } = await fetchTvMaze(endpointPath, url.searchParams, apiKey);
+    const { url: tvmazeUrl, response: apiResponse } = await fetchTvMaze(endpointPath, safeParams, apiKey);
     const durationMs = Date.now() - startedAt;
     if (!apiResponse.ok) {
       const bodyPreview = (await apiResponse.text()).slice(0, 300);
-      console.error('[tvmaze function] Upstream error', {
+      logEvent('warn', 'proxy.upstream_error', {
+        route: ROUTE_KEY,
         requestId,
         endpoint: endpointPath,
         target: tvmazeUrl,
@@ -294,7 +301,8 @@ export async function onRequest(context) {
         upstreamStatus: apiResponse.status,
         durationMs,
       });
-      return addCorsHeaders(errorResponse);
+      addCorsHeaders(errorResponse, corsConfig);
+      return applyRateLimitHeaders(errorResponse, rateLimit);
     }
 
     const response = new Response(apiResponse.body, {
@@ -308,13 +316,15 @@ export async function onRequest(context) {
       durationMs,
     });
 
-    return addCorsHeaders(response);
+    addCorsHeaders(response, corsConfig);
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     const message = getErrorMessage(error);
-    console.error('[tvmaze function] Unexpected error', {
+    logEvent('error', 'proxy.unexpected_error', {
+      route: ROUTE_KEY,
       requestId,
-      method: request.method,
+      method: request.method.toUpperCase(),
       durationMs,
       error: message,
     });
@@ -329,6 +339,7 @@ export async function onRequest(context) {
       durationMs,
     });
 
-    return addCorsHeaders(errorResponse);
+    addCorsHeaders(errorResponse, corsConfig);
+    return applyRateLimitHeaders(errorResponse, rateLimit);
   }
 }

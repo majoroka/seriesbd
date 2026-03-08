@@ -1,20 +1,15 @@
-const JSON_HEADERS = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Cache-Control': 'no-store',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  handleOptions,
+  jsonResponse,
+  logEvent,
+} from '../_shared/security.js';
 
-function jsonResponse(payload, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      ...JSON_HEADERS,
-      ...extraHeaders,
-    },
-  });
-}
+const ROUTE_KEY = 'auth.display_name_available';
 
 function normalizeDisplayName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -58,51 +53,100 @@ async function fetchMatchingProfiles(env, normalizedName) {
 export async function onRequest(context) {
   const { request, env } = context;
   const method = request.method.toUpperCase();
+  const requestId = createRequestId('auth');
+  const startedAt = Date.now();
+  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type' };
 
-  if (method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: JSON_HEADERS,
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
+  if (optionsResponse) return optionsResponse;
+
+  if (method !== 'GET') {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, {
+      Allow: 'GET, OPTIONS',
+    }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
     });
   }
 
-  if (method !== 'GET') {
-    return jsonResponse({ ok: false, error: 'Method not allowed' }, 405, {
-      Allow: 'GET, OPTIONS',
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 20, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
     });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   const url = new URL(request.url);
   const normalizedName = normalizeDisplayName(resolveRequestedName(url));
 
   if (!normalizedName) {
-    return jsonResponse({ ok: false, error: 'Missing name parameter' }, 400);
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Missing name parameter' }, 400), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 400,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   if (normalizedName.length < 3) {
-    return jsonResponse({ ok: false, error: 'Display name must have at least 3 characters' }, 400);
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Display name must have at least 3 characters' }, 400), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 400,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   if (normalizedName.length > 80) {
-    return jsonResponse({ ok: false, error: 'Display name exceeds 80 characters' }, 400);
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Display name exceeds 80 characters' }, 400), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 400,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   try {
     const rows = await fetchMatchingProfiles(env, normalizedName);
-    return jsonResponse({
+    const response = addCorsHeaders(jsonResponse({
       ok: true,
       normalizedName,
       available: rows.length === 0,
+    }), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 200,
+      durationMs: Date.now() - startedAt,
     });
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const details = error instanceof Error ? error.message : String(error);
-    return jsonResponse(
+    logEvent('error', 'auth.display_name_available.error', {
+      requestId,
+      error: details,
+    });
+    const response = addCorsHeaders(jsonResponse(
       {
         ok: false,
         error: 'Failed to validate display name',
         details,
       },
       500
-    );
+    ), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 500,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 }

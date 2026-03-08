@@ -1,58 +1,53 @@
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  getErrorMessage,
+  handleOptions,
+  isPathSafe,
+  jsonResponse,
+  logEvent,
+  resolveEndpointPath,
+  sanitizeOriginHeaders,
+  sanitizeSearchParams,
+} from '../_shared/security.js';
+
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
-const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
-
-const createRequestId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `trakt_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-};
-
-const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
-
-const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
-  response.headers.set('x-request-id', requestId);
-  response.headers.set('x-upstream-status', String(upstreamStatus));
-  response.headers.set('x-upstream-latency-ms', String(durationMs));
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const addCorsHeaders = (response) => {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, trakt-api-version, trakt-api-key');
-  response.headers.set('Access-Control-Max-Age', '86400');
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const sanitizeOriginHeaders = (sourceHeaders) => {
-  const headers = new Headers(sourceHeaders);
-  headers.delete('content-encoding');
-  headers.delete('content-length');
-  headers.delete('Content-Encoding');
-  headers.delete('Content-Length');
-  return headers;
-};
-
-const resolveEndpointPath = (requestUrl) => {
-  const url = new URL(requestUrl);
-  let endpointPath = url.pathname;
-  if (endpointPath.startsWith('/api/trakt')) {
-    endpointPath = endpointPath.substring('/api/trakt'.length);
-  }
-  return endpointPath || '/';
-};
+const ROUTE_KEY = 'trakt';
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const requestId = createRequestId();
+  const requestId = createRequestId(ROUTE_KEY);
   const startedAt = Date.now();
+  const corsConfig = {
+    methods: 'GET, OPTIONS',
+    headers: 'Content-Type, trakt-api-version, trakt-api-key',
+  };
 
-  if (request.method === 'OPTIONS') {
-    const optionsResponse = addCorsHeaders(new Response(null, { status: 204 }));
-    optionsResponse.headers.set('x-request-id', requestId);
-    return optionsResponse;
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
+  if (optionsResponse) return optionsResponse;
+
+  if (request.method.toUpperCase() !== 'GET') {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, OPTIONS' }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 90, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   try {
@@ -63,17 +58,33 @@ export async function onRequest(context) {
 
     const userAgent = env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://seriesbd.pages.dev)';
     const url = new URL(request.url);
-    const endpointPath = resolveEndpointPath(request.url);
-    const traktUrl = `${TRAKT_BASE_URL}${endpointPath}?${url.searchParams.toString()}`;
+    const endpointPath = resolveEndpointPath(request.url, '/api/trakt');
+    if (!isPathSafe(endpointPath)) {
+      const badPath = addCorsHeaders(jsonResponse({ ok: false, error: 'Invalid endpoint path' }, 400), corsConfig);
+      addProxyHeaders(badPath, {
+        requestId,
+        upstreamStatus: 400,
+        durationMs: Date.now() - startedAt,
+      });
+      return applyRateLimitHeaders(badPath, rateLimit);
+    }
 
-    console.log('[trakt function] Proxy request', {
-      requestId,
-      method: request.method,
-      endpoint: endpointPath,
-      target: traktUrl,
+    const safeParams = sanitizeSearchParams(url.searchParams, { maxParams: 25, maxValueLength: 700 });
+    const traktUrl = new URL(`${TRAKT_BASE_URL}${endpointPath}`);
+    safeParams.forEach((value, key) => {
+      traktUrl.searchParams.set(key, value);
     });
 
-    const apiResponse = await fetch(traktUrl, {
+    logEvent('info', 'proxy.request', {
+      route: ROUTE_KEY,
+      requestId,
+      method: request.method.toUpperCase(),
+      endpoint: endpointPath,
+      target: traktUrl.toString(),
+    });
+
+    const apiResponse = await fetch(traktUrl.toString(), {
+      method: 'GET',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
@@ -89,51 +100,62 @@ export async function onRequest(context) {
       const htmlBody = await apiResponse.text();
       const cloudflareBlocked = /cloudflare|you have been blocked|attention required/i.test(htmlBody);
       if (cloudflareBlocked) {
-        console.error('[trakt function] Cloudflare block detected while calling Trakt.', {
+        logEvent('error', 'proxy.cloudflare_block', {
+          route: ROUTE_KEY,
           requestId,
           status: apiResponse.status,
           endpoint: endpointPath,
           durationMs,
         });
-        const blockedResponse = new Response(
-          JSON.stringify({
-            error: 'Trakt blocked by Cloudflare',
-            details: 'A chamada à Trakt foi bloqueada pelo Cloudflare.',
-          }),
-          { status: 502, headers: { 'Content-Type': 'application/json' } }
+        const blockedResponse = addCorsHeaders(
+          jsonResponse(
+            {
+              ok: false,
+              error: 'Trakt blocked by Cloudflare',
+              details: 'A chamada à Trakt foi bloqueada pelo Cloudflare.',
+            },
+            502
+          ),
+          corsConfig
         );
         addProxyHeaders(blockedResponse, {
           requestId,
           upstreamStatus: apiResponse.status,
           durationMs,
         });
-        return addCorsHeaders(blockedResponse);
+        return applyRateLimitHeaders(blockedResponse, rateLimit);
       }
 
-      console.error('[trakt function] Unexpected HTML response from upstream.', {
+      logEvent('error', 'proxy.unexpected_html', {
+        route: ROUTE_KEY,
         requestId,
         status: apiResponse.status,
         endpoint: endpointPath,
         durationMs,
       });
-      const unexpectedHtmlResponse = new Response(
-        JSON.stringify({
-          error: 'Unexpected HTML response from Trakt',
-          details: 'A Trakt respondeu com HTML em vez de JSON.',
-        }),
-        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      const unexpectedHtml = addCorsHeaders(
+        jsonResponse(
+          {
+            ok: false,
+            error: 'Unexpected HTML response from Trakt',
+            details: 'A Trakt respondeu com HTML em vez de JSON.',
+          },
+          502
+        ),
+        corsConfig
       );
-      addProxyHeaders(unexpectedHtmlResponse, {
+      addProxyHeaders(unexpectedHtml, {
         requestId,
         upstreamStatus: apiResponse.status,
         durationMs,
       });
-      return addCorsHeaders(unexpectedHtmlResponse);
+      return applyRateLimitHeaders(unexpectedHtml, rateLimit);
     }
 
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
-      console.error('[trakt function] Upstream error', {
+      logEvent('warn', 'proxy.upstream_error', {
+        route: ROUTE_KEY,
         requestId,
         endpoint: endpointPath,
         status: apiResponse.status,
@@ -146,12 +168,13 @@ export async function onRequest(context) {
         statusText: apiResponse.statusText,
         headers: sanitizeOriginHeaders(apiResponse.headers),
       });
+      addCorsHeaders(errorResponse, corsConfig);
       addProxyHeaders(errorResponse, {
         requestId,
         upstreamStatus: apiResponse.status,
         durationMs,
       });
-      return addCorsHeaders(errorResponse);
+      return applyRateLimitHeaders(errorResponse, rateLimit);
     }
 
     const response = new Response(apiResponse.body, {
@@ -159,26 +182,28 @@ export async function onRequest(context) {
       statusText: apiResponse.statusText,
       headers: sanitizeOriginHeaders(apiResponse.headers),
     });
+    addCorsHeaders(response, corsConfig);
     addProxyHeaders(response, {
       requestId,
       upstreamStatus: apiResponse.status,
       durationMs,
     });
 
-    return addCorsHeaders(response);
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     const message = getErrorMessage(error);
-    console.error('[trakt function] Unexpected error', {
+    logEvent('error', 'proxy.unexpected_error', {
+      route: ROUTE_KEY,
       requestId,
-      method: request.method,
+      method: request.method.toUpperCase(),
       durationMs,
       error: message,
     });
 
-    const errorResponse = new Response(
-      JSON.stringify({ error: 'Falha ao processar o pedido na função trakt', details: message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    const errorResponse = addCorsHeaders(
+      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função trakt', details: message }, 500),
+      corsConfig
     );
     addProxyHeaders(errorResponse, {
       requestId,
@@ -186,6 +211,6 @@ export async function onRequest(context) {
       durationMs,
     });
 
-    return addCorsHeaders(errorResponse);
+    return applyRateLimitHeaders(errorResponse, rateLimit);
   }
 }

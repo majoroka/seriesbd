@@ -108,11 +108,12 @@ Plano de execução e estado dos sprints: [SPRINTS.md](./SPRINTS.md).
 
 ## Testes
 
-Os testes existentes concentram-se em `src/utils.test.ts`. Para expandir a cobertura, priorizar:
-
-- Fluxos críticos (`addSeriesToWatchlist`, gestão de episódios, exportações).
-- Componentes que manipulam o IndexedDB (mockando Dexie).
-- Renderização do detalhe da série (Testing Library + jsdom).
+Cobertura atual inclui:
+- `src/api.test.ts` (fluxos críticos de providers/fallbacks).
+- `src/state.test.ts` (persistência/migração/transições principais).
+- `src/utils.test.ts`.
+- `functions/api/_shared/security.test.js` (rate limit + validação).
+- `functions/api/auth/display-name-available.test.js`.
 
 ```bash
 npm run test
@@ -133,6 +134,7 @@ npm run test
 
 - [ARQUITETURA](ARQUITETURA.md) – detalhe dos módulos, fluxos e decisões técnicas.
 - [ROADMAP](ROADMAP.md) – visão da evolução prevista e tarefas futuras.
+- [S6_QA_ROLLBACK](S6_QA_ROLLBACK.md) – checklist formal de UAT/go-live e plano de rollback.
 
 ## Deploy
 
@@ -156,5 +158,5 @@ npm run test
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
 - Observabilidade mínima ativa:
   - frontend regista falhas por secção dinâmica com contexto (`secção`, `endpoint`, `status`) e snapshot em `sessionStorage` (`seriesdb.observability.v1`);
-  - funções Cloudflare devolvem `x-request-id`, `x-upstream-status` e `x-upstream-latency-ms` para troubleshooting.
+  - funções Cloudflare devolvem `x-request-id`, `x-upstream-status`, `x-upstream-latency-ms`, `x-ratelimit-limit`, `x-ratelimit-remaining` e `x-ratelimit-reset` para troubleshooting.
 - Em offline, funcionalidades dependentes de `/api/*` (pesquisa remota, tendências/populares/estreias, ratings públicos) podem ficar indisponíveis até voltar a ligação.

@@ -1,33 +1,22 @@
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  getErrorMessage,
+  handleOptions,
+  jsonResponse,
+  resolveEndpointPath,
+  sanitizeSearchParams,
+} from '../_shared/security.js';
+
 const GOOGLE_BOOKS_BASE_URL = 'https://www.googleapis.com/books/v1';
 const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
 const OPEN_LIBRARY_COVERS_BASE_URL = 'https://covers.openlibrary.org/b/id';
-const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
-
-const createRequestId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `books_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-};
-
-const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
-
-const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
-  response.headers.set('x-request-id', requestId);
-  response.headers.set('x-upstream-status', String(upstreamStatus));
-  response.headers.set('x-upstream-latency-ms', String(durationMs));
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const addCorsHeaders = (response) => {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-  response.headers.set('Access-Control-Max-Age', '86400');
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
+const ROUTE_KEY = 'books';
 
 const hashStringToPositiveInt = (value) => {
   let hash = 2166136261;
@@ -39,15 +28,6 @@ const hashStringToPositiveInt = (value) => {
 };
 
 const toScopedBookId = (sourceId) => BOOK_ID_OFFSET + (hashStringToPositiveInt(String(sourceId || 'unknown')) % BOOK_ID_RANGE);
-
-const normalizePath = (requestUrl) => {
-  const url = new URL(requestUrl);
-  let endpointPath = url.pathname;
-  if (endpointPath.startsWith('/api/books')) {
-    endpointPath = endpointPath.substring('/api/books'.length);
-  }
-  return endpointPath || '/';
-};
 
 const toGenreList = (input) => {
   if (!Array.isArray(input)) return [];
@@ -204,48 +184,73 @@ const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const requestId = createRequestId();
+  const requestId = createRequestId(ROUTE_KEY);
   const startedAt = Date.now();
+  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type' };
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
+  if (optionsResponse) return optionsResponse;
 
-  if (request.method === 'OPTIONS') {
-    const response = addCorsHeaders(new Response(null, { status: 204 }));
-    response.headers.set('x-request-id', requestId);
-    return response;
+  if (request.method.toUpperCase() !== 'GET') {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, OPTIONS' }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 80, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 
   try {
     const url = new URL(request.url);
-    const endpointPath = normalizePath(request.url);
+    const endpointPath = resolveEndpointPath(request.url, '/api/books');
+    const safeParams = sanitizeSearchParams(url.searchParams, {
+      maxParams: endpointPath === '/details' ? 6 : 3,
+      maxValueLength: 500,
+    });
 
     if (endpointPath !== '/search' && endpointPath !== '/details') {
       const notFound = addCorsHeaders(
         new Response(JSON.stringify({ error: 'Endpoint not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
+        corsConfig
       );
-      return addProxyHeaders(notFound, {
+      addProxyHeaders(notFound, {
         requestId,
         upstreamStatus: 404,
         durationMs: Date.now() - startedAt,
       });
+      return applyRateLimitHeaders(notFound, rateLimit);
     }
 
     const googleApiKey = env.GOOGLE_BOOKS_API_KEY;
     if (endpointPath === '/search') {
-      const query = (url.searchParams.get('query') || url.searchParams.get('q') || '').trim();
+      const query = (safeParams.get('query') || safeParams.get('q') || '').trim();
       if (!query) {
         const badRequest = addCorsHeaders(
           new Response(JSON.stringify({ error: 'Missing query parameter' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
-          })
+          }),
+          corsConfig
         );
-        return addProxyHeaders(badRequest, {
+        addProxyHeaders(badRequest, {
           requestId,
           upstreamStatus: 400,
           durationMs: Date.now() - startedAt,
         });
+        return applyRateLimitHeaders(badRequest, rateLimit);
       }
 
       const google = await searchGoogleBooks(query, googleApiKey);
@@ -275,31 +280,35 @@ export async function onRequest(context) {
               'Cache-Control': 'public, max-age=1800',
             },
           }
-        )
+        ),
+        corsConfig
       );
 
-      return addProxyHeaders(response, {
+      addProxyHeaders(response, {
         requestId,
         upstreamStatus,
         durationMs: Date.now() - startedAt,
       });
+      return applyRateLimitHeaders(response, rateLimit);
     }
 
-    const sourceId = (url.searchParams.get('source_id') || url.searchParams.get('id') || '').trim();
-    const providerParam = (url.searchParams.get('provider') || '').trim();
-    const query = (url.searchParams.get('query') || url.searchParams.get('q') || '').trim();
+    const sourceId = (safeParams.get('source_id') || safeParams.get('id') || '').trim();
+    const providerParam = (safeParams.get('provider') || '').trim();
+    const query = (safeParams.get('query') || safeParams.get('q') || '').trim();
     if (!sourceId && !query) {
       const badRequest = addCorsHeaders(
         new Response(JSON.stringify({ error: 'Missing source_id or query parameter' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
+        corsConfig
       );
-      return addProxyHeaders(badRequest, {
+      addProxyHeaders(badRequest, {
         requestId,
         upstreamStatus: 400,
         durationMs: Date.now() - startedAt,
       });
+      return applyRateLimitHeaders(badRequest, rateLimit);
     }
 
     let provider = providerParam === 'open_library' ? 'open_library' : 'google_books';
@@ -333,13 +342,15 @@ export async function onRequest(context) {
         new Response(JSON.stringify({ error: 'Book details not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
+        corsConfig
       );
-      return addProxyHeaders(notFound, {
+      addProxyHeaders(notFound, {
         requestId,
         upstreamStatus: 404,
         durationMs: Date.now() - startedAt,
       });
+      return applyRateLimitHeaders(notFound, rateLimit);
     }
 
     const response = addCorsHeaders(
@@ -358,26 +369,30 @@ export async function onRequest(context) {
             'Cache-Control': 'public, max-age=1800',
           },
         }
-      )
-    );
+        ),
+        corsConfig
+      );
 
-    return addProxyHeaders(response, {
+    addProxyHeaders(response, {
       requestId,
       upstreamStatus,
       durationMs: Date.now() - startedAt,
     });
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const message = getErrorMessage(error);
     const response = addCorsHeaders(
       new Response(JSON.stringify({ error: 'Falha ao processar o pedido na função books', details: message }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
-      })
+      }),
+      corsConfig
     );
-    return addProxyHeaders(response, {
+    addProxyHeaders(response, {
       requestId,
       upstreamStatus: 500,
       durationMs: Date.now() - startedAt,
     });
+    return applyRateLimitHeaders(response, rateLimit);
   }
 }

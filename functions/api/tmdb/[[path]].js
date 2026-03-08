@@ -1,64 +1,50 @@
+import {
+  addCorsHeaders,
+  addProxyHeaders,
+  applyRateLimitHeaders,
+  createRequestId,
+  enforceRateLimit,
+  getErrorMessage,
+  handleOptions,
+  isPathSafe,
+  jsonResponse,
+  logEvent,
+  maskApiKeyFromUrl,
+  resolveEndpointPath,
+  sanitizeOriginHeaders,
+  sanitizeSearchParams,
+} from '../_shared/security.js';
+
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
-
-const createRequestId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `tmdb_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-};
-
-const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
-
-const maskApiKey = (rawUrl) => {
-  try {
-    const parsed = new URL(rawUrl);
-    if (parsed.searchParams.has('api_key')) parsed.searchParams.set('api_key', '***');
-    return parsed.toString();
-  } catch {
-    return rawUrl.replace(/api_key=[^&]+/g, 'api_key=***');
-  }
-};
-
-const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
-  response.headers.set('x-request-id', requestId);
-  response.headers.set('x-upstream-status', String(upstreamStatus));
-  response.headers.set('x-upstream-latency-ms', String(durationMs));
-  response.headers.set('Access-Control-Expose-Headers', PROXY_HEADER_EXPOSE);
-  return response;
-};
-
-const handleOptions = (req, requestId) => {
-  if (req.method === 'OPTIONS') {
-    const response = new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Max-Age': '86400',
-        'Access-Control-Expose-Headers': PROXY_HEADER_EXPOSE,
-      },
-    });
-    response.headers.set('x-request-id', requestId);
-    return response;
-  }
-  return null;
-};
-
-const resolveEndpointPath = (requestUrl) => {
-  const url = new URL(requestUrl);
-  let endpointPath = url.pathname;
-  if (endpointPath.startsWith('/api/tmdb')) {
-    endpointPath = endpointPath.substring('/api/tmdb'.length);
-  }
-  return endpointPath || '/';
-};
+const ROUTE_KEY = 'tmdb';
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const requestId = createRequestId();
+  const requestId = createRequestId(ROUTE_KEY);
   const startedAt = Date.now();
-  const optionsResponse = handleOptions(request, requestId);
+  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type' };
+  const optionsResponse = handleOptions(request, requestId, corsConfig);
   if (optionsResponse) return optionsResponse;
+
+  if (request.method.toUpperCase() !== 'GET') {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, OPTIONS' }), corsConfig);
+    return addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 405,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 120, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
+  }
 
   try {
     const tmdbApiKey = env.TMDB_API_KEY;
@@ -67,10 +53,20 @@ export async function onRequest(context) {
     }
 
     const url = new URL(request.url);
-    const endpointPath = resolveEndpointPath(request.url);
+    const endpointPath = resolveEndpointPath(request.url, '/api/tmdb');
+    if (!isPathSafe(endpointPath)) {
+      const badPathResponse = addCorsHeaders(jsonResponse({ ok: false, error: 'Invalid endpoint path' }, 400), corsConfig);
+      addProxyHeaders(badPathResponse, {
+        requestId,
+        upstreamStatus: 400,
+        durationMs: Date.now() - startedAt,
+      });
+      return applyRateLimitHeaders(badPathResponse, rateLimit);
+    }
 
-    const tmdbUrl = new URL(`${TMDB_BASE_URL}${endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`}`);
-    url.searchParams.forEach((value, key) => {
+    const safeParams = sanitizeSearchParams(url.searchParams, { maxParams: 30, maxValueLength: 800 });
+    const tmdbUrl = new URL(`${TMDB_BASE_URL}${endpointPath}`);
+    safeParams.forEach((value, key) => {
       tmdbUrl.searchParams.set(key, value);
     });
     tmdbUrl.searchParams.set('api_key', tmdbApiKey);
@@ -78,17 +74,22 @@ export async function onRequest(context) {
       tmdbUrl.searchParams.set('language', 'pt-PT');
     }
 
-    console.log('[tmdb function] Proxy request', {
+    logEvent('info', 'proxy.request', {
+      route: ROUTE_KEY,
       requestId,
-      method: request.method,
+      method: request.method.toUpperCase(),
       endpoint: endpointPath,
-      target: maskApiKey(tmdbUrl.toString()),
+      target: maskApiKeyFromUrl(tmdbUrl.toString()),
     });
 
-    const apiResponse = await fetch(tmdbUrl.toString());
+    const apiResponse = await fetch(tmdbUrl.toString(), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
     const durationMs = Date.now() - startedAt;
     if (!apiResponse.ok) {
-      console.error('[tmdb function] Upstream error', {
+      logEvent('warn', 'proxy.upstream_error', {
+        route: ROUTE_KEY,
         requestId,
         endpoint: endpointPath,
         status: apiResponse.status,
@@ -96,41 +97,35 @@ export async function onRequest(context) {
       });
     }
 
-    const response = new Response(apiResponse.body, apiResponse);
-    response.headers.delete('Content-Encoding');
-    response.headers.delete('Content-Length');
-    response.headers.delete('content-encoding');
-    response.headers.delete('content-length');
+    const response = new Response(apiResponse.body, {
+      status: apiResponse.status,
+      statusText: apiResponse.statusText,
+      headers: sanitizeOriginHeaders(apiResponse.headers),
+    });
 
     response.headers.set('Cache-Control', 'public, max-age=3600');
-    response.headers.set('Access-Control-Allow-Origin', '*');
+    addCorsHeaders(response, corsConfig);
     addProxyHeaders(response, {
       requestId,
       upstreamStatus: apiResponse.status,
       durationMs,
     });
 
-    return response;
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     const message = getErrorMessage(error);
-    console.error('[tmdb function] Unexpected error', {
+    logEvent('error', 'proxy.unexpected_error', {
+      route: ROUTE_KEY,
       requestId,
-      method: request.method,
+      method: request.method.toUpperCase(),
       durationMs,
       error: message,
     });
 
-    const response = new Response(
-      JSON.stringify({ error: 'Falha ao processar o pedido na função tmdb', details: message }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Expose-Headers': PROXY_HEADER_EXPOSE,
-        },
-      }
+    const response = addCorsHeaders(
+      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função tmdb', details: message }, 500),
+      corsConfig
     );
 
     addProxyHeaders(response, {
@@ -139,6 +134,6 @@ export async function onRequest(context) {
       durationMs,
     });
 
-    return response;
+    return applyRateLimitHeaders(response, rateLimit);
   }
 }
