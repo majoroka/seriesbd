@@ -2659,6 +2659,10 @@ body.light-theme .network-logo {
 .grid-view .watchlist-info {
     text-align: center; /* Center the title and the status label */
     padding: 0.25rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .grid-view .watchlist-info h3 {
@@ -2666,13 +2670,20 @@ body.light-theme .network-logo {
     line-height: 1.3;
     font-weight: 600;
     /* Garante que o título tem sempre a mesma altura (máximo 2 linhas) */
-    height: 2.08rem; /* 0.8rem * 1.3 * 2 */
+    min-height: 2.08rem; /* 0.8rem * 1.3 * 2 */
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
+    margin: 0;
+}
+
+.grid-view .media-type-chip-grid {
+    font-size: 0.64rem;
+    padding: 0.08rem 0.4rem;
+    margin-top: 0.05rem;
 }
 /* Em ecrãs pequenos, na vista de grelha, o título fica em minúsculas */
 @media (max-width: 768px) {
@@ -2699,7 +2710,7 @@ body.light-theme .network-logo {
 }
 
 .grid-view .series-status-label {
-    margin-top: 0.25rem; /* Add some space above the label */
+    margin-top: 0.15rem; /* Add some space above the label */
 }
 
 .grid-view .remove-btn {

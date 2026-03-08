@@ -793,11 +793,14 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
     }
     titleChildren.push(`${series.name} ${releaseYear}`);
-    if (mediaType !== 'series') {
+    if (mediaType !== 'series' && viewMode === 'list') {
         titleChildren.push(' ');
         titleChildren.push(el('span', { class: 'media-type-chip', text: mediaTypeLabel }));
     }
     const titleElement = el('h3', {}, titleChildren);
+    const mediaTypeChipInGrid = viewMode === 'grid' && mediaType !== 'series'
+        ? el('span', { class: 'media-type-chip media-type-chip-grid', text: mediaTypeLabel })
+        : null;
 
     const titleInList = viewMode === 'list' ? titleElement : null;
     const statusInList = viewMode === 'list' ? statusElement : null;
@@ -808,6 +811,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         progressElement,
         overviewElement,
         titleInGrid,
+        mediaTypeChipInGrid,
         statusInGrid
     ]);
     return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
