@@ -58,6 +58,13 @@ let currentAuthenticatedUserId: string | null = null;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
 let selectedSearchMediaType: MediaType = 'series';
+let inactivityLogoutTimer: number | null = null;
+let inactivityActivityListenersRegistered = false;
+let lastInactivityActivityAt = 0;
+let lastSignOutReason: 'manual' | 'inactivity' | null = null;
+
+const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
+const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -415,6 +422,69 @@ function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'er
     if (mode === 'error') DOM.authStatusLabel.classList.add('error');
 }
 
+function clearInactivityLogoutTimer() {
+    if (!inactivityLogoutTimer) return;
+    clearTimeout(inactivityLogoutTimer);
+    inactivityLogoutTimer = null;
+}
+
+async function signOutDueToInactivity(): Promise<void> {
+    if (!isSupabaseConfigured() || !currentAuthenticatedUserId) return;
+    try {
+        lastSignOutReason = 'inactivity';
+        await signOutCurrentUser();
+    } catch (error) {
+        const message = getErrorMessage(error);
+        lastSignOutReason = null;
+        console.error('[auth] Erro ao terminar sessão por inatividade.', error);
+        UI.showNotification(`Não foi possível terminar sessão por inatividade: ${message}`);
+    }
+}
+
+function scheduleInactivityLogoutTimer() {
+    if (!isSupabaseConfigured() || !currentAuthenticatedUserId) {
+        clearInactivityLogoutTimer();
+        return;
+    }
+    clearInactivityLogoutTimer();
+    inactivityLogoutTimer = window.setTimeout(() => {
+        inactivityLogoutTimer = null;
+        void signOutDueToInactivity();
+    }, INACTIVITY_LOGOUT_TIMEOUT_MS);
+}
+
+function onUserActivityForSessionTimeout(event?: Event) {
+    if (!currentAuthenticatedUserId) return;
+    const now = Date.now();
+    const eventType = event?.type ?? '';
+    const isNoisyEvent = eventType === 'mousemove' || eventType === 'scroll';
+
+    if (isNoisyEvent && now - lastInactivityActivityAt < INACTIVITY_ACTIVITY_THROTTLE_MS) {
+        return;
+    }
+
+    lastInactivityActivityAt = now;
+    scheduleInactivityLogoutTimer();
+}
+
+function ensureInactivityActivityListeners() {
+    if (inactivityActivityListenersRegistered) return;
+    inactivityActivityListenersRegistered = true;
+
+    const resetTimer = (event?: Event) => onUserActivityForSessionTimeout(event);
+    const passiveOptions: AddEventListenerOptions = { passive: true };
+
+    document.addEventListener('click', resetTimer, passiveOptions);
+    document.addEventListener('keydown', resetTimer, passiveOptions);
+    document.addEventListener('mousemove', resetTimer, passiveOptions);
+    document.addEventListener('touchstart', resetTimer, passiveOptions);
+    document.addEventListener('scroll', resetTimer, passiveOptions);
+    window.addEventListener('focus', resetTimer, passiveOptions);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') resetTimer();
+    });
+}
+
 function clearAuthInlineFeedback() {
     DOM.authInlineFeedback.hidden = true;
     DOM.authInlineFeedback.textContent = '';
@@ -507,6 +577,11 @@ function renderLibraryStateFromMemory() {
 
 function setAuthenticatedUi(user: User | null) {
     currentAuthenticatedUserId = user?.id ?? null;
+    if (currentAuthenticatedUserId) {
+        scheduleInactivityLogoutTimer();
+    } else {
+        clearInactivityLogoutTimer();
+    }
     updateAuthActionButtons(user);
     if (!isSupabaseConfigured()) {
         setAuthStatusLabel('Modo local (Supabase não configurado)', 'default');
@@ -523,25 +598,33 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
     if (event === 'SIGNED_IN' && user?.email) {
+        onUserActivityForSessionTimeout();
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
             UI.showNotification(`Sessão iniciada: ${user.email}`);
             void syncCloudStateAfterLogin(user.id);
         }
     } else if (event === 'SIGNED_OUT') {
+        clearInactivityLogoutTimer();
         if (librarySyncTimer) {
             clearTimeout(librarySyncTimer);
             librarySyncTimer = null;
         }
         if (previousUserId) {
-            UI.showNotification('Sessão terminada.');
+            if (lastSignOutReason === 'inactivity') {
+                UI.showNotification('Sessão terminada por inatividade (30 minutos).');
+            } else {
+                UI.showNotification('Sessão terminada.');
+            }
         }
+        lastSignOutReason = null;
         clearInMemoryLibraryState();
         renderLibraryStateFromMemory();
     }
 }
 
 async function initializeAuthState() {
+    ensureInactivityActivityListeners();
     if (!isSupabaseConfigured()) {
         setAuthenticatedUi(null);
         DOM.authLoginBtn.disabled = true;
@@ -2597,11 +2680,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const star = target.closest('.star-container');
         if (star) {
             const ratingContainer = star.closest('.star-rating');
-            const seriesId = parseInt((ratingContainer as HTMLElement).dataset.seriesId!, 10);
+            if (!ratingContainer) return;
+            const containerDataset = (ratingContainer as HTMLElement).dataset;
+            const mediaType = parseMediaType(containerDataset.mediaType);
+            const mediaId = parseInt(containerDataset.mediaId || containerDataset.seriesId || '', 10);
+            if (Number.isNaN(mediaId)) return;
+            const stateKey = mediaType === 'series' ? String(mediaId) : createMediaKey(mediaType, mediaId);
             const value = parseInt((star as HTMLElement).dataset.value!, 10);
-            const currentRating = S.userData[seriesId]?.rating || 0;
+            const currentRating = S.userData[stateKey]?.rating || 0;
             const newRating = (value === currentRating) ? 0 : value; // Toggle off
-            await S.updateUserRating(seriesId, newRating);
+            await S.updateMediaRating(mediaType, mediaId, newRating);
             UI.renderStars(ratingContainer as HTMLElement, newRating);
             return;
         }
@@ -2794,10 +2882,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notesTextarea) {
             clearTimeout(notesSaveTimeout);
             notesSaveTimeout = window.setTimeout(async () => {
-                const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
+                const mediaType = parseMediaType((notesTextarea as HTMLElement).dataset.mediaType);
+                const mediaId = parseInt((notesTextarea as HTMLElement).dataset.mediaId || (notesTextarea as HTMLElement).dataset.seriesId || '', 10);
+                if (Number.isNaN(mediaId)) return;
                 const notes = (notesTextarea as HTMLTextAreaElement).value;
-                await S.updateUserNotes(seriesId, notes);
-                console.log(`Notas para a série ${seriesId} guardadas.`);
+                await S.updateMediaNotes(mediaType, mediaId, notes);
+                console.log(`Notas para ${mediaType}:${mediaId} guardadas.`);
             }, 1500);
         }
     });
@@ -2848,9 +2938,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 UI.showNotification('Utilizador sem sessão ativa.');
                 return;
             }
+            lastSignOutReason = 'manual';
             await signOutCurrentUser();
         } catch (error) {
             const message = getErrorMessage(error);
+            lastSignOutReason = null;
             console.error('[auth] Erro ao terminar sessão.', error);
             UI.showNotification(`Não foi possível terminar sessão: ${message}`);
         }

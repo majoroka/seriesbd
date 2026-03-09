@@ -34,10 +34,67 @@ const toGenreList = (input) => {
   return input.slice(0, 3).map((name, index) => ({ id: index + 1, name: String(name) }));
 };
 
-const toGoogleCover = (imageLinks) => {
-  const raw = imageLinks?.thumbnail || imageLinks?.smallThumbnail || null;
-  if (!raw) return null;
-  return String(raw).replace(/^http:\/\//i, 'https://');
+const dedupeBookResults = (results) => {
+  const seen = new Set();
+  return (Array.isArray(results) ? results : []).filter((item) => {
+    const provider = String(item?.source_provider || '');
+    const sourceId = String(item?.source_id || item?.id || '');
+    const key = `${provider}:${sourceId}`;
+    if (!sourceId || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const buildGoogleSearchQueries = (query) => {
+  const normalized = String(query || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return [];
+
+  const strategies = [normalized];
+  if (!/^inauthor:/i.test(normalized)) {
+    strategies.push(`inauthor:"${normalized}"`);
+  }
+  if (!/^intitle:/i.test(normalized)) {
+    strategies.push(`intitle:"${normalized}"`);
+  }
+
+  return Array.from(new Set(strategies));
+};
+
+const normalizeGoogleCoverUrl = (rawUrl) => {
+  if (!rawUrl) return null;
+  const normalized = String(rawUrl).replace(/^http:\/\//i, 'https://');
+  try {
+    const parsed = new URL(normalized);
+    const currentZoom = Number(parsed.searchParams.get('zoom') || '1');
+    if (Number.isNaN(currentZoom) || currentZoom < 2) {
+      parsed.searchParams.set('zoom', '3');
+    }
+    parsed.searchParams.delete('edge');
+    return parsed.toString();
+  } catch {
+    return normalized
+      .replace(/([?&])zoom=1(&|$)/, '$1zoom=3$2')
+      .replace(/([?&])edge=[^&]+(&|$)/, '$1');
+  }
+};
+
+const buildGoogleCoverFallback = (sourceId) => {
+  const safeId = String(sourceId || '').trim();
+  if (!safeId) return null;
+  return `https://books.google.com/books/content?id=${encodeURIComponent(safeId)}&printsec=frontcover&img=1&zoom=3&source=gbs_api`;
+};
+
+const toGoogleCover = (imageLinks, sourceId) => {
+  const raw =
+    imageLinks?.extraLarge
+    || imageLinks?.large
+    || imageLinks?.medium
+    || imageLinks?.small
+    || imageLinks?.thumbnail
+    || imageLinks?.smallThumbnail
+    || buildGoogleCoverFallback(sourceId);
+  return normalizeGoogleCoverUrl(raw);
 };
 
 const mapGoogleBook = (item) => {
@@ -55,7 +112,7 @@ const mapGoogleBook = (item) => {
     name: String(info.title || 'Livro sem titulo'),
     original_name: String(info.subtitle || info.title || ''),
     overview: description,
-    poster_path: toGoogleCover(info.imageLinks),
+    poster_path: toGoogleCover(info.imageLinks, sourceId),
     backdrop_path: null,
     first_air_date: publishedDate,
     genres: toGenreList(info.categories),
@@ -107,11 +164,14 @@ const searchGoogleBooks = async (query, apiKey) => {
   };
 };
 
-const searchOpenLibraryBooks = async (query) => {
+const searchOpenLibraryBooks = async (query, options = {}) => {
+  const { byAuthor = false } = options;
   const url = new URL(`${OPEN_LIBRARY_BASE_URL}/search.json`);
-  url.searchParams.set('q', query);
+  url.searchParams.set(byAuthor ? 'author' : 'q', query);
   url.searchParams.set('limit', '20');
-  url.searchParams.set('language', 'por');
+  if (!byAuthor) {
+    url.searchParams.set('language', 'por');
+  }
 
   const response = await fetch(url.toString());
   const payload = await response.json().catch(() => ({}));
@@ -253,16 +313,31 @@ export async function onRequest(context) {
         return applyRateLimitHeaders(badRequest, rateLimit);
       }
 
-      const google = await searchGoogleBooks(query, googleApiKey);
+      const googleQueries = buildGoogleSearchQueries(query);
       let provider = 'google_books';
-      let upstreamStatus = google.status;
-      let results = google.results;
+      let upstreamStatus = 200;
+      const googleResults = [];
+      let googleHadOkResponse = false;
 
-      if (!google.ok || results.length === 0) {
-        const openLibrary = await searchOpenLibraryBooks(query);
+      for (const googleQuery of googleQueries) {
+        const google = await searchGoogleBooks(googleQuery, googleApiKey);
+        upstreamStatus = google.status;
+        if (!google.ok) continue;
+        googleHadOkResponse = true;
+        googleResults.push(...google.results);
+      }
+
+      let results = dedupeBookResults(googleResults);
+
+      if (!googleHadOkResponse || results.length === 0) {
+        const openLibraryKeyword = await searchOpenLibraryBooks(query);
+        const openLibraryAuthor = await searchOpenLibraryBooks(query, { byAuthor: true });
         provider = 'open_library';
-        upstreamStatus = openLibrary.status;
-        results = openLibrary.results;
+        upstreamStatus = openLibraryAuthor.status || openLibraryKeyword.status;
+        results = dedupeBookResults([
+          ...openLibraryKeyword.results,
+          ...openLibraryAuthor.results,
+        ]);
       }
 
       const response = addCorsHeaders(
