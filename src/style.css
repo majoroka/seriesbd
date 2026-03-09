@@ -2258,9 +2258,18 @@ body.light-theme .network-logo {
     flex-wrap: wrap;
 }
 
+.v2-detail-header .media-progress-controls {
+    color: #fff;
+}
+
 .book-progress-controls label {
     font-weight: 600;
     color: var(--text-secondary);
+}
+
+.v2-detail-header .book-progress-controls label,
+.v2-detail-header .book-progress-value {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 #book-progress-range {

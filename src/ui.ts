@@ -905,7 +905,7 @@ export function renderMediaDetails(
     const mediaType = media.media_type || 'series';
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
     const releaseYear = media.first_air_date ? `(${new Date(media.first_air_date).getFullYear()})` : '';
-    const releaseDate = media.first_air_date
+    const releaseDate = media.first_air_date && !Number.isNaN(new Date(media.first_air_date).getTime())
         ? new Date(media.first_air_date).toLocaleDateString('pt-PT')
         : 'Data desconhecida';
     const posterPath = buildPosterUrl(
@@ -914,12 +914,30 @@ export function renderMediaDetails(
         '/placeholders/poster.svg'
     );
     const backdropPath = buildPosterUrl(media.backdrop_path, 'w1280', '');
+    const effectiveBackdrop = backdropPath || posterPath;
     const progressPercent = Math.max(0, Math.min(100, Math.round(options.progressPercent || 0)));
     const genres = (media.genres || []).map((g) => g?.name).filter(Boolean).join(', ') || 'N/A';
-    const publicRating = typeof media.vote_average === 'number' ? media.vote_average.toFixed(1) : 'N/A';
+    const publicRatingValue = typeof media.vote_average === 'number' ? media.vote_average : 0;
+    const publicRating = publicRatingValue > 0 ? publicRatingValue.toFixed(1) : 'N/A';
+    const mediaStateKey = getMediaStateKey(media);
+    const currentUserData = S.userData[mediaStateKey] || {};
+    const currentUserRating = Math.max(0, Math.min(10, currentUserData.rating || 0));
+    const currentUserNotes = currentUserData.notes || '';
+    const runtimeMinutes = typeof media.episode_run_time === 'number' ? media.episode_run_time : 0;
+    const runtimeText = runtimeMinutes > 0 ? formatHoursMinutes(runtimeMinutes) : 'N/A';
+    const sourceProviderLabel = (() => {
+        if (media.source_provider === 'tmdb_movie') return 'TMDb';
+        if (media.source_provider === 'google_books') return 'Google Books';
+        if (media.source_provider === 'open_library') return 'Open Library';
+        return media.source_provider || 'N/A';
+    })();
     const progressLabel = mediaType === 'movie'
-        ? (progressPercent >= 100 ? 'Visto' : 'Não visto')
-        : `${progressPercent}% lido`;
+        ? (progressPercent >= 100 ? 'Visto' : 'Por ver')
+        : (progressPercent >= 100 ? 'Concluído' : progressPercent > 0 ? 'Em leitura' : 'Por ler');
+    const progressCounter = mediaType === 'movie'
+        ? (progressPercent >= 100 ? '100% concluído' : '0% concluído')
+        : `${progressPercent}% leitura`;
+    const progressHTML = `<div class="v2-overview-progress"><div class="v2-progress-bar-container"><div class="v2-progress-bar" style="width: ${progressPercent}%;"></div></div><div class="v2-progress-text"><span>${Math.round(progressPercent)}%</span><span>${progressCounter}</span></div></div>`;
     const findMediaTrailerKey = () => {
         const videos = media.videos?.results;
         if (!Array.isArray(videos) || videos.length === 0) return null;
@@ -939,6 +957,67 @@ export function renderMediaDetails(
         return youtubeVideos[0]?.key || null;
     };
     const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() : null;
+    const ratingEntries = publicRatingValue > 0
+        ? [{
+            key: mediaType === 'movie' ? 'tmdb' : 'books',
+            label: mediaType === 'movie' ? 'TMDb' : sourceProviderLabel,
+            value: publicRatingValue,
+            color: mediaType === 'movie' ? 'var(--primary-accent)' : 'var(--tvmaze-accent)',
+        }]
+        : [];
+    const averageRating = ratingEntries.length > 0
+        ? ratingEntries.reduce((sum, entry) => sum + entry.value, 0) / ratingEntries.length
+        : 0;
+    const publicRatingsElement = ratingEntries.length > 0 ? el('div', { class: 'v2-public-ratings' }, [
+        el('p', { class: 'v2-action-label', text: 'Avaliações' }),
+        el('div', { class: 'concentric-chart-wrapper' }, [
+            el('div', { class: 'concentric-chart rings-1' }, [
+                el('div', {
+                    class: 'chart-ring outer',
+                    style: `--progress: ${ratingEntries[0].value * 10}%; --color: ${ratingEntries[0].color};`
+                }),
+                el('div', { class: 'chart-center' }, [el('span', { class: 'chart-average', text: averageRating.toFixed(1) })])
+            ]),
+            el('div', { class: 'chart-legend' }, ratingEntries.map((entry) =>
+                el('div', { class: 'legend-item' }, [
+                    el('span', { class: 'legend-color', style: `background-color: ${entry.color};` }),
+                    el('span', { class: 'legend-text', text: `${entry.label}:` }),
+                    el('strong', { class: 'legend-value', text: entry.value.toFixed(1) })
+                ])
+            ))
+        ])
+    ]) : null;
+    const topFacts = [
+        { type: 'text', value: releaseDate },
+        { type: 'certification', value: mediaTypeLabel },
+        { type: 'text', value: genres },
+        mediaType === 'movie' ? { type: 'text', value: runtimeText } : null,
+    ].filter((fact): fact is { type: 'text' | 'certification'; value: string } => Boolean(fact?.value && fact.value !== 'N/A'));
+    const factsElements = topFacts.flatMap((fact, index) => {
+        const nodes: (Node | HTMLElement)[] = [];
+        if (index > 0) nodes.push(el('span', { class: 'separator-dot', html: ' &bull; ' }));
+        nodes.push(fact.type === 'certification'
+            ? el('span', { class: 'v2-certification', text: fact.value })
+            : document.createTextNode(fact.value));
+        return nodes;
+    });
+    const metadataItems = mediaType === 'movie'
+        ? [
+            { label: 'Status', value: progressLabel },
+            { label: 'Géneros', value: genres },
+            { label: 'Duração', value: runtimeText },
+            { label: 'Fonte', value: sourceProviderLabel },
+            { label: 'ID Fonte', value: media.source_id || String(media.id) },
+            { label: 'Avaliação Pública', value: publicRating === 'N/A' ? 'N/A' : `${publicRating}/10` },
+        ]
+        : [
+            { label: 'Estado Leitura', value: progressLabel },
+            { label: 'Géneros', value: genres },
+            { label: 'Publicado', value: releaseDate },
+            { label: 'Fonte', value: sourceProviderLabel },
+            { label: 'ID Fonte', value: media.source_id || String(media.id) },
+            { label: 'Progresso', value: `${progressPercent}%` },
+        ];
 
     const actionButtons: (HTMLElement | null)[] = [
         el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
@@ -1007,53 +1086,64 @@ export function renderMediaDetails(
             ]),
         ]);
 
-    const header = el('div', { class: 'v2-detail-header media-detail-header', style: backdropPath ? `background-image: url('${backdropPath}');` : '' }, [
+    const header = el('div', { class: 'v2-detail-header', style: effectiveBackdrop ? `background-image: url('${effectiveBackdrop}');` : '' }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
-                el('div', { class: 'v2-poster-wrapper media-detail-poster' }, [
-                    createPosterImage(
-                        posterPath,
-                        `Poster de ${media.name}`,
-                        'v2-poster',
-                        '/placeholders/poster.svg'
-                    )
+                el('div', { class: 'v2-poster-wrapper media-detail-poster', html: progressHTML }, [
+                    el('img', { src: posterPath, alt: `Poster de ${media.name}`, class: 'v2-poster' })
                 ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
                         el('div', { class: 'v2-title-text' }, [
                             el('h1', {}, [
                                 `${media.name} `,
-                                el('span', { class: 'release-year', text: releaseYear }),
-                                ' ',
-                                el('span', { class: 'media-type-chip', text: mediaTypeLabel })
+                                el('span', { class: 'release-year', text: releaseYear })
                             ])
                         ]),
                         el('div', { class: 'v2-header-actions' }, actionButtons)
                     ]),
-                    el('div', { class: 'v2-facts' }, [
-                        document.createTextNode(releaseDate),
-                        el('span', { class: 'separator-dot', html: ' &bull; ' }),
-                        document.createTextNode(`Avaliação pública: ${publicRating}`),
-                        el('span', { class: 'separator-dot', html: ' &bull; ' }),
-                        document.createTextNode(`Progresso: ${progressLabel}`),
+                    el('div', { class: 'v2-facts' }, factsElements),
+                    el('div', { class: 'v2-actions' }, [
+                        el('div', { class: 'v2-all-ratings-wrapper' }, [
+                            el('div', { class: 'v2-ratings-group' }, [
+                                el('div', { class: 'user-rating-container v2-user-rating' }, [
+                                    el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
+                                    el('div', {
+                                        class: 'star-rating',
+                                        'data-series-id': String(media.id),
+                                        'data-media-id': String(media.id),
+                                        'data-media-type': mediaType,
+                                    }, Array.from({ length: 10 }, (_, i) => {
+                                        const value = i + 1;
+                                        const starClass = value <= currentUserRating ? 'fas' : 'far';
+                                        return el('div', { class: 'star-container', 'data-value': value }, [
+                                            el('i', { class: `${starClass} fa-star star-icon` }),
+                                            el('span', { class: 'star-number', text: value })
+                                        ]);
+                                    })),
+                                ]),
+                                publicRatingsElement,
+                            ])
+                        ]),
+                        mediaTrailerKey
+                            ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': mediaTrailerKey }, [
+                                el('i', { class: 'fas fa-play' }),
+                                ' Ver Trailer'
+                            ])
+                            : null
                     ]),
                     el('div', { class: 'v2-overview' }, [
                         el('h3', { text: 'Sinopse' }),
                         el('p', { text: media.overview || 'Sinopse não disponível.' })
                     ]),
-                    mediaTrailerKey
-                        ? el('div', { class: 'v2-actions' }, [
-                            el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': mediaTrailerKey }, [
-                                el('i', { class: 'fas fa-play' }),
-                                ' Ver Trailer'
-                            ])
-                        ])
-                        : null,
                     el('div', { class: 'v2-additional-facts' }, [
                         el('div', { class: 'v2-metadata-grid' }, [
-                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Tipo' }), el('p', { text: mediaTypeLabel })]),
-                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Géneros' }), el('p', { text: genres })]),
-                            el('div', { class: 'v2-metadata-item' }, [el('span', { text: 'Fonte' }), el('p', { text: media.source_provider || 'N/A' })]),
+                            ...metadataItems.map((fact) =>
+                                el('div', { class: 'v2-metadata-item' }, [
+                                    el('span', { text: fact.label }),
+                                    el('p', { text: fact.value || 'N/A' })
+                                ])
+                            )
                         ])
                     ]),
                     progressControls
@@ -1066,6 +1156,23 @@ export function renderMediaDetails(
     detailSection.dataset.seriesId = String(media.id);
     detailSection.dataset.mediaType = mediaType;
     detailSection.dataset.mediaId = String(media.id);
+
+    const bodyContentContainer = el('div', { class: 'v2-body-content' }, [
+        el('div', { class: 'v2-info-card collapsible' }, [
+            el('details', {}, [
+                el('summary', { text: 'As Minhas Notas' }),
+                el('textarea', {
+                    class: 'user-notes-textarea',
+                    'data-series-id': String(media.id),
+                    'data-media-id': String(media.id),
+                    'data-media-type': mediaType,
+                    placeholder: `Escreva aqui as suas notas sobre ${mediaType === 'movie' ? 'o filme' : 'o livro'}...`,
+                    text: currentUserNotes
+                })
+            ])
+        ])
+    ]);
+    detailSection.appendChild(bodyContentContainer);
 }
 
 export function renderSeriesDetails(

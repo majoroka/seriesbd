@@ -2597,11 +2597,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const star = target.closest('.star-container');
         if (star) {
             const ratingContainer = star.closest('.star-rating');
-            const seriesId = parseInt((ratingContainer as HTMLElement).dataset.seriesId!, 10);
+            if (!ratingContainer) return;
+            const containerDataset = (ratingContainer as HTMLElement).dataset;
+            const mediaType = parseMediaType(containerDataset.mediaType);
+            const mediaId = parseInt(containerDataset.mediaId || containerDataset.seriesId || '', 10);
+            if (Number.isNaN(mediaId)) return;
+            const stateKey = mediaType === 'series' ? String(mediaId) : createMediaKey(mediaType, mediaId);
             const value = parseInt((star as HTMLElement).dataset.value!, 10);
-            const currentRating = S.userData[seriesId]?.rating || 0;
+            const currentRating = S.userData[stateKey]?.rating || 0;
             const newRating = (value === currentRating) ? 0 : value; // Toggle off
-            await S.updateUserRating(seriesId, newRating);
+            await S.updateMediaRating(mediaType, mediaId, newRating);
             UI.renderStars(ratingContainer as HTMLElement, newRating);
             return;
         }
@@ -2794,10 +2799,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notesTextarea) {
             clearTimeout(notesSaveTimeout);
             notesSaveTimeout = window.setTimeout(async () => {
-                const seriesId = parseInt((notesTextarea as HTMLElement).dataset.seriesId!, 10);
+                const mediaType = parseMediaType((notesTextarea as HTMLElement).dataset.mediaType);
+                const mediaId = parseInt((notesTextarea as HTMLElement).dataset.mediaId || (notesTextarea as HTMLElement).dataset.seriesId || '', 10);
+                if (Number.isNaN(mediaId)) return;
                 const notes = (notesTextarea as HTMLTextAreaElement).value;
-                await S.updateUserNotes(seriesId, notes);
-                console.log(`Notas para a série ${seriesId} guardadas.`);
+                await S.updateMediaNotes(mediaType, mediaId, notes);
+                console.log(`Notas para ${mediaType}:${mediaId} guardadas.`);
             }, 1500);
         }
     });

@@ -185,7 +185,11 @@ export async function unmarkEpisodesAsWatched(seriesId: number, episodeIds: numb
 }
 
 export async function updateUserRating(seriesId: number, rating: number) {
-    const stateKey = toSeriesStateKey(seriesId);
+    await updateMediaRating('series', seriesId, rating);
+}
+
+export async function updateMediaRating(mediaType: MediaType, mediaId: number, rating: number) {
+    const stateKey = toStateKey(mediaType, mediaId);
     const notes = userData[stateKey]?.notes || '';
     const progressPercent = userData[stateKey]?.progress_percent;
     if (!userData[stateKey]) {
@@ -193,19 +197,23 @@ export async function updateUserRating(seriesId: number, rating: number) {
     }
     userData[stateKey].rating = rating;
     await db.userData.put({
-        media_key: getSeriesMediaKey(seriesId),
-        media_type: 'series',
-        media_id: seriesId,
-        seriesId,
+        media_key: mediaType === 'series' ? getSeriesMediaKey(mediaId) : createMediaKey(mediaType, mediaId),
+        media_type: mediaType,
+        media_id: mediaId,
+        seriesId: mediaId,
         rating,
         notes,
         progress_percent: progressPercent,
     });
-    emitStateMutation('updateUserRating');
+    emitStateMutation('updateMediaRating');
 }
 
 export async function updateUserNotes(seriesId: number, notes: string) {
-    const stateKey = toSeriesStateKey(seriesId);
+    await updateMediaNotes('series', seriesId, notes);
+}
+
+export async function updateMediaNotes(mediaType: MediaType, mediaId: number, notes: string) {
+    const stateKey = toStateKey(mediaType, mediaId);
     const rating = userData[stateKey]?.rating || 0;
     const progressPercent = userData[stateKey]?.progress_percent;
     if (!userData[stateKey]) {
@@ -213,15 +221,15 @@ export async function updateUserNotes(seriesId: number, notes: string) {
     }
     userData[stateKey].notes = notes;
     await db.userData.put({
-        media_key: getSeriesMediaKey(seriesId),
-        media_type: 'series',
-        media_id: seriesId,
-        seriesId,
+        media_key: mediaType === 'series' ? getSeriesMediaKey(mediaId) : createMediaKey(mediaType, mediaId),
+        media_type: mediaType,
+        media_id: mediaId,
+        seriesId: mediaId,
         rating,
         notes,
         progress_percent: progressPercent,
     });
-    emitStateMutation('updateUserNotes');
+    emitStateMutation('updateMediaNotes');
 }
 
 export async function updateMediaProgress(mediaType: MediaType, mediaId: number, progressPercent: number) {
