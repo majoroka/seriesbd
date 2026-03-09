@@ -1,0 +1,147 @@
+# Dashboard V2 Plan (MediaDex)
+
+Documento de execução da nova dashboard SaaS para a app, com foco em UI/UX moderna, rollout seguro e zero regressões funcionais.
+
+## Objetivo
+
+Transformar o ecrã inicial numa dashboard moderna e modular para consumo de media:
+- séries
+- filmes
+- livros
+- biblioteca
+
+## Decisões já fechadas
+
+- `Dashboard` passa a ser o ecrã de entrada.
+- Menu principal da sidebar:
+  - Dashboard
+  - Filmes
+  - Séries
+  - Livros
+  - Biblioteca
+- `Biblioteca` é única e geral (mantém filtros atuais), sem bibliotecas separadas por domínio.
+- Recomendações `Para Ti`:
+  - sem histórico suficiente: géneros mais consumidos globalmente;
+  - com histórico: personalização por consumo do utilizador.
+- Notificações: implementar com eventos reais.
+
+## Estratégia de rollout (anti-regressão)
+
+- Implementar atrás de feature flags:
+  - `dashboard_v2`
+  - `recommendations_v1`
+  - `notifications_v1`
+- Validar sempre em `staging` antes de PR para `main`.
+- Manter o layout atual disponível até aprovação formal.
+
+## Fase 1 - Shell visual e navegação base
+
+- DV2-T01 Criar layout 3 áreas:
+  - sidebar esquerda fixa (220-250px)
+  - área principal
+  - coluna direita
+- DV2-T02 Implementar top bar:
+  - saudação com nome do user
+  - pesquisa existente
+  - ícone de notificações
+  - conta (avatar + nome + dropdown)
+- DV2-T03 Criar bloco central da sidebar: `ÁREA SUB-MENU`.
+- DV2-T04 Rodapé da sidebar:
+  - perfil
+  - configurações
+  - toggle tema claro/escuro
+- DV2-T05 Estados auth no header:
+  - sessão ativa: avatar/nome/dropdown
+  - sessão inativa: `Entrar` + `Criar Conta`
+
+## Fase 2 - Conteúdo da dashboard
+
+- DV2-T06 Cards de estatísticas em tempo real:
+  - SÉRIES
+  - FILMES
+  - LIVROS
+  - ESTATÍSTICAS
+- DV2-T07 Secção `GRÁFICOS DE EVOLUÇÃO E GÉNEROS`:
+  - gráfico de linhas (evolução mensal por tipo de media)
+  - gráfico donut (distribuição por géneros)
+- DV2-T08 Secção `RECENTEMENTE VISTOS / LIDOS`:
+  - carrossel horizontal
+  - item com capa/poster, título e badge de estado
+- DV2-T09 Secção `PARA TI`:
+  - recomendações com fallback cold-start
+  - recomendações personalizadas por histórico
+- DV2-T10 Coluna direita:
+  - `PRÓXIMOS LANÇAMENTOS AGUARDADOS`
+  - lista vertical com poster + data destacada
+
+## Fase 3 - Sub-menu por domínio
+
+- DV2-T11 Clique em `Séries`:
+  - carregar no sub-menu os fluxos já existentes
+  - quero ver, a ver, próximo episódio, tendências, top rated, estreias, estatísticas
+- DV2-T12 Clique em `Filmes`:
+  - quero ver, a ver, tendências, top rated, estreias, estatísticas
+  - ligar chamadas API onde existir suporte
+- DV2-T13 Clique em `Livros`:
+  - quero ler, a ler, tendências, top rated, estreias, estatísticas
+  - se não houver dados robustos para uma secção: mostrar `Brevemente`
+- DV2-T14 Clique em `Biblioteca`:
+  - manter biblioteca geral atual
+  - manter filtros atuais por estado/media/género
+
+## Fase 4 - Conta, permissões e ações
+
+- DV2-T15 Mover `Importar` e `Exportar` para dropdown da conta.
+- DV2-T16 Restringir import/export a users autenticados.
+- DV2-T17 Mensagens UX consistentes:
+  - sessão inativa
+  - erro de auth
+  - ação indisponível sem conta
+
+## Fase 5 - Notificações reais
+
+- DV2-T18 Criar centro de notificações (dropdown/painel):
+  - próximos episódios
+  - episódios lançados
+  - lançamentos de filmes aguardados
+- DV2-T19 Persistir notificações lidas/não lidas por utilizador.
+- DV2-T20 Atualizar badge de contagem sem bloquear navegação.
+
+## Fase 6 - QA e Go-live interno
+
+- DV2-T21 Testes de regressão séries/filmes/livros (fluxos já estáveis).
+- DV2-T22 Testes de UI responsiva (desktop/tablet/mobile).
+- DV2-T23 Acessibilidade base:
+  - foco visível
+  - navegação por teclado
+  - labels ARIA em componentes críticos
+- DV2-T24 Verificação de performance:
+  - render inicial da dashboard
+  - custo dos gráficos
+  - carrosséis
+
+## Plano de PRs recomendado
+
+- PR-1: Shell da dashboard, sidebar, top bar, tema e navegação base.
+- PR-2: Cards KPI + gráficos + recentes + lançamentos aguardados.
+- PR-3: Sub-menus por domínio e integração biblioteca geral.
+- PR-4: Recomendações personalizadas + notificações reais.
+- PR-5: Hardening UX, acessibilidade e regressão final.
+
+## Critérios de aceitação globais
+
+- A dashboard nova é o ecrã de entrada.
+- A identidade visual mantém coerência com o tema atual da app.
+- `Biblioteca` geral mantém o comportamento anterior sem perda de funcionalidades.
+- Séries não regressam funcionalmente.
+- Filmes e livros têm fallback seguro quando faltar fonte de dados.
+- Notificações funcionam com eventos reais e não degradam a UX.
+
+## Riscos e mitigação
+
+- Risco: regressões em fluxos atuais de séries.
+  - Mitigação: feature flags + PRs pequenos + checklist de regressão.
+- Risco: ausência de dados robustos para `tendências/top rated/estreias` em livros.
+  - Mitigação: estados `Brevemente` e fallback explícito de UX.
+- Risco: excesso de carga no render inicial.
+  - Mitigação: lazy render por secção, reuse de componentes e cache de dados já existente.
