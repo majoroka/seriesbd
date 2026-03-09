@@ -1090,7 +1090,12 @@ export function renderMediaDetails(
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
                 el('div', { class: 'v2-poster-wrapper media-detail-poster', html: progressHTML }, [
-                    el('img', { src: posterPath, alt: `Poster de ${media.name}`, class: 'v2-poster' })
+                    createPosterImage(
+                        posterPath,
+                        `Poster de ${media.name}`,
+                        'v2-poster',
+                        '/placeholders/poster.svg'
+                    )
                 ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
@@ -1291,7 +1296,14 @@ export function renderSeriesDetails(
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
-                el('div', { class: 'v2-poster-wrapper', html: progressHTML }, [el('img', { src: posterPath, alt: `Poster de ${seriesData.name}`, class: 'v2-poster' })]),
+                el('div', { class: 'v2-poster-wrapper', html: progressHTML }, [
+                    createPosterImage(
+                        posterPath,
+                        `Poster de ${seriesData.name}`,
+                        'v2-poster',
+                        '/placeholders/poster.svg'
+                    )
+                ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
                         el('div', { class: 'v2-title-text' }, [
@@ -1426,7 +1438,12 @@ export function renderSeriesDetails(
 
 export function createPersonElement(person: { id: number; name: string; profile_path: string | null; roles: string[] }): HTMLElement {
     const photoElement = person.profile_path
-        ? el('img', { src: `https://image.tmdb.org/t/p/w185${person.profile_path}`, alt: person.name, loading: 'lazy', class: 'v2-person-photo' })
+        ? createPosterImage(
+            `https://image.tmdb.org/t/p/w185${person.profile_path}`,
+            person.name,
+            'v2-person-photo',
+            '/placeholders/poster.svg'
+        )
         : el('div', { class: 'v2-person-photo no-photo', text: 'Foto não disponível' });
     return el('li', {}, [
         el('div', { class: 'v2-person-card' }, [
@@ -1498,7 +1515,12 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
         }
         const runtimeText = episode.runtime ? `${episode.runtime} min` : 'N/A';
         const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview || 'Sinopse não disponível.', 'data-still-path-large': stillPathLarge }, [
-            el('img', { src: stillPathSmall, alt: `Imagem do episódio ${episode.episode_number}`, class: 'episode-still', loading: 'lazy' }),
+            createPosterImage(
+                stillPathSmall,
+                `Imagem do episódio ${episode.episode_number}`,
+                'episode-still',
+                '/placeholders/still.svg'
+            ),
             el('i', { class: 'far fa-circle status-icon', role: 'button', tabindex: '0' }),
             el('span', { class: 'episode-number', text: `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` }),
             el('p', { class: 'episode-title', text: episode.name }),
