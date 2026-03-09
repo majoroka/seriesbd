@@ -34,10 +34,40 @@ const toGenreList = (input) => {
   return input.slice(0, 3).map((name, index) => ({ id: index + 1, name: String(name) }));
 };
 
-const toGoogleCover = (imageLinks) => {
-  const raw = imageLinks?.thumbnail || imageLinks?.smallThumbnail || null;
-  if (!raw) return null;
-  return String(raw).replace(/^http:\/\//i, 'https://');
+const normalizeGoogleCoverUrl = (rawUrl) => {
+  if (!rawUrl) return null;
+  const normalized = String(rawUrl).replace(/^http:\/\//i, 'https://');
+  try {
+    const parsed = new URL(normalized);
+    const currentZoom = Number(parsed.searchParams.get('zoom') || '1');
+    if (Number.isNaN(currentZoom) || currentZoom < 2) {
+      parsed.searchParams.set('zoom', '3');
+    }
+    parsed.searchParams.delete('edge');
+    return parsed.toString();
+  } catch {
+    return normalized
+      .replace(/([?&])zoom=1(&|$)/, '$1zoom=3$2')
+      .replace(/([?&])edge=[^&]+(&|$)/, '$1');
+  }
+};
+
+const buildGoogleCoverFallback = (sourceId) => {
+  const safeId = String(sourceId || '').trim();
+  if (!safeId) return null;
+  return `https://books.google.com/books/content?id=${encodeURIComponent(safeId)}&printsec=frontcover&img=1&zoom=3&source=gbs_api`;
+};
+
+const toGoogleCover = (imageLinks, sourceId) => {
+  const raw =
+    imageLinks?.extraLarge
+    || imageLinks?.large
+    || imageLinks?.medium
+    || imageLinks?.small
+    || imageLinks?.thumbnail
+    || imageLinks?.smallThumbnail
+    || buildGoogleCoverFallback(sourceId);
+  return normalizeGoogleCoverUrl(raw);
 };
 
 const mapGoogleBook = (item) => {
@@ -55,7 +85,7 @@ const mapGoogleBook = (item) => {
     name: String(info.title || 'Livro sem titulo'),
     original_name: String(info.subtitle || info.title || ''),
     overview: description,
-    poster_path: toGoogleCover(info.imageLinks),
+    poster_path: toGoogleCover(info.imageLinks, sourceId),
     backdrop_path: null,
     first_air_date: publishedDate,
     genres: toGenreList(info.categories),
