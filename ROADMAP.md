@@ -6,6 +6,7 @@
 - Biblioteca local com gestão completa (watchlist, arquivo, notas, ratings).
 - Integração com TMDb/Trakt/TVMaze via Cloudflare Pages Functions e cache de temporadas.
 - Estatísticas com gráficos e exportações, import/export completo da base local.
+- Plano de execução da nova dashboard SaaS definido em [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
 
 ## ✅ Recém-adicionado
 
@@ -20,6 +21,21 @@
 - **Ratings com 3 anéis (P3-03)**: bloco de avaliações na vista de detalhes passa a mostrar TMDb, Trakt e TVMaze, com anéis mais finos e cor TVMaze `#386e67`.
 - **Matching hardening (P3-04)**: resolução entre fontes agora prioriza IMDb, usa fallback nome+ano com score mínimo e descarta matches fracos para reduzir falsos positivos.
 - **Testes de regressão da agregação (P3-05)**: cobertura adicionada para PT vs EN, EN mais completo, ratings de 3 fontes e falha parcial de providers.
+- **Planeamento Dashboard V2 (S7/S8)**: definido plano de UI/UX, navegação modular, recomendações e notificações reais com rollout por feature flags.
+
+## Em preparação imediata (S7/S8)
+
+1. **Dashboard SaaS V2 como ecrã de entrada**
+   - Sidebar fixa com navegação principal e `ÁREA SUB-MENU`.
+   - Top bar com saudação, pesquisa, notificações e conta.
+   - Cards KPI, gráficos interativos, recentes e lançamentos aguardados.
+2. **Navegação por domínio**
+   - Sub-menu dinâmico para Séries, Filmes e Livros.
+   - Biblioteca geral única (com filtros atuais) como secção própria.
+3. **Recomendações + notificações reais**
+   - Cold-start por consumo global.
+   - Personalização por histórico quando disponível.
+   - Eventos reais de próximos lançamentos/episódios.
 
 ## Backlog técnico (pronto para issues)
 

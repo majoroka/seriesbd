@@ -1,8 +1,9 @@
 # seriesBD
 
-Aplicação web para organizar e acompanhar séries de televisão usando dados do TMDb, Trakt e TVMaze. Permite gerir uma biblioteca pessoal, marcar episódios como vistos, acompanhar estreias e tendências e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
+Aplicação web para organizar e acompanhar consumo de media (séries, filmes e livros) usando dados do TMDb, Trakt, TVMaze, Google Books e Open Library. Permite gerir uma biblioteca pessoal, acompanhar progresso, pesquisar conteúdos, consultar tendências/estreias e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
-Plano de execução e estado dos sprints: [SPRINTS.md](./SPRINTS.md).
+Plano de execução e estado dos sprints: [SPRINTS.md](./SPRINTS.md).  
+Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
 
 - ## Funcionalidades principais
 
