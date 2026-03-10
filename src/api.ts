@@ -195,12 +195,21 @@ export async function searchByMediaType(
  * @param {'day' | 'week'} timeWindow - O período de tempo.
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
-export async function fetchTrending(timeWindow: 'day' | 'week', signal: AbortSignal): Promise<{ results: Series[] }> {
-    const url = `${API_BASE_TMDB}/trending/tv/${timeWindow}?language=pt-PT`;
+export async function fetchTrending(
+    timeWindow: 'day' | 'week',
+    signal: AbortSignal,
+    mediaType: 'series' | 'movie' = 'series'
+): Promise<{ results: Series[] }> {
+    const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
+    const url = `${API_BASE_TMDB}/trending/${tmdbMediaType}/${timeWindow}?language=pt-PT`;
     const response = await fetchWithRetry(url, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as { results: unknown };
-    return { results: normalizeSeriesCollection(payload.results) };
+    const normalized = normalizeSeriesCollection(payload.results);
+    if (mediaType === 'movie') {
+        return { results: normalized.map((item) => mapMovieSearchResult(item)) };
+    }
+    return { results: normalized };
 }
 
 /**
@@ -846,15 +855,22 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
  * @param page - O número da página a ser buscada.
  * @returns Uma promessa que resolve com os dados das séries top rated.
  */
-export async function fetchPopularSeries(page: number): Promise<{ results: Series[], page: number, total_pages: number }> {
-    const url = `${API_BASE_TMDB}/tv/top_rated?language=pt-PT&page=${page}`;
+export async function fetchPopularSeries(
+    page: number,
+    mediaType: 'series' | 'movie' = 'series'
+): Promise<{ results: Series[], page: number, total_pages: number }> {
+    const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
+    const url = `${API_BASE_TMDB}/${tmdbMediaType}/top_rated?language=pt-PT&page=${page}`;
     const response = await fetchWithRetry(url, {}, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) {
-        throw new Error('Não foi possível buscar as séries top rated.');
+        throw new Error(mediaType === 'movie'
+            ? 'Não foi possível buscar os filmes top rated.'
+            : 'Não foi possível buscar as séries top rated.');
     }
     const payload = await response.json() as { results: unknown; page: number; total_pages: number };
+    const normalized = normalizeSeriesCollection(payload.results);
     return {
-        results: normalizeSeriesCollection(payload.results),
+        results: mediaType === 'movie' ? normalized.map((item) => mapMovieSearchResult(item)) : normalized,
         page: payload.page,
         total_pages: payload.total_pages,
     };
@@ -867,21 +883,27 @@ export async function fetchPopularSeries(page: number): Promise<{ results: Serie
  */
 export async function fetchNewPremieres(
     page: number,
-    signal: AbortSignal | null = null
+    signal: AbortSignal | null = null,
+    mediaType: 'series' | 'movie' = 'series'
 ): Promise<{ results: Series[], page: number, total_pages: number }> {
     const today = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(today.getMonth() - 1);
     const gteDate = oneMonthAgo.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 
-    const url = `${API_BASE_TMDB}/discover/tv?language=pt-PT&page=${page}&sort_by=popularity.desc&first_air_date.gte=${gteDate}&with_original_language=en`;
+    const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
+    const dateKey = mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
+    const url = `${API_BASE_TMDB}/discover/${tmdbMediaType}?language=pt-PT&page=${page}&sort_by=popularity.desc&${dateKey}=${gteDate}&with_original_language=en`;
     const response = await fetchWithRetry(url, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) {
-        throw new Error('Não foi possível buscar as séries em exibição.');
+        throw new Error(mediaType === 'movie'
+            ? 'Não foi possível buscar os filmes em estreia.'
+            : 'Não foi possível buscar as séries em exibição.');
     }
     const payload = await response.json() as { results: unknown; page: number; total_pages: number };
+    const normalized = normalizeSeriesCollection(payload.results);
     return {
-        results: normalizeSeriesCollection(payload.results),
+        results: mediaType === 'movie' ? normalized.map((item) => mapMovieSearchResult(item)) : normalized,
         page: payload.page,
         total_pages: payload.total_pages,
     };

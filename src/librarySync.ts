@@ -222,6 +222,13 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
     return 'pulled';
   }
 
+  // Proteção contra migrações antigas sem timestamp local: priorizar local para evitar perda de dados.
+  if (Number.isNaN(localMutationTs)) {
+    await pushLocalLibrarySnapshot(userId);
+    await markLocalLibraryMutation(new Date().toISOString());
+    return 'pushed';
+  }
+
   if (!Number.isNaN(localMutationTs) && !Number.isNaN(remoteUpdatedTs) && localMutationTs > remoteUpdatedTs + 1000) {
     await pushLocalLibrarySnapshot(userId);
     await markLocalLibraryMutation(new Date().toISOString());

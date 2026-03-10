@@ -29,50 +29,42 @@
         <!-- ========== SIDEBAR ========== -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <i class="fas fa-tv"></i>
-                <h1>seriesBD</h1>
+                <h1 class="brand-logo"><span class="brand-media">Media</span><span class="brand-dex">Dex</span></h1>
             </div>
-            <nav class="main-nav">
-                <h2>Biblioteca</h2>
+
+            <nav class="primary-nav" aria-label="Navegação principal">
                 <ul>
-                    <li><a href="#" class="nav-link active" data-target="media-dashboard-section"><i class="fas fa-table-cells-large"></i> Dashboard</a></li>
-                    <li><a href="#" class="nav-link" data-target="watchlist-section"><i class="fas fa-star"></i> Quero Ver</a></li>
-                    <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> A Ver</a></li>
-                    <li><a href="#" class="nav-link" data-target="all-series-section"><i class="fas fa-list-ul"></i> Biblioteca</a></li>
-                    <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> Próximo Episódio</a></li>
-                    <li class="separator"><a href="#" class="nav-link" data-target="trending-section"><i class="fas fa-fire"></i> Tendências</a></li>
-                    <li><a href="#" class="nav-link" data-target="popular-section"><i class="fas fa-poll"></i> Top Rated</a></li>
-                    <li><a href="#" class="nav-link" data-target="premieres-section"><i class="fas fa-rocket"></i> Estreias</a></li>
-                    <li class="separator"><a href="#" class="nav-link" data-target="stats-section"><i class="fas fa-chart-pie"></i> Estatísticas</a></li>
+                    <li><a href="#" class="main-menu-link active" data-main-target="dashboard"><i class="fas fa-table-cells-large"></i> Dashboard</a></li>
+                    <li><a href="#" class="main-menu-link" data-main-target="series"><i class="fas fa-tv"></i> Séries</a></li>
+                    <li><a href="#" class="main-menu-link" data-main-target="movie"><i class="fas fa-film"></i> Filmes</a></li>
+                    <li><a href="#" class="main-menu-link" data-main-target="book"><i class="fas fa-book"></i> Livros</a></li>
+                    <li><a href="#" class="main-menu-link" data-main-target="library"><i class="fas fa-list-ul"></i> Biblioteca</a></li>
                 </ul>
             </nav>
+
+            <section class="sidebar-submenu-shell is-hidden" aria-label="Área sub-menu" aria-hidden="true">
+                <nav class="main-nav sidebar-submenu-nav">
+                    <ul id="sidebar-submenu-list">
+                        <li><a href="#" class="nav-link" data-target="watchlist-section"><i class="fas fa-star"></i> <span class="nav-link-label">Quero Ver</span></a></li>
+                        <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> <span class="nav-link-label">A Ver</span></a></li>
+                        <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> <span class="nav-link-label">Próximo Episódio</span></a></li>
+                        <li class="separator"><a href="#" class="nav-link" data-target="trending-section"><i class="fas fa-fire"></i> <span class="nav-link-label">Tendências</span></a></li>
+                        <li><a href="#" class="nav-link" data-target="popular-section"><i class="fas fa-poll"></i> <span class="nav-link-label">Top Rated</span></a></li>
+                        <li><a href="#" class="nav-link" data-target="premieres-section"><i class="fas fa-rocket"></i> <span class="nav-link-label">Estreias</span></a></li>
+                        <li class="separator"><a href="#" class="nav-link" data-target="stats-section"><i class="fas fa-chart-pie"></i> <span class="nav-link-label">Estatísticas</span></a></li>
+                    </ul>
+                </nav>
+            </section>
+
             <div class="sidebar-footer">
-                <div class="sidebar-actions">
-                    <button class="icon-button" aria-label="Pesquisar na Biblioteca" id="open-library-search-btn"><i class="fas fa-search"></i></button>
-                    <button class="icon-button" aria-label="Mudar Tema" id="theme-toggle-btn"><i class="fas fa-sun"></i></button>
-                    <div class="settings-menu-wrapper">
-                        <button class="icon-button" aria-label="Definições" id="settings-btn"><i class="fas fa-cog"></i></button>
-                        <div class="settings-menu" id="settings-menu">
-                            <ul>
-                                <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Séries</button></li>
-                                <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Séries</button></li>
-                                <li class="separator"></li>
-                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
-                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
-                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
-                                <li class="separator"></li>
-                                <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
-                                <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
                 <div class="sidebar-attribution">
-                    <p id="auth-status-label" class="auth-status-label">Modo local (sem login)</p>
-                    <p class="privacy-note">Os seus dados são guardados localmente no seu dispositivo.</p>
-                    <p>Dados fornecidos por<br>
+                    <p>Dados fornecidos por</p>
+                    <p>
                         <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDb</a> &
-                        <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>.
+                        <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>,
+                        <a href="https://www.tvmaze.com/" target="_blank" rel="noopener noreferrer">TVMaze</a>,
+                        <a href="https://developers.google.com/books/" target="_blank" rel="noopener noreferrer">Google Books</a> e
+                        <a href="https://openlibrary.org/" target="_blank" rel="noopener noreferrer">Open Library</a>.
                     </p>
                 </div>
                 <p class="copyright">
@@ -84,20 +76,60 @@
         <!-- ========== MAIN CONTENT ========== -->
         <main class="main-content">
             <header class="main-header">
-                <div class="search-bar">
-                    <i class="fas fa-search"></i>
-                    <label for="search-media-type" class="visually-hidden">Tipo de conteúdo</label>
-                    <select id="search-media-type" aria-label="Tipo de conteúdo para pesquisar">
-                        <option value="series" selected>Séries</option>
-                        <option value="movie">Filmes</option>
-                        <option value="book">Livros</option>
-                    </select>
-                    <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série...">
-                    <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
+                <div class="main-header-left">
+                    <p class="main-header-eyebrow">Dashboard</p>
+                    <h2 id="topbar-greeting">Olá, visitante!</h2>
                 </div>
-                <div class="user-stats">
-                    <span>Progresso Total <span class="progress-scope">(A Ver)</span>:</span>
-                    <span id="global-progress-percentage" class="stats-percentage">0%</span>
+                <div class="main-header-right">
+                    <div class="search-bar">
+                        <i class="fas fa-search"></i>
+                        <label for="search-media-type" class="visually-hidden">Tipo de conteúdo</label>
+                        <select id="search-media-type" aria-label="Tipo de conteúdo para pesquisar">
+                            <option value="series" selected>Séries</option>
+                            <option value="movie">Filmes</option>
+                            <option value="book">Livros</option>
+                        </select>
+                        <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série...">
+                        <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
+                    </div>
+                    <div class="user-stats">
+                        <span>Progresso Total <span class="progress-scope">(A Ver)</span>:</span>
+                        <span id="global-progress-percentage" class="stats-percentage">0%</span>
+                    </div>
+                    <button id="notifications-btn" class="icon-button topbar-icon-button" type="button" aria-label="Notificações">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                    <div class="settings-menu-wrapper account-menu-wrapper">
+                        <button id="settings-btn" class="account-menu-trigger" aria-label="Menu da conta" type="button">
+                            <span id="topbar-account-avatar" class="account-avatar">U</span>
+                            <span id="topbar-account-name" class="account-name">Utilizador</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="settings-menu settings-menu-account" id="settings-menu">
+                            <ul>
+                                <li class="account-menu-summary">
+                                    <div class="account-menu-summary-content">
+                                        <span id="account-menu-avatar" class="account-avatar account-avatar-menu">U</span>
+                                        <div class="account-menu-summary-text">
+                                            <strong id="account-menu-name">Conta local</strong>
+                                            <p id="auth-status-label" class="auth-status-label">Sem sessão iniciada</p>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="separator"></li>
+                                <li><button id="theme-toggle-btn"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
+                                <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Media</button></li>
+                                <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Media</button></li>
+                                <li class="separator"></li>
+                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
+                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
+                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
+                                <li class="separator"></li>
+                                <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
+                                <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -228,38 +260,38 @@
                 <!-- Statistics Section (Placeholder) -->
                 <section class="card" id="stats-section" style="display: none;">
                     <div class="section-header">
-                        <h2><i class="fas fa-chart-pie"></i> Estatísticas</h2>
+                        <h2 id="stats-section-title"><i class="fas fa-chart-pie"></i> Estatísticas</h2>
                         <button id="export-stats-btn" class="search-bar-button" style="align-self: center;">Exportar Estatísticas</button>
                     </div>
                     <div class="key-stats-grid">
                         <div class="key-stat-card watched-episodes">
-                            <h4>Episódios Vistos</h4>
+                            <h4 id="stats-primary-label">Episódios Vistos</h4>
                             <p id="stat-watched-episodes">0</p>
                         </div>
                         <div class="key-stat-card unwatched-episodes">
-                            <h4>Episódios por Ver</h4>
+                            <h4 id="stats-secondary-label">Episódios por Ver</h4>
                             <p id="stat-unwatched-episodes">0</p>
                         </div>
                         <div class="key-stat-card watch-time">
-                            <h4>Tempo na TV</h4>
+                            <h4 id="stats-tertiary-label">Tempo na TV</h4>
                             <p id="stat-watch-time">0m</p>
                         </div>
                     </div>
                     <div class="charts-grid">
                         <div class="chart-card">
-                            <h3>Episódios Vistos vs. Por Ver</h3>
+                            <h3 id="stats-doughnut-title">Episódios Vistos vs. Por Ver</h3>
                             <canvas id="watched-unwatched-chart"></canvas>
                         </div>
                         <div class="chart-card">
-                            <h3>Top Géneros na Biblioteca</h3>
+                            <h3 id="stats-genres-title">Top Géneros na Biblioteca</h3>
                             <canvas id="genres-chart"></canvas>
                         </div>
                         <div class="chart-card">
-                            <h3>Séries por Ano de Lançamento</h3>
+                            <h3 id="stats-years-title">Séries por Ano de Lançamento</h3>
                             <canvas id="aired-years-chart"></canvas>
                         </div>
                         <div class="chart-card" id="top-rated-series-card">
-                            <h3>As Minhas Séries Favoritas</h3>
+                            <h3 id="stats-top-rated-title">As Minhas Séries Favoritas</h3>
                             <div id="top-rated-series-list">
                                 <!-- O conteúdo será injetado pelo script.js -->
                             </div>
@@ -409,7 +441,7 @@
     <div id="series-by-rating-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="series-by-rating-modal-title" aria-hidden="true">
         <div class="modal-content series-by-rating-modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
-            <h2 id="series-by-rating-modal-title">Séries Avaliadas</h2>
+            <h2 id="series-by-rating-modal-title">Conteúdos Avaliados</h2>
             <div id="series-by-rating-modal-results">
                 <!-- Scrollable list of series for a specific rating -->
             </div>

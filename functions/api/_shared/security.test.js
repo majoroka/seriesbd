@@ -23,9 +23,11 @@ describe('security shared helpers', () => {
     const input = new URLSearchParams();
     input.set('query', 'Dexter');
     input.set('language', 'pt-PT');
+    input.set('first_air_date.gte', '2026-01-01');
     const sanitized = sanitizeSearchParams(input);
     expect(sanitized.get('query')).toBe('Dexter');
     expect(sanitized.get('language')).toBe('pt-PT');
+    expect(sanitized.get('first_air_date.gte')).toBe('2026-01-01');
 
     const bad = new URLSearchParams();
     bad.set('bad-key', 'x');
@@ -47,4 +49,3 @@ describe('security shared helpers', () => {
     expect(c.headers['retry-after']).toBeDefined();
   });
 });
-

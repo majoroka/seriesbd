@@ -95,7 +95,8 @@ export const sanitizeSearchParams = (searchParams, options = {}) => {
     const key = String(rawKey || '');
     const value = String(rawValue || '');
 
-    if (!/^[A-Za-z0-9_]+$/.test(key)) {
+    // TMDb usa parâmetros com "." em filtros (ex.: first_air_date.gte).
+    if (!/^[A-Za-z0-9_.]+$/.test(key)) {
       throw new Error(`Invalid query parameter key: ${key}`);
     }
     if (key.length > maxKeyLength) {
