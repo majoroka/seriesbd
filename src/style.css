@@ -154,6 +154,18 @@ textarea:focus-visible,
     transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
+.primary-nav .main-menu-link {
+    display: grid;
+    grid-template-columns: 1.2rem minmax(0, 1fr);
+    align-items: center;
+    text-align: left;
+}
+
+.primary-nav .main-menu-link i {
+    width: 1.2rem;
+    text-align: center;
+}
+
 .primary-nav .main-menu-link:hover,
 .main-nav .nav-link:hover {
     background-color: var(--bg-hover);
