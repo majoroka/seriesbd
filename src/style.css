@@ -562,17 +562,16 @@ textarea:focus-visible,
 .media-dashboard-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas:
+        "kpis kpis"
+        "analytics side"
+        "recent recent";
     gap: 1rem;
     align-items: start;
 }
 
-.media-dashboard-main-column {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
 .media-dashboard-side-column {
+    grid-area: side;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -582,6 +581,18 @@ textarea:focus-visible,
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1rem;
+}
+
+.media-dashboard-grid--kpi {
+    grid-area: kpis;
+}
+
+.dashboard-panel-analytics {
+    grid-area: analytics;
+}
+
+.dashboard-panel-recent {
+    grid-area: recent;
 }
 
 .dashboard-media-card {
@@ -3318,6 +3329,11 @@ body.light-theme .network-logo {
 
     .media-dashboard-layout {
         grid-template-columns: 1fr;
+        grid-template-areas:
+            "kpis"
+            "analytics"
+            "side"
+            "recent";
     }
 
     .media-dashboard-grid {
