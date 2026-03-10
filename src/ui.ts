@@ -1430,6 +1430,22 @@ export function renderMediaDashboard() {
         if (total) total.textContent = String(metrics.total);
         if (inProgress) inProgress.textContent = String(metrics.inProgress);
         if (completed) completed.textContent = String(metrics.completed);
+
+        const metricRows = card.querySelectorAll<HTMLElement>('.dashboard-media-card-metrics > div[data-metric]');
+        metricRows.forEach((row) => {
+            const metricKey = row.dataset.metric;
+            let percentage = 0;
+            if (metricKey === 'total') {
+                percentage = metrics.total > 0 ? 100 : 0;
+            } else if (metricKey === 'in-progress') {
+                percentage = metrics.total > 0 ? (metrics.inProgress / metrics.total) * 100 : 0;
+            } else if (metricKey === 'completed') {
+                percentage = metrics.total > 0 ? (metrics.completed / metrics.total) * 100 : 0;
+            }
+            const safePercentage = Math.max(0, Math.min(100, Number(percentage.toFixed(1))));
+            row.style.setProperty('--metric-progress', `${safePercentage}%`);
+            row.setAttribute('aria-label', `${metricKey || 'metric'}: ${safePercentage}%`);
+        });
     });
 
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';

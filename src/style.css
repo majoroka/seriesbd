@@ -689,33 +689,77 @@ textarea:focus-visible,
 .dashboard-media-card-metrics {
     margin-top: auto;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-    gap: 0.5rem;
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
 }
 
 .dashboard-media-card-metrics div {
-    background-color: rgba(var(--dashboard-card-rgb), 0.1);
-    border: 1px solid rgba(var(--dashboard-card-rgb), 0.3);
-    border-radius: 8px;
-    padding: 0.45rem 0.5rem;
+    --metric-progress: 0%;
+    --metric-color: var(--dashboard-card-accent);
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.5rem;
     min-width: 0;
+    padding-bottom: 0.75rem;
+}
+
+.dashboard-media-card-metrics div::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0.48rem;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+.dashboard-media-card-metrics div::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: var(--metric-progress);
+    max-width: 100%;
+    height: 0.48rem;
+    border-radius: 999px;
+    background-color: var(--metric-color);
 }
 
 .dashboard-media-card-metrics dt {
-    font-size: 0.7rem;
+    font-size: 0.88rem;
     color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 0.2rem;
-    line-height: 1.12;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    margin-bottom: 0;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 }
 
 .dashboard-media-card-metrics dd {
     font-family: var(--font-mono);
-    font-size: 1.15rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: var(--text-primary);
+    line-height: 1;
+}
+
+.dashboard-media-card-metrics div:nth-child(1) {
+    --metric-color: #1ea75b;
+}
+
+.dashboard-media-card-metrics div:nth-child(2) {
+    --metric-color: #c8cf2f;
+}
+
+.dashboard-media-card-metrics div:nth-child(3) {
+    --metric-color: var(--dashboard-card-accent);
+}
+
+body.light-theme .dashboard-media-card-metrics div::after {
+    background-color: rgba(32, 37, 46, 0.18);
 }
 
 .dashboard-panel {
@@ -3650,7 +3694,8 @@ body.light-theme .network-logo {
     }
 
     .dashboard-media-card-metrics {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
     }
 
     .dashboard-panel {
