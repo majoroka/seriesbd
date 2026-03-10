@@ -714,6 +714,7 @@ textarea:focus-visible,
     height: 0.48rem;
     border-radius: 999px;
     background-color: rgba(255, 255, 255, 0.22);
+    z-index: 0;
 }
 
 .dashboard-media-card-metrics div::before {
@@ -726,6 +727,7 @@ textarea:focus-visible,
     height: 0.48rem;
     border-radius: 999px;
     background-color: var(--metric-color);
+    z-index: 1;
 }
 
 .dashboard-media-card-metrics dt {
@@ -739,7 +741,7 @@ textarea:focus-visible,
 }
 
 .dashboard-media-card-metrics dd {
-    font-family: var(--font-mono);
+    font-family: var(--font-main);
     font-size: 1.35rem;
     font-weight: 700;
     color: var(--text-primary);
@@ -780,6 +782,7 @@ body.light-theme .dashboard-media-card-metrics div::after {
     font-size: 0.95rem;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
+    font-family: var(--font-main);
 }
 
 .dashboard-analytics-grid {
@@ -804,6 +807,38 @@ body.light-theme .dashboard-media-card-metrics div::after {
 .dashboard-chart-card h4 {
     margin-bottom: 0.6rem;
     font-size: 1rem;
+    font-family: var(--font-main);
+}
+
+.dashboard-chart-card--genres {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    grid-template-areas:
+        "title title"
+        "legend chart";
+    align-items: center;
+    column-gap: 0.8rem;
+}
+
+.dashboard-chart-card--genres h4 {
+    grid-area: title;
+    margin-bottom: 0.45rem;
+}
+
+.dashboard-chart-card--genres #dashboard-genres-chart {
+    grid-area: chart;
+    justify-self: end;
+    align-self: center;
+    width: 210px !important;
+    height: 210px !important;
+    max-height: 210px;
+}
+
+.dashboard-chart-card--genres .dashboard-genres-legend {
+    grid-area: legend;
+    margin-top: 0;
+    max-height: none;
+    overflow-y: visible;
 }
 
 #dashboard-evolution-chart,
@@ -841,8 +876,9 @@ body.light-theme .dashboard-media-card-metrics div::after {
 }
 
 .dashboard-legend-value {
-    font-family: var(--font-mono);
+    font-family: var(--font-main);
     font-size: 0.88rem;
+    font-weight: 700;
 }
 
 .dashboard-legend-empty,
@@ -983,13 +1019,30 @@ body.light-theme .dashboard-media-card-metrics div::after {
 }
 
 .dashboard-upcoming-date {
-    font-family: var(--font-mono);
+    font-family: var(--font-main);
     font-size: 0.78rem;
+    font-weight: 700;
     border: 1px solid rgba(71, 171, 210, 0.45);
     border-radius: 999px;
     padding: 0.28rem 0.5rem;
     color: var(--primary-accent);
     white-space: nowrap;
+}
+
+.media-dashboard .dashboard-media-card,
+.media-dashboard .dashboard-media-card h2,
+.media-dashboard .dashboard-media-card h3,
+.media-dashboard .dashboard-media-card h4,
+.media-dashboard .dashboard-media-card p,
+.media-dashboard .dashboard-media-card dt,
+.media-dashboard .dashboard-media-card dd,
+.media-dashboard .dashboard-panel,
+.media-dashboard .dashboard-panel h3,
+.media-dashboard .dashboard-panel h4,
+.media-dashboard .dashboard-panel p,
+.media-dashboard .dashboard-panel li,
+.media-dashboard .dashboard-panel span {
+    font-family: var(--font-main);
 }
 
 /* Estilos para o acordeão da secção de tendências */
@@ -3405,6 +3458,17 @@ body.light-theme .network-logo {
         max-height: 360px;
     }
 
+    .dashboard-chart-card--genres {
+        grid-template-columns: minmax(0, 1fr) 190px;
+        column-gap: 0.6rem;
+    }
+
+    .dashboard-chart-card--genres #dashboard-genres-chart {
+        width: 190px !important;
+        height: 190px !important;
+        max-height: 190px;
+    }
+
     .media-dashboard-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -3711,6 +3775,27 @@ body.light-theme .network-logo {
         flex: 0 0 170px;
         height: 170px !important;
         max-height: 170px;
+    }
+
+    .dashboard-chart-card--genres {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "title"
+            "chart"
+            "legend";
+        row-gap: 0.6rem;
+    }
+
+    .dashboard-chart-card--genres #dashboard-genres-chart {
+        justify-self: center;
+        width: 170px !important;
+        height: 170px !important;
+        max-height: 170px;
+    }
+
+    .dashboard-chart-card--genres .dashboard-genres-legend {
+        max-height: 96px;
+        overflow-y: auto;
     }
 
     .dashboard-recent-item {

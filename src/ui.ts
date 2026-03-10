@@ -993,7 +993,7 @@ function renderDashboardGenresChart(): void {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '62%',
+            cutout: '46%',
             plugins: {
                 legend: {
                     display: false,
@@ -1431,9 +1431,10 @@ export function renderMediaDashboard() {
         if (inProgress) inProgress.textContent = String(metrics.inProgress);
         if (completed) completed.textContent = String(metrics.completed);
 
-        const metricRows = card.querySelectorAll<HTMLElement>('.dashboard-media-card-metrics > div[data-metric]');
+        const metricRows = card.querySelectorAll<HTMLElement>('.dashboard-media-card-metrics > div');
         metricRows.forEach((row) => {
-            const metricKey = row.dataset.metric;
+            const metricValue = row.querySelector<HTMLElement>('dd[data-metric]');
+            const metricKey = metricValue?.dataset.metric;
             let percentage = 0;
             if (metricKey === 'total') {
                 percentage = metrics.total > 0 ? 100 : 0;
