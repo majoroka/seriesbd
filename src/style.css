@@ -580,7 +580,7 @@ textarea:focus-visible,
 
 .media-dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1rem;
 }
 
@@ -667,7 +667,7 @@ textarea:focus-visible,
 .dashboard-media-card-metrics {
     margin-top: auto;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
     gap: 0.5rem;
 }
 
@@ -676,6 +676,7 @@ textarea:focus-visible,
     border: 1px solid rgba(var(--dashboard-card-rgb), 0.3);
     border-radius: 8px;
     padding: 0.45rem 0.5rem;
+    min-width: 0;
 }
 
 .dashboard-media-card-metrics dt {
@@ -684,6 +685,8 @@ textarea:focus-visible,
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 0.2rem;
+    line-height: 1.12;
+    overflow-wrap: anywhere;
 }
 
 .dashboard-media-card-metrics dd {
@@ -724,9 +727,12 @@ textarea:focus-visible,
     border-radius: 10px;
     background: linear-gradient(150deg, rgba(71, 171, 210, 0.08), rgba(210, 70, 101, 0.03));
     padding: 0.9rem;
-    min-height: 280px;
+    min-height: 340px;
+    height: 340px;
+    max-height: 340px;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .dashboard-chart-card h4 {
@@ -736,8 +742,9 @@ textarea:focus-visible,
 
 #dashboard-evolution-chart,
 #dashboard-genres-chart {
-    flex: 1;
-    min-height: 220px;
+    flex: 0 0 210px;
+    height: 210px !important;
+    max-height: 210px;
 }
 
 .dashboard-genres-legend {
@@ -745,6 +752,8 @@ textarea:focus-visible,
     list-style: none;
     display: grid;
     gap: 0.45rem;
+    overflow-y: auto;
+    max-height: 96px;
 }
 
 .dashboard-legend-item {
@@ -3410,6 +3419,15 @@ body.light-theme .network-logo {
 
     .dashboard-chart-card {
         min-height: 250px;
+        height: auto;
+        max-height: none;
+    }
+
+    #dashboard-evolution-chart,
+    #dashboard-genres-chart {
+        flex: 0 0 190px;
+        height: 190px !important;
+        max-height: 190px;
     }
 
     /* --- V2 Detail View --- */
@@ -3590,8 +3608,23 @@ body.light-theme .network-logo {
         min-height: 200px;
     }
 
+    .dashboard-media-card-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .dashboard-panel {
         padding: 0.85rem;
+    }
+
+    .dashboard-chart-card {
+        min-height: 230px;
+    }
+
+    #dashboard-evolution-chart,
+    #dashboard-genres-chart {
+        flex: 0 0 170px;
+        height: 170px !important;
+        max-height: 170px;
     }
 
     .dashboard-recent-item {
