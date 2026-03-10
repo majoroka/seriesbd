@@ -57,24 +57,14 @@
             </section>
 
             <div class="sidebar-footer">
-                <div class="sidebar-profile-card">
-                    <p class="sidebar-footer-title">Perfil</p>
-                    <p id="auth-status-label" class="auth-status-label">Modo local (sem login)</p>
-                    <p class="privacy-note">Os seus dados são guardados localmente no seu dispositivo.</p>
-                </div>
-
-                <div class="sidebar-config-card">
-                    <p class="sidebar-footer-title">Configurações</p>
-                    <div class="sidebar-actions">
-                        <button class="icon-button" aria-label="Pesquisar na Biblioteca" id="open-library-search-btn"><i class="fas fa-search"></i></button>
-                        <button class="icon-button" aria-label="Mudar Tema" id="theme-toggle-btn"><i class="fas fa-sun"></i></button>
-                    </div>
-                </div>
-
                 <div class="sidebar-attribution">
-                    <p>Dados fornecidos por<br>
+                    <p>Dados fornecidos por</p>
+                    <p>
                         <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDb</a> &
-                        <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>.
+                        <a href="https://trakt.tv/" target="_blank" rel="noopener noreferrer">Trakt</a>,
+                        <a href="https://www.tvmaze.com/" target="_blank" rel="noopener noreferrer">TVMaze</a>,
+                        <a href="https://developers.google.com/books/" target="_blank" rel="noopener noreferrer">Google Books</a> e
+                        <a href="https://openlibrary.org/" target="_blank" rel="noopener noreferrer">Open Library</a>.
                     </p>
                 </div>
                 <p class="copyright">
@@ -117,6 +107,17 @@
                         </button>
                         <div class="settings-menu settings-menu-account" id="settings-menu">
                             <ul>
+                                <li class="account-menu-summary">
+                                    <div class="account-menu-summary-content">
+                                        <span id="account-menu-avatar" class="account-avatar account-avatar-menu">U</span>
+                                        <div class="account-menu-summary-text">
+                                            <strong id="account-menu-name">Conta local</strong>
+                                            <p id="auth-status-label" class="auth-status-label">Sem sessão iniciada</p>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="separator"></li>
+                                <li><button id="theme-toggle-btn"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
                                 <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Séries</button></li>
                                 <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Séries</button></li>
                                 <li class="separator"></li>

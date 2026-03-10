@@ -132,8 +132,12 @@ export function applyViewMode(view: string, container: HTMLElement, toggle: HTML
 export function applyTheme(theme: string) {
     if (DOM.themeToggleBtn) {
         document.body.classList.toggle('light-theme', theme === 'light');
-        DOM.themeToggleBtn.innerHTML = theme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
-        DOM.themeToggleBtn.title = theme === 'light' ? 'Mudar para Tema Escuro' : 'Mudar para Tema Claro';
+        const isLightTheme = theme === 'light';
+        const label = isLightTheme ? 'Mudar para tema escuro' : 'Mudar para tema claro';
+        const icon = isLightTheme ? 'fa-moon' : 'fa-sun';
+        DOM.themeToggleBtn.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
+        DOM.themeToggleBtn.title = label;
+        DOM.themeToggleBtn.setAttribute('aria-label', label);
     }
     const statsSection = document.getElementById('stats-section');
     if (statsSection && statsSection.style.display !== 'none') {

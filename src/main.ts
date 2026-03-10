@@ -63,6 +63,7 @@ let inactivityLogoutTimer: number | null = null;
 let inactivityActivityListenersRegistered = false;
 let lastInactivityActivityAt = 0;
 let lastSignOutReason: 'manual' | 'inactivity' | null = null;
+let profileIdentityRequestId = 0;
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
 const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
@@ -164,25 +165,111 @@ async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
 }
 
 function getBestUserDisplayName(user: User | null): string {
-    if (!user) return 'visitante';
-    const metadata = user.user_metadata as { full_name?: string } | undefined;
+    if (!user) return 'utilizador';
+    const metadata = user.user_metadata as { full_name?: string; name?: string; display_name?: string } | undefined;
     const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name.trim() : '';
     if (fullName) return fullName;
+    const displayName = typeof metadata?.display_name === 'string' ? metadata.display_name.trim() : '';
+    if (displayName) return displayName;
+    const genericName = typeof metadata?.name === 'string' ? metadata.name.trim() : '';
+    if (genericName) return genericName;
     const email = String(user.email || '').trim();
     if (!email) return 'utilizador';
     return email.split('@')[0] || 'utilizador';
 }
 
-function updateTopbarIdentity(user: User | null): void {
+function getBestUserAvatarUrl(user: User | null): string | null {
+    if (!user) return null;
+    const metadata = user.user_metadata as { avatar_url?: string; picture?: string } | undefined;
+    const avatarUrl = typeof metadata?.avatar_url === 'string' ? metadata.avatar_url.trim() : '';
+    if (avatarUrl) return avatarUrl;
+    const pictureUrl = typeof metadata?.picture === 'string' ? metadata.picture.trim() : '';
+    if (pictureUrl) return pictureUrl;
+    return null;
+}
+
+function applyAvatarIdentity(
+    avatarElement: HTMLElement | null | undefined,
+    isAuthenticated: boolean,
+    displayName: string,
+    avatarUrl: string | null
+): void {
+    if (!avatarElement) return;
+    if (!isAuthenticated) {
+        avatarElement.classList.add('is-hidden');
+        avatarElement.classList.remove('has-image');
+        avatarElement.style.backgroundImage = '';
+        avatarElement.textContent = '';
+        return;
+    }
+
+    avatarElement.classList.remove('is-hidden');
+    if (avatarUrl) {
+        avatarElement.classList.add('has-image');
+        avatarElement.style.backgroundImage = `url("${avatarUrl}")`;
+        avatarElement.textContent = '';
+        return;
+    }
+
+    avatarElement.classList.remove('has-image');
+    avatarElement.style.backgroundImage = '';
+    avatarElement.textContent = (displayName.charAt(0) || 'U').toUpperCase();
+}
+
+function updateTopbarIdentity(
+    user: User | null,
+    profileIdentity?: { displayName?: string | null; avatarUrl?: string | null }
+): void {
+    const isAuthenticated = Boolean(user);
+    const resolvedDisplayName = profileIdentity?.displayName?.trim() || getBestUserDisplayName(user);
+    const resolvedAvatarUrl = profileIdentity?.avatarUrl?.trim() || getBestUserAvatarUrl(user);
+
     if (DOM.topbarGreeting) {
-        DOM.topbarGreeting.textContent = `Olá, ${getBestUserDisplayName(user)}!`;
+        DOM.topbarGreeting.textContent = `Olá, ${isAuthenticated ? resolvedDisplayName : 'visitante'}!`;
     }
     if (DOM.topbarAccountName) {
-        DOM.topbarAccountName.textContent = user ? getBestUserDisplayName(user) : 'Conta';
+        DOM.topbarAccountName.textContent = isAuthenticated ? resolvedDisplayName : 'Conta';
     }
-    if (DOM.topbarAccountAvatar) {
-        const baseName = user ? getBestUserDisplayName(user) : 'Conta';
-        DOM.topbarAccountAvatar.textContent = baseName.charAt(0).toUpperCase();
+    if (DOM.accountMenuName) {
+        DOM.accountMenuName.textContent = isAuthenticated ? resolvedDisplayName : 'Conta local';
+    }
+    applyAvatarIdentity(DOM.topbarAccountAvatar, isAuthenticated, resolvedDisplayName, resolvedAvatarUrl);
+    applyAvatarIdentity(DOM.accountMenuAvatar, isAuthenticated, resolvedDisplayName, resolvedAvatarUrl);
+    DOM.settingsBtn?.classList.toggle('no-avatar', !isAuthenticated);
+}
+
+async function refreshTopbarIdentityFromProfile(user: User | null): Promise<void> {
+    profileIdentityRequestId += 1;
+    const currentRequestId = profileIdentityRequestId;
+    if (!user || !isSupabaseConfigured()) {
+        return;
+    }
+
+    try {
+        const client = getSupabaseClient();
+        const { data, error } = await client
+            .from('profiles')
+            .select('display_name, avatar_url')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (currentRequestId !== profileIdentityRequestId || currentAuthenticatedUserId !== user.id) {
+            return;
+        }
+
+        if (error) {
+            console.warn('[auth] Não foi possível carregar dados de perfil para o menu de conta.', error);
+            return;
+        }
+
+        const profileDisplayName = typeof data?.display_name === 'string' ? data.display_name.trim() : '';
+        const profileAvatarUrl = typeof data?.avatar_url === 'string' ? data.avatar_url.trim() : '';
+        updateTopbarIdentity(user, {
+            displayName: profileDisplayName || null,
+            avatarUrl: profileAvatarUrl || null,
+        });
+    } catch (error) {
+        console.warn('[auth] Erro ao atualizar identidade de perfil no menu de conta.', error);
     }
 }
 
@@ -658,6 +745,7 @@ function renderLibraryStateFromMemory() {
 function setAuthenticatedUi(user: User | null) {
     currentAuthenticatedUserId = user?.id ?? null;
     updateTopbarIdentity(user);
+    void refreshTopbarIdentityFromProfile(user);
     if (currentAuthenticatedUserId) {
         scheduleInactivityLogoutTimer();
     } else {

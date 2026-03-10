@@ -200,37 +200,19 @@ textarea:focus-visible,
     border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
-}
-
-.sidebar-footer-title {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-secondary);
-    margin-bottom: 0.45rem;
-}
-
-.sidebar-profile-card,
-.sidebar-config-card {
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    background-color: var(--bg-card);
-    padding: 0.7rem;
-}
-
-.privacy-note {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    line-height: 1.35;
+    gap: 0.7rem;
 }
 
 .sidebar-attribution {
     font-size: 0.8rem;
     color: var(--text-secondary);
     text-align: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.4rem;
     line-height: 1.4;
+}
+
+.sidebar-attribution p {
+    margin: 0;
 }
 
 .auth-status-label {
@@ -395,11 +377,26 @@ textarea:focus-visible,
     background-color: var(--primary-accent);
 }
 
+.account-avatar.has-image {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: transparent;
+}
+
+.account-avatar.is-hidden {
+    display: none;
+}
+
 .account-name {
     max-width: 130px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.account-menu-trigger.no-avatar {
+    padding-left: 0.65rem;
 }
 
 .search-bar-button {
@@ -1955,6 +1952,7 @@ body.light-theme .network-logo {
 }
 
 .account-menu-wrapper .settings-menu {
+    width: 300px;
     top: calc(100% + 0.5rem);
     right: 0;
     left: auto;
@@ -1969,6 +1967,46 @@ body.light-theme .network-logo {
 
 .settings-menu ul {
     list-style: none;
+}
+
+.settings-menu li.account-menu-summary {
+    padding: 0.35rem;
+}
+
+.account-menu-summary-content {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    padding: 0.5rem;
+}
+
+.account-avatar-menu {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+}
+
+.account-menu-summary-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.account-menu-summary-text strong {
+    font-size: 0.95rem;
+    line-height: 1.1;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.account-menu-summary .auth-status-label {
+    margin: 0;
 }
 
 .settings-menu li button {
