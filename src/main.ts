@@ -807,6 +807,7 @@ function clearInMemoryLibraryState() {
     S.setWatchedState({});
     S.setUserData({});
     S.setCurrentSearchResults([]);
+    S.setDashboardSuggestedMedia([]);
 }
 
 function renderLibraryStateFromMemory() {
@@ -960,7 +961,8 @@ async function setAllSeriesMediaFilterPreference(mediaFilter: AllSeriesMediaFilt
 
 function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
     return S.getMediaItem(mediaType, mediaId)
-        || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId);
+        || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId)
+        || S.dashboardSuggestedMedia.find((item) => item.media_type === mediaType && item.id === mediaId);
 }
 
 async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promise<void> {

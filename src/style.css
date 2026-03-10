@@ -560,6 +560,7 @@ textarea:focus-visible,
 
 /* ========== DASHBOARD (MEDIA HUB) ========== */
 .media-dashboard-layout {
+    --dashboard-analytics-row-height: 430px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-areas:
@@ -567,7 +568,7 @@ textarea:focus-visible,
         "analytics side"
         "recent recent";
     gap: 1rem;
-    align-items: start;
+    align-items: stretch;
 }
 
 .media-dashboard-side-column {
@@ -575,6 +576,7 @@ textarea:focus-visible,
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-height: 0;
 }
 
 .media-dashboard-grid {
@@ -589,10 +591,19 @@ textarea:focus-visible,
 
 .dashboard-panel-analytics {
     grid-area: analytics;
+    min-height: var(--dashboard-analytics-row-height);
 }
 
 .dashboard-panel-recent {
     grid-area: recent;
+}
+
+.dashboard-launches-panel {
+    min-height: var(--dashboard-analytics-row-height);
+    max-height: var(--dashboard-analytics-row-height);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .dashboard-media-card {
@@ -875,6 +886,10 @@ textarea:focus-visible,
 .dashboard-upcoming-list {
     display: grid;
     gap: 0.7rem;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+    min-height: 0;
+    flex: 1;
 }
 
 .dashboard-upcoming-item {
@@ -3334,6 +3349,16 @@ body.light-theme .network-logo {
             "analytics"
             "side"
             "recent";
+    }
+
+    .dashboard-panel-analytics,
+    .dashboard-launches-panel {
+        min-height: 0;
+        max-height: none;
+    }
+
+    .dashboard-upcoming-list {
+        max-height: 360px;
     }
 
     .media-dashboard-grid {

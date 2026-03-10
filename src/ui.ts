@@ -1,6 +1,7 @@
 import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertification, animateValue, animateDuration, formatDuration, translateGenreName } from './utils';
 import * as DOM from './dom';
 import * as S from './state';
+import * as API from './api';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType } from './types';
 import { createMediaKey } from './media';
@@ -655,6 +656,62 @@ type DashboardUpcomingEntry = {
     item: Series;
     date: Date;
     label: string;
+    source: 'library' | 'suggested-movie' | 'suggested-book';
+};
+
+type DashboardTopGenre = {
+    label: string;
+    normalized: string;
+    count: number;
+    movieGenreId: number | null;
+    bookQuery: string;
+};
+
+const DASHBOARD_TOP_GENRES_LIMIT = 3;
+const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
+const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
+const DASHBOARD_UPCOMING_RECENT_BOOK_DAYS = 365;
+const DASHBOARD_UPCOMING_CACHE_TTL_MS = 20 * 60 * 1000;
+let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
+let dashboardUpcomingCacheSignature = '';
+let dashboardUpcomingCacheExpiresAt = 0;
+let dashboardUpcomingInFlight: Promise<void> | null = null;
+let dashboardUpcomingRequestVersion = 0;
+
+const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
+    action: 28,
+    acao: 28,
+    adventure: 12,
+    aventura: 12,
+    animation: 16,
+    animacao: 16,
+    comedy: 35,
+    comedia: 35,
+    crime: 80,
+    documentary: 99,
+    documentario: 99,
+    drama: 18,
+    family: 10751,
+    familia: 10751,
+    fantasy: 14,
+    fantasia: 14,
+    history: 36,
+    historia: 36,
+    horror: 27,
+    terror: 27,
+    music: 10402,
+    musica: 10402,
+    mystery: 9648,
+    misterio: 9648,
+    romance: 10749,
+    'science fiction': 878,
+    'ficcao cientifica': 878,
+    'ficcao cientifica e fantasia': 878,
+    thriller: 53,
+    war: 10752,
+    guerra: 10752,
+    western: 37,
+    faroeste: 37,
 };
 
 function resolveLibraryStatus(series: Series): LibraryStatusFilter {
@@ -1029,7 +1086,13 @@ function parseDateOnly(value: string | null | undefined): Date | null {
     if (!value) return null;
     const normalized = String(value).trim();
     if (!normalized) return null;
-    const date = new Date(`${normalized}T00:00:00`);
+    let isoDate = normalized;
+    if (/^\d{4}$/.test(normalized)) {
+        isoDate = `${normalized}-01-01`;
+    } else if (/^\d{4}-\d{2}$/.test(normalized)) {
+        isoDate = `${normalized}-01`;
+    }
+    const date = new Date(`${isoDate}T00:00:00`);
     if (Number.isNaN(date.getTime())) return null;
     return date;
 }
@@ -1040,12 +1103,81 @@ function formatDashboardUpcomingDate(date: Date): string {
     return `${day} ${month}`;
 }
 
-function renderDashboardUpcomingReleases(): void {
-    if (!DOM.dashboardUpcomingList) return;
+function toLocalDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+function normalizeGenreToken(value: string): string {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
 
+function resolveMovieGenreId(normalizedGenre: string): number | null {
+    if (!normalizedGenre) return null;
+    const direct = MOVIE_GENRE_ID_BY_KEY[normalizedGenre];
+    if (typeof direct === 'number') return direct;
+    const matchedKey = Object.keys(MOVIE_GENRE_ID_BY_KEY).find((key) =>
+        normalizedGenre.includes(key) || key.includes(normalizedGenre)
+    );
+    if (!matchedKey) return null;
+    const value = MOVIE_GENRE_ID_BY_KEY[matchedKey];
+    return typeof value === 'number' ? value : null;
+}
+
+function buildTopDashboardGenres(): DashboardTopGenre[] {
+    const counts = new Map<string, { label: string; count: number }>();
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        (item.genres || []).forEach((genre) => {
+            const rawLabel = translateGenreName(genre?.name) || genre?.name || '';
+            const label = String(rawLabel).trim();
+            const normalized = normalizeGenreToken(label);
+            if (!normalized) return;
+            const current = counts.get(normalized);
+            if (current) {
+                current.count += 1;
+                return;
+            }
+            counts.set(normalized, { label, count: 1 });
+        });
+    });
+
+    return Array.from(counts.entries())
+        .sort(([, a], [, b]) => b.count - a.count)
+        .slice(0, DASHBOARD_TOP_GENRES_LIMIT)
+        .map(([normalized, data]) => ({
+            label: data.label,
+            normalized,
+            count: data.count,
+            movieGenreId: resolveMovieGenreId(normalized),
+            bookQuery: data.label,
+        }));
+}
+
+function dedupeUpcomingEntries(entries: DashboardUpcomingEntry[]): DashboardUpcomingEntry[] {
+    const deduped = new Map<string, DashboardUpcomingEntry>();
+    entries.forEach((entry) => {
+        const mediaType = entry.item.media_type || 'series';
+        const key = `${mediaType}:${entry.item.id}:${toLocalDateKey(entry.date)}`;
+        const existing = deduped.get(key);
+        if (!existing) {
+            deduped.set(key, entry);
+            return;
+        }
+        if (existing.source !== 'library' && entry.source === 'library') {
+            deduped.set(key, entry);
+        }
+    });
+    return Array.from(deduped.values());
+}
+
+function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     const entries: DashboardUpcomingEntry[] = [];
     [...S.myWatchlist, ...S.myArchive].forEach((item) => {
         const mediaType = item.media_type || 'series';
@@ -1055,6 +1187,7 @@ function renderDashboardUpcomingReleases(): void {
                 item,
                 date: firstDate,
                 label: mediaType === 'book' ? 'Lançamento' : 'Estreia',
+                source: 'library',
             });
         }
 
@@ -1065,25 +1198,199 @@ function renderDashboardUpcomingReleases(): void {
                     item,
                     date: nextEpisodeDate,
                     label: 'Novo episódio',
+                    source: 'library',
                 });
             }
         }
     });
+    return entries;
+}
+
+async function fetchSuggestedMovieUpcomingEntries(
+    topGenres: DashboardTopGenre[],
+    today: Date,
+    libraryKeys: Set<string>
+): Promise<DashboardUpcomingEntry[]> {
+    const genreIds = Array.from(
+        new Set(topGenres.map((genre) => genre.movieGenreId).filter((value): value is number => Number.isFinite(value)))
+    );
+    if (genreIds.length === 0) return [];
+
+    const todayIso = today.toISOString().slice(0, 10);
+    const responses = await Promise.allSettled(
+        genreIds.map((genreId) =>
+            API.fetchNewPremieres(1, null, 'movie', {
+                fromDate: todayIso,
+                sortBy: 'primary_release_date.asc',
+                genreIds: [genreId],
+                withOriginalLanguage: false,
+            })
+        )
+    );
 
     const deduped = new Map<string, DashboardUpcomingEntry>();
-    entries.forEach((entry) => {
-        const mediaType = entry.item.media_type || 'series';
-        const key = `${mediaType}:${entry.item.id}:${entry.label}:${entry.date.toISOString().slice(0, 10)}`;
-        if (!deduped.has(key)) deduped.set(key, entry);
+    responses.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.results.forEach((movie) => {
+            const date = parseDateOnly(movie.first_air_date);
+            if (!date || date < today) return;
+            const mediaType = movie.media_type || 'movie';
+            if (mediaType !== 'movie') return;
+            const mediaKey = `${mediaType}:${movie.id}`;
+            if (libraryKeys.has(mediaKey)) return;
+            const candidate: DashboardUpcomingEntry = {
+                item: movie,
+                date,
+                label: 'Estreia sugerida',
+                source: 'suggested-movie',
+            };
+            const existing = deduped.get(mediaKey);
+            if (!existing || date < existing.date) {
+                deduped.set(mediaKey, candidate);
+            }
+        });
     });
 
-    const sortedEntries = Array.from(deduped.values())
+    return Array.from(deduped.values())
         .sort((a, b) => a.date.getTime() - b.date.getTime())
-        .slice(0, 8);
+        .slice(0, DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS);
+}
+
+async function fetchSuggestedBookUpcomingEntries(
+    topGenres: DashboardTopGenre[],
+    today: Date,
+    libraryKeys: Set<string>
+): Promise<DashboardUpcomingEntry[]> {
+    const queries = Array.from(
+        new Set(
+            topGenres
+                .map((genre) => genre.bookQuery.trim())
+                .filter((query) => query.length >= 2)
+        )
+    );
+    if (queries.length === 0) return [];
+
+    const responses = await Promise.allSettled(
+        queries.map((query) => API.searchBooks(`subject:${query}`, new AbortController().signal))
+    );
+    const recentLimit = new Date(today);
+    recentLimit.setDate(recentLimit.getDate() - DASHBOARD_UPCOMING_RECENT_BOOK_DAYS);
+
+    const deduped = new Map<string, DashboardUpcomingEntry>();
+    responses.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.results.forEach((book) => {
+            const mediaType = book.media_type || 'book';
+            if (mediaType !== 'book') return;
+            const date = parseDateOnly(book.first_air_date);
+            if (!date) return;
+            const isFuture = date >= today;
+            if (!isFuture && date < recentLimit) return;
+            const mediaKey = `${mediaType}:${book.id}`;
+            if (libraryKeys.has(mediaKey)) return;
+
+            const candidate: DashboardUpcomingEntry = {
+                item: book,
+                date,
+                label: isFuture ? 'Lançamento sugerido' : 'Novidade do género',
+                source: 'suggested-book',
+            };
+            const existing = deduped.get(mediaKey);
+            if (!existing) {
+                deduped.set(mediaKey, candidate);
+                return;
+            }
+            const existingIsFuture = existing.date >= today;
+            if (!existingIsFuture && isFuture) {
+                deduped.set(mediaKey, candidate);
+                return;
+            }
+            if (isFuture && candidate.date < existing.date) {
+                deduped.set(mediaKey, candidate);
+                return;
+            }
+            if (!isFuture && !existingIsFuture && candidate.date > existing.date) {
+                deduped.set(mediaKey, candidate);
+            }
+        });
+    });
+
+    return Array.from(deduped.values())
+        .sort((a, b) => {
+            const aFuture = a.date >= today;
+            const bFuture = b.date >= today;
+            if (aFuture !== bFuture) return aFuture ? -1 : 1;
+            if (aFuture && bFuture) return a.date.getTime() - b.date.getTime();
+            return b.date.getTime() - a.date.getTime();
+        })
+        .slice(0, DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS);
+}
+
+async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[], today: Date): Promise<void> {
+    if (topGenres.length === 0) {
+        const hadSuggestions = dashboardSuggestedUpcomingEntries.length > 0;
+        dashboardSuggestedUpcomingEntries = [];
+        dashboardUpcomingCacheSignature = '';
+        dashboardUpcomingCacheExpiresAt = 0;
+        S.setDashboardSuggestedMedia([]);
+        if (hadSuggestions) {
+            renderDashboardUpcomingReleases();
+        }
+        return;
+    }
+
+    const signature = topGenres.map((genre) => `${genre.normalized}:${genre.count}`).join('|');
+    const now = Date.now();
+    if (
+        signature === dashboardUpcomingCacheSignature
+        && now < dashboardUpcomingCacheExpiresAt
+    ) {
+        return;
+    }
+    if (dashboardUpcomingInFlight) return;
+
+    const requestVersion = ++dashboardUpcomingRequestVersion;
+    const libraryKeys = new Set(
+        [...S.myWatchlist, ...S.myArchive].map((item) => `${item.media_type || 'series'}:${item.id}`)
+    );
+
+    dashboardUpcomingInFlight = (async () => {
+        const [movieSuggestions, bookSuggestions] = await Promise.all([
+            fetchSuggestedMovieUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
+            fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
+        ]);
+        if (requestVersion !== dashboardUpcomingRequestVersion) return;
+        dashboardSuggestedUpcomingEntries = [...movieSuggestions, ...bookSuggestions];
+        S.setDashboardSuggestedMedia(dashboardSuggestedUpcomingEntries.map((entry) => entry.item));
+        dashboardUpcomingCacheSignature = signature;
+        dashboardUpcomingCacheExpiresAt = Date.now() + DASHBOARD_UPCOMING_CACHE_TTL_MS;
+        renderDashboardUpcomingReleases();
+    })()
+        .catch((error) => {
+            console.warn('[dashboard] Falha ao carregar sugestões de lançamentos por género.', error);
+        })
+        .finally(() => {
+            if (requestVersion === dashboardUpcomingRequestVersion) {
+                dashboardUpcomingInFlight = null;
+            }
+        });
+}
+
+function renderDashboardUpcomingReleases(): void {
+    if (!DOM.dashboardUpcomingList) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const libraryEntries = getLibraryUpcomingEntries(today);
+    const sortedEntries = dedupeUpcomingEntries([...libraryEntries, ...dashboardSuggestedUpcomingEntries])
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const topGenres = buildTopDashboardGenres();
+    void ensureDashboardUpcomingSuggestions(topGenres, today);
 
     DOM.dashboardUpcomingList.innerHTML = '';
     if (sortedEntries.length === 0) {
-        DOM.dashboardUpcomingList.innerHTML = '<p class="dashboard-empty-message">Sem lançamentos futuros registados na sua biblioteca.</p>';
+        DOM.dashboardUpcomingList.innerHTML = '<p class="dashboard-empty-message">Sem lançamentos futuros registados para já.</p>';
         return;
     }
 

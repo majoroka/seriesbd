@@ -20,6 +20,12 @@ const API_BASE_TRAKT = '/api/trakt';
 const API_BASE_TVMAZE = '/api/tvmaze';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
+type DiscoverPremieresOptions = {
+    fromDate?: string;
+    sortBy?: string;
+    genreIds?: number[];
+    withOriginalLanguage?: boolean;
+};
 
 function extractStatusFromError(error: unknown): number | null {
     if (typeof error === 'object' && error !== null && 'status' in error) {
@@ -884,16 +890,29 @@ export async function fetchPopularSeries(
 export async function fetchNewPremieres(
     page: number,
     signal: AbortSignal | null = null,
-    mediaType: 'series' | 'movie' = 'series'
+    mediaType: 'series' | 'movie' = 'series',
+    options: DiscoverPremieresOptions = {}
 ): Promise<{ results: Series[], page: number, total_pages: number }> {
     const today = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(today.getMonth() - 1);
-    const gteDate = oneMonthAgo.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+    const gteDate = options.fromDate || oneMonthAgo.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 
     const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
     const dateKey = mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
-    const url = `${API_BASE_TMDB}/discover/${tmdbMediaType}?language=pt-PT&page=${page}&sort_by=popularity.desc&${dateKey}=${gteDate}&with_original_language=en`;
+    const params = new URLSearchParams({
+        language: 'pt-PT',
+        page: String(page),
+        sort_by: options.sortBy || 'popularity.desc',
+    });
+    params.set(dateKey, gteDate);
+    if (Array.isArray(options.genreIds) && options.genreIds.length > 0) {
+        params.set('with_genres', options.genreIds.join(','));
+    }
+    if (options.withOriginalLanguage !== false) {
+        params.set('with_original_language', 'en');
+    }
+    const url = `${API_BASE_TMDB}/discover/${tmdbMediaType}?${params.toString()}`;
     const response = await fetchWithRetry(url, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) {
         throw new Error(mediaType === 'movie'
