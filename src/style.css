@@ -179,12 +179,8 @@ textarea:focus-visible,
     overflow: hidden;
 }
 
-.sidebar-submenu-shell h2 {
-    font-size: 0.78rem;
-    letter-spacing: 0.12em;
-    font-weight: 700;
-    color: var(--text-secondary);
-    margin-bottom: 0.75rem;
+.sidebar-submenu-shell.is-hidden {
+    display: none;
 }
 
 .sidebar-submenu-nav {

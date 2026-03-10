@@ -3,6 +3,7 @@ export const nextAiredListContainer = document.querySelector('.next-aired .episo
 export const mainMenuLinks = document.querySelectorAll('.primary-nav .main-menu-link') as NodeListOf<HTMLAnchorElement>;
 export const mainNavLinks = document.querySelectorAll('.main-nav .nav-link') as NodeListOf<HTMLAnchorElement>;
 export const sidebarSubmenuList = document.getElementById('sidebar-submenu-list') as HTMLUListElement;
+export const sidebarSubmenuShell = document.querySelector('.sidebar-submenu-shell') as HTMLElement;
 export const mainContentSections = document.querySelectorAll('.dashboard .card') as NodeListOf<HTMLElement>;
 export const openLibrarySearchBtn = document.getElementById('open-library-search-btn') as HTMLButtonElement;
 export const searchMediaTypeSelect = document.getElementById('search-media-type') as HTMLSelectElement;

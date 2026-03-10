@@ -118,6 +118,12 @@ function updateMainMenuActiveState(target: MainMenuTarget): void {
     DOM.mainMenuLinks.forEach((link) => {
         link.classList.toggle('active', parseMainMenuTarget(link.dataset.mainTarget) === target);
     });
+
+    if (DOM.sidebarSubmenuShell) {
+        const showSeriesSubmenu = target === 'series';
+        DOM.sidebarSubmenuShell.classList.toggle('is-hidden', !showSeriesSubmenu);
+        DOM.sidebarSubmenuShell.setAttribute('aria-hidden', showSeriesSubmenu ? 'false' : 'true');
+    }
 }
 
 function getMainMenuTargetFromSection(targetSection: string): MainMenuTarget {
