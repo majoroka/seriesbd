@@ -217,8 +217,8 @@ async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
     updateMainMenuActiveState(target);
     if (target === 'dashboard') {
         UI.setScopedStatsMediaType('all');
-        UI.renderMediaDashboard();
         UI.showSection('media-dashboard-section');
+        UI.renderMediaDashboard();
         return;
     }
 
@@ -2814,7 +2814,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter' || e.key === ' ') {
             const target = e.target as HTMLElement;
             // Ativa elementos interativos que não são botões/links nativos mas têm o comportamento esperado
-            const interactiveElement = target.closest<HTMLElement>('.status-icon, .star-container, .action-icon, .series-item, .add-btn, .remove-btn, .trailer-btn, .mark-season-seen-btn, .cast-show-more-btn');
+            const interactiveElement = target.closest<HTMLElement>('.status-icon, .star-container, .action-icon, .series-item, .add-btn, .remove-btn, .trailer-btn, .mark-season-seen-btn, .cast-show-more-btn, .dashboard-recent-item, .dashboard-upcoming-item');
             if (interactiveElement) {
                 e.preventDefault(); // Previne o scroll da página ao usar a barra de espaço
                 interactiveElement.click(); // Dispara o evento de clique existente, reutilizando a lógica
@@ -2861,7 +2861,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item');
+        const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item, .dashboard-recent-item, .dashboard-upcoming-item');
         if (seriesItem) {
             const typedSeriesItem = seriesItem as HTMLElement;
             const mediaType = parseMediaType(typedSeriesItem.dataset.mediaType);

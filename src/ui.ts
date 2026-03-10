@@ -122,6 +122,11 @@ export function showSection(targetId: string) {
         const stats = updateKeyStats(true);
         renderStatistics(stats);
     }
+    if (targetId === 'media-dashboard-section') {
+        requestAnimationFrame(() => {
+            renderMediaDashboard();
+        });
+    }
 }
 
 export function updateActiveNavLink(targetId: string) {
@@ -162,6 +167,12 @@ export function applyTheme(theme: string) {
         requestAnimationFrame(() => {
             const stats = updateKeyStats();
             renderStatistics(stats);
+        });
+    }
+    const dashboardSection = document.getElementById('media-dashboard-section');
+    if (dashboardSection && dashboardSection.style.display !== 'none') {
+        requestAnimationFrame(() => {
+            renderMediaDashboard();
         });
     }
 }
@@ -628,10 +639,22 @@ export function renderArchive() {
 }
 
 type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
+type DashboardCardType = MediaType | 'all';
 type DashboardMetrics = {
     total: number;
     inProgress: number;
     completed: number;
+};
+type DashboardRecentEntry = {
+    item: Series;
+    progress: number;
+    statusLabel: string;
+    statusClass: 'is-complete' | 'is-progress' | 'is-pending';
+};
+type DashboardUpcomingEntry = {
+    item: Series;
+    date: Date;
+    label: string;
 };
 
 function resolveLibraryStatus(series: Series): LibraryStatusFilter {
@@ -662,15 +685,71 @@ function resolveDashboardProgress(series: Series): number {
     return watchedCount > 0 ? 1 : 0;
 }
 
-function computeDashboardMetrics(mediaType: MediaType): DashboardMetrics {
+function isItemArchived(item: Series): boolean {
+    const mediaType = item.media_type || 'series';
+    return S.myArchive.some((archived) => archived.media_type === mediaType && archived.id === item.id);
+}
+
+function getItemStatusLabel(item: Series, progress: number): string {
+    const mediaType = item.media_type || 'series';
+    const archived = isItemArchived(item);
+    if (archived || progress >= 100) {
+        return mediaType === 'book' ? 'LIDO' : 'VISTO';
+    }
+    if (progress > 0) {
+        return mediaType === 'book' ? 'A LER' : 'A VER';
+    }
+    return mediaType === 'book' ? 'QUERO LER' : 'QUERO VER';
+}
+
+function getItemStatusClass(item: Series, progress: number): 'is-complete' | 'is-progress' | 'is-pending' {
+    const archived = isItemArchived(item);
+    if (archived || progress >= 100) return 'is-complete';
+    if (progress > 0) return 'is-progress';
+    return 'is-pending';
+}
+
+function getItemConsumedHours(item: Series): number {
+    const mediaType = item.media_type || 'series';
+    if (mediaType === 'series') {
+        const watchedCount = S.watchedState[item.id]?.length || 0;
+        const totalEpisodes = item.total_episodes || 0;
+        const runtimeMinutes = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
+            ? item.episode_run_time
+            : 30;
+        if (watchedCount > 0) {
+            return (watchedCount * runtimeMinutes) / 60;
+        }
+        if (isItemArchived(item) && totalEpisodes > 0) {
+            return (totalEpisodes * runtimeMinutes) / 60;
+        }
+        return 0;
+    }
+
+    const baseProgress = resolveDashboardProgress(item);
+    const progressPercent = isItemArchived(item) && baseProgress <= 0 ? 100 : baseProgress;
+    if (mediaType === 'movie') {
+        const runtimeMinutes = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
+            ? item.episode_run_time
+            : 110;
+        return (runtimeMinutes * Math.max(0, Math.min(100, progressPercent))) / 100 / 60;
+    }
+
+    const estimatedBookHours = 8;
+    return (estimatedBookHours * Math.max(0, Math.min(100, progressPercent))) / 100;
+}
+
+function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics {
     const allLibraryItems = [...S.myWatchlist, ...S.myArchive];
-    const mediaItems = allLibraryItems.filter(item => (item.media_type || 'series') === mediaType);
+    const mediaItems = mediaType === 'all'
+        ? allLibraryItems
+        : allLibraryItems.filter(item => (item.media_type || 'series') === mediaType);
     let inProgress = 0;
     let completed = 0;
 
     mediaItems.forEach((item) => {
-        const isArchived = S.myArchive.some(archived => archived.media_type === mediaType && archived.id === item.id);
-        if (isArchived) {
+        const archived = isItemArchived(item);
+        if (archived) {
             completed += 1;
             return;
         }
@@ -692,11 +771,351 @@ function computeDashboardMetrics(mediaType: MediaType): DashboardMetrics {
     };
 }
 
+function getLastSixMonthLabels(): string[] {
+    const labels: string[] = [];
+    const now = new Date();
+    for (let offset = 5; offset >= 0; offset -= 1) {
+        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const shortMonth = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '');
+        labels.push(shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1));
+    }
+    return labels;
+}
+
+function renderDashboardEvolutionChart(): void {
+    if (!DOM.dashboardEvolutionChart) return;
+    const ctx = DOM.dashboardEvolutionChart.getContext('2d');
+    if (!ctx) return;
+
+    const labels = getLastSixMonthLabels();
+    const evolutionBuckets: Record<MediaType, number[]> = {
+        series: new Array(labels.length).fill(0),
+        movie: new Array(labels.length).fill(0),
+        book: new Array(labels.length).fill(0),
+    };
+
+    const allItems = [...S.myWatchlist, ...S.myArchive];
+    allItems.forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        const consumedHours = getItemConsumedHours(item);
+        if (!Number.isFinite(consumedHours) || consumedHours <= 0) return;
+
+        const progress = resolveDashboardProgress(item);
+        const span = isItemArchived(item) || progress >= 100 ? labels.length : Math.min(labels.length, progress > 0 ? 4 : 2);
+        const weights = Array.from({ length: span }, (_, index) => span - index);
+        const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+        if (totalWeight <= 0) return;
+
+        for (let step = 0; step < span; step += 1) {
+            const targetIndex = labels.length - 1 - step;
+            if (targetIndex < 0) break;
+            evolutionBuckets[mediaType][targetIndex] += (consumedHours * weights[step]) / totalWeight;
+        }
+    });
+
+    if (S.charts.dashboardEvolution) {
+        S.charts.dashboardEvolution.destroy();
+    }
+
+    S.charts.dashboardEvolution = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Séries',
+                    data: evolutionBuckets.series.map((value) => Number(value.toFixed(1))),
+                    borderColor: '#47ABD2',
+                    backgroundColor: 'rgba(71, 171, 210, 0.12)',
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                },
+                {
+                    label: 'Filmes',
+                    data: evolutionBuckets.movie.map((value) => Number(value.toFixed(1))),
+                    borderColor: '#F08F44',
+                    backgroundColor: 'rgba(240, 143, 68, 0.12)',
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                },
+                {
+                    label: 'Livros',
+                    data: evolutionBuckets.book.map((value) => Number(value.toFixed(1))),
+                    borderColor: '#7DC86E',
+                    backgroundColor: 'rgba(125, 200, 110, 0.12)',
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
+                    },
+                    grid: {
+                        color: getComputedStyle(document.body).getPropertyValue('--chart-grid-color').trim(),
+                    },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
+                        callback: (value: string | number) => `${value}h`,
+                    },
+                    grid: {
+                        color: getComputedStyle(document.body).getPropertyValue('--chart-grid-color').trim(),
+                    },
+                },
+            },
+        } as any,
+    });
+}
+
+function renderDashboardGenresChart(): void {
+    if (!DOM.dashboardGenresChart || !DOM.dashboardGenresLegend) return;
+    const ctx = DOM.dashboardGenresChart.getContext('2d');
+    if (!ctx) return;
+
+    const allItems = [...S.myWatchlist, ...S.myArchive];
+    const genreCounts: Record<string, number> = {};
+    allItems.forEach((item) => {
+        (item.genres || []).forEach((genre) => {
+            const translated = translateGenreName(genre.name) || genre.name;
+            if (!translated) return;
+            genreCounts[translated] = (genreCounts[translated] || 0) + 1;
+        });
+    });
+
+    const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a);
+    const topGenres = sortedGenres.slice(0, 5);
+    const otherCount = sortedGenres.slice(5).reduce((sum, [, count]) => sum + count, 0);
+    if (otherCount > 0) topGenres.push(['Outros', otherCount]);
+
+    const labels = topGenres.map(([name]) => name);
+    const values = topGenres.map(([, count]) => count);
+    const hasData = values.length > 0;
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const chartLabels = hasData ? labels : ['Sem dados'];
+    const chartValues = hasData ? values : [1];
+    const palette = ['#47ABD2', '#D24665', '#7DC86E', '#F08F44', '#6DB0FF', '#BED984'];
+    const chartColors = hasData ? chartLabels.map((_, index) => palette[index % palette.length]) : ['#4A4A4A'];
+
+    if (S.charts.dashboardGenres) {
+        S.charts.dashboardGenres.destroy();
+    }
+
+    S.charts.dashboardGenres = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: chartLabels,
+            datasets: [
+                {
+                    data: chartValues,
+                    backgroundColor: chartColors,
+                    borderColor: getComputedStyle(document.body).getPropertyValue('--bg-card').trim(),
+                    borderWidth: 2,
+                    hoverOffset: 6,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '62%',
+            plugins: {
+                legend: {
+                    display: false,
+                },
+            },
+        },
+    });
+
+    DOM.dashboardGenresLegend.innerHTML = '';
+    if (!hasData) {
+        DOM.dashboardGenresLegend.innerHTML = '<li class="dashboard-legend-empty">Sem dados de género suficientes.</li>';
+        return;
+    }
+
+    topGenres.forEach(([name, count], index) => {
+        const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+        const item = el('li', { class: 'dashboard-legend-item' }, [
+            el('span', {
+                class: 'dashboard-legend-color',
+                style: `background-color: ${palette[index % palette.length]}`,
+            }),
+            el('span', { class: 'dashboard-legend-label', text: name }),
+            el('span', { class: 'dashboard-legend-value', text: `${percentage}%` }),
+        ]);
+        DOM.dashboardGenresLegend.appendChild(item);
+    });
+}
+
+function renderDashboardRecentCarousel(): void {
+    if (!DOM.dashboardRecentCarousel) return;
+
+    const archiveRecent = [...S.myArchive].reverse();
+    const inProgress = [...S.myWatchlist]
+        .filter((item) => resolveDashboardProgress(item) > 0)
+        .sort((a, b) => resolveDashboardProgress(b) - resolveDashboardProgress(a));
+
+    const merged = [...archiveRecent, ...inProgress];
+    const uniqueRecent: DashboardRecentEntry[] = [];
+    const seen = new Set<string>();
+
+    merged.forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        const key = `${mediaType}:${item.id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const progress = resolveDashboardProgress(item);
+        uniqueRecent.push({
+            item,
+            progress,
+            statusLabel: getItemStatusLabel(item, progress),
+            statusClass: getItemStatusClass(item, progress),
+        });
+    });
+
+    const visibleItems = uniqueRecent.slice(0, 12);
+    DOM.dashboardRecentCarousel.innerHTML = '';
+
+    if (visibleItems.length === 0) {
+        DOM.dashboardRecentCarousel.innerHTML = '<p class="dashboard-empty-message">Ainda não existem conteúdos vistos/lidos recentemente.</p>';
+        return;
+    }
+
+    visibleItems.forEach(({ item, statusLabel, statusClass }) => {
+        const mediaType = item.media_type || 'series';
+        const posterPath = buildPosterUrl(item.poster_path, 'w185', '/placeholders/poster.svg');
+        const releaseYear = item.first_air_date && !Number.isNaN(new Date(item.first_air_date).getTime())
+            ? ` (${new Date(item.first_air_date).getFullYear()})`
+            : '';
+        const card = el('article', {
+            class: 'dashboard-recent-item',
+            'data-series-id': String(item.id),
+            'data-media-type': mediaType,
+            role: 'listitem',
+            tabindex: '0',
+            'aria-label': `Abrir detalhe de ${item.name}`,
+            title: `Abrir detalhe de ${item.name}`,
+        }, [
+            createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-recent-poster', '/placeholders/poster.svg'),
+            el('div', { class: 'dashboard-recent-content' }, [
+                el('h4', { text: `${item.name}${releaseYear}` }),
+                el('span', { class: `dashboard-status-badge ${statusClass}`, text: statusLabel }),
+            ]),
+        ]);
+        DOM.dashboardRecentCarousel.appendChild(card);
+    });
+}
+
+function parseDateOnly(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const normalized = String(value).trim();
+    if (!normalized) return null;
+    const date = new Date(`${normalized}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+}
+
+function formatDashboardUpcomingDate(date: Date): string {
+    const day = date.toLocaleDateString('pt-PT', { day: '2-digit' });
+    const month = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '').toUpperCase();
+    return `${day} ${month}`;
+}
+
+function renderDashboardUpcomingReleases(): void {
+    if (!DOM.dashboardUpcomingList) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const entries: DashboardUpcomingEntry[] = [];
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        const firstDate = parseDateOnly(item.first_air_date);
+        if (firstDate && firstDate >= today) {
+            entries.push({
+                item,
+                date: firstDate,
+                label: mediaType === 'book' ? 'Lançamento' : 'Estreia',
+            });
+        }
+
+        if (mediaType === 'series') {
+            const nextEpisodeDate = parseDateOnly(item._details?.next_episode_to_air?.air_date || null);
+            if (nextEpisodeDate && nextEpisodeDate >= today) {
+                entries.push({
+                    item,
+                    date: nextEpisodeDate,
+                    label: 'Novo episódio',
+                });
+            }
+        }
+    });
+
+    const deduped = new Map<string, DashboardUpcomingEntry>();
+    entries.forEach((entry) => {
+        const mediaType = entry.item.media_type || 'series';
+        const key = `${mediaType}:${entry.item.id}:${entry.label}:${entry.date.toISOString().slice(0, 10)}`;
+        if (!deduped.has(key)) deduped.set(key, entry);
+    });
+
+    const sortedEntries = Array.from(deduped.values())
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .slice(0, 8);
+
+    DOM.dashboardUpcomingList.innerHTML = '';
+    if (sortedEntries.length === 0) {
+        DOM.dashboardUpcomingList.innerHTML = '<p class="dashboard-empty-message">Sem lançamentos futuros registados na sua biblioteca.</p>';
+        return;
+    }
+
+    sortedEntries.forEach(({ item, date, label }) => {
+        const mediaType = item.media_type || 'series';
+        const posterPath = buildPosterUrl(item.poster_path, 'w185', '/placeholders/poster.svg');
+        const entryElement = el('article', {
+            class: 'dashboard-upcoming-item',
+            'data-series-id': String(item.id),
+            'data-media-type': mediaType,
+            tabindex: '0',
+            'aria-label': `Abrir detalhe de ${item.name}`,
+            title: `Abrir detalhe de ${item.name}`,
+        }, [
+            createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-upcoming-poster', '/placeholders/poster.svg'),
+            el('div', { class: 'dashboard-upcoming-content' }, [
+                el('p', { class: 'dashboard-upcoming-title', text: item.name }),
+                el('p', { class: 'dashboard-upcoming-label', text: label }),
+            ]),
+            el('span', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
+        ]);
+        DOM.dashboardUpcomingList.appendChild(entryElement);
+    });
+}
+
 export function renderMediaDashboard() {
     if (!DOM.dashboardMediaCards || DOM.dashboardMediaCards.length === 0) return;
     DOM.dashboardMediaCards.forEach((card) => {
         const rawType = card.dataset.mediaType || 'series';
-        const mediaType: MediaType = rawType === 'movie' || rawType === 'book' ? rawType : 'series';
+        const mediaType: DashboardCardType = rawType === 'movie' || rawType === 'book' || rawType === 'all'
+            ? rawType
+            : 'series';
         const metrics = computeDashboardMetrics(mediaType);
         const total = card.querySelector<HTMLElement>('[data-metric="total"]');
         const inProgress = card.querySelector<HTMLElement>('[data-metric="in-progress"]');
@@ -705,6 +1124,14 @@ export function renderMediaDashboard() {
         if (inProgress) inProgress.textContent = String(metrics.inProgress);
         if (completed) completed.textContent = String(metrics.completed);
     });
+
+    const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
+    if (!isDashboardVisible) return;
+
+    renderDashboardEvolutionChart();
+    renderDashboardGenresChart();
+    renderDashboardRecentCarousel();
+    renderDashboardUpcomingReleases();
 }
 
 function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
