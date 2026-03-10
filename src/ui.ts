@@ -18,6 +18,15 @@ let confirmationResolve: ((value: boolean) => void) | null = null;
 const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[] = [];
 let modalA11yInitialized = false;
+let scopedLibraryMediaType: 'all' | MediaType = 'all';
+
+export function setScopedLibraryMediaType(mediaType: 'all' | MediaType): void {
+    if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book' || mediaType === 'all') {
+        scopedLibraryMediaType = mediaType;
+        return;
+    }
+    scopedLibraryMediaType = 'all';
+}
 
 function getMediaTypeLabel(mediaType: MediaType): string {
     if (mediaType === 'movie') return 'Filme';
@@ -496,7 +505,8 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
         const voteAverage = (series.vote_average || 0).toFixed(1);
         const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
 
-        const card = el('div', { class: 'trending-card', 'data-series-id': String(series.id) }, [
+        const mediaType = series.media_type || 'series';
+        const card = el('div', { class: 'trending-card', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
             el('div', { class: 'image' }, [
                 el('div', { class: 'wrapper' }, [
                     createPosterImage(
@@ -527,7 +537,9 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
 export function renderWatchlist() {
     const viewMode = DOM.watchlistContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.watchlistContainer.innerHTML = '';
-    const seriesToWatch = S.myWatchlist.filter((series) => {
+    const seriesToWatch = S.myWatchlist
+        .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
+        .filter((series) => {
         const mediaType = series.media_type || 'series';
         if (mediaType === 'series') {
             return !S.watchedState[series.id] || S.watchedState[series.id].length === 0;
@@ -536,7 +548,13 @@ export function renderWatchlist() {
         return getMediaProgressPercent(series) === 0;
     });
     if (seriesToWatch.length === 0) {
-        DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo novo para começar. Adicione itens ou veja o separador "A Ver".</p>';
+        if (scopedLibraryMediaType === 'book') {
+            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum livro novo para começar.</p>';
+        } else if (scopedLibraryMediaType === 'movie') {
+            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum filme novo para começar.</p>';
+        } else {
+            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo novo para começar. Adicione itens ou veja o separador "A Ver".</p>';
+        }
         return;
     }
     seriesToWatch.forEach(series => {
@@ -548,7 +566,9 @@ export function renderWatchlist() {
 export function renderUnseen() {
     const viewMode = DOM.unseenContainer.classList.contains('grid-view') ? 'grid' : 'list';
     DOM.unseenContainer.innerHTML = '';
-    const seriesInProgress = S.myWatchlist.filter(series => {
+    const seriesInProgress = S.myWatchlist
+        .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
+        .filter(series => {
         const mediaType = series.media_type || 'series';
         if (mediaType === 'series') {
             const watchedCount = S.watchedState[series.id]?.length || 0;
@@ -562,7 +582,13 @@ export function renderUnseen() {
         return progressPercent > 0 && progressPercent < 100;
     });
     if (seriesInProgress.length === 0) {
-        DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo em progresso.</p>';
+        if (scopedLibraryMediaType === 'book') {
+            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum livro em leitura.</p>';
+        } else if (scopedLibraryMediaType === 'movie') {
+            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum filme em progresso.</p>';
+        } else {
+            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo em progresso.</p>';
+        }
         return;
     }
     seriesInProgress.forEach(series => {

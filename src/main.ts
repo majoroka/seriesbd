@@ -49,6 +49,7 @@ type DetailReturnContext = {
     scrollTop: number;
 };
 type MainMenuTarget = 'dashboard' | 'series' | 'movie' | 'book' | 'library';
+type SubmenuMediaTarget = Extract<MainMenuTarget, 'series' | 'movie' | 'book'>;
 
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
@@ -64,6 +65,7 @@ let inactivityActivityListenersRegistered = false;
 let lastInactivityActivityAt = 0;
 let lastSignOutReason: 'manual' | 'inactivity' | null = null;
 let profileIdentityRequestId = 0;
+let activeSubmenuMediaTarget: SubmenuMediaTarget = 'series';
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
 const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
@@ -115,22 +117,98 @@ function getSearchEmptyMessage(mediaType: MediaType): string {
     return 'Escreva na barra de pesquisa para encontrar novas séries.';
 }
 
+function getSubmenuMediaTarget(mainTarget: MainMenuTarget): SubmenuMediaTarget | null {
+    if (mainTarget === 'series' || mainTarget === 'movie' || mainTarget === 'book') return mainTarget;
+    return null;
+}
+
+function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, string> {
+    if (mediaTarget === 'book') {
+        return {
+            'watchlist-section': 'Quero Ler',
+            'unseen-section': 'A Ler',
+            'next-aired-section': 'Próximo Episódio',
+            'trending-section': 'Tendências',
+            'popular-section': 'Top Rated',
+            'premieres-section': 'Estreias',
+            'stats-section': 'Estatísticas',
+        };
+    }
+
+    return {
+        'watchlist-section': 'Quero Ver',
+        'unseen-section': 'A Ver',
+        'next-aired-section': 'Próximo Episódio',
+        'trending-section': 'Tendências',
+        'popular-section': 'Top Rated',
+        'premieres-section': 'Estreias',
+        'stats-section': 'Estatísticas',
+    };
+}
+
+function updateSectionHeadingsForMediaTarget(mediaTarget: SubmenuMediaTarget): void {
+    const watchlistHeading = document.querySelector('#watchlist-section h2');
+    const unseenHeading = document.querySelector('#unseen-section h2');
+    if (watchlistHeading) {
+        watchlistHeading.innerHTML = mediaTarget === 'book'
+            ? '<i class="fas fa-star"></i> Quero Ler'
+            : '<i class="fas fa-star"></i> Quero Ver';
+    }
+    if (unseenHeading) {
+        unseenHeading.innerHTML = mediaTarget === 'book'
+            ? '<i class="fas fa-eye-slash"></i> A Ler'
+            : '<i class="fas fa-eye-slash"></i> A Ver';
+    }
+}
+
+function applySubmenuForMainTarget(mainTarget: MainMenuTarget): void {
+    const mediaTarget = getSubmenuMediaTarget(mainTarget);
+    if (!mediaTarget) {
+        UI.setScopedLibraryMediaType('all');
+        return;
+    }
+
+    activeSubmenuMediaTarget = mediaTarget;
+    UI.setScopedLibraryMediaType(mediaTarget);
+    updateSectionHeadingsForMediaTarget(mediaTarget);
+
+    const labels = getSubmenuLabels(mediaTarget);
+    DOM.mainNavLinks.forEach((link) => {
+        const targetId = (link as HTMLElement).dataset.target || '';
+        const linkElement = link as HTMLAnchorElement;
+        const parentItem = linkElement.closest('li');
+        const labelElement = linkElement.querySelector<HTMLElement>('.nav-link-label');
+        if (labelElement && labels[targetId]) {
+            labelElement.textContent = labels[targetId];
+        }
+        if (targetId === 'next-aired-section' && parentItem) {
+            const shouldHide = mediaTarget !== 'series';
+            parentItem.classList.toggle('is-hidden', shouldHide);
+            if (shouldHide) {
+                linkElement.classList.remove('active');
+            }
+        }
+    });
+}
+
 function updateMainMenuActiveState(target: MainMenuTarget): void {
     DOM.mainMenuLinks.forEach((link) => {
         link.classList.toggle('active', parseMainMenuTarget(link.dataset.mainTarget) === target);
     });
 
+    applySubmenuForMainTarget(target);
+
     if (DOM.sidebarSubmenuShell) {
-        const showSeriesSubmenu = target === 'series';
-        DOM.sidebarSubmenuShell.classList.toggle('is-hidden', !showSeriesSubmenu);
-        DOM.sidebarSubmenuShell.setAttribute('aria-hidden', showSeriesSubmenu ? 'false' : 'true');
+        const showSubmenu = target === 'series' || target === 'movie' || target === 'book';
+        DOM.sidebarSubmenuShell.classList.toggle('is-hidden', !showSubmenu);
+        DOM.sidebarSubmenuShell.setAttribute('aria-hidden', showSubmenu ? 'false' : 'true');
     }
 }
 
 function getMainMenuTargetFromSection(targetSection: string): MainMenuTarget {
     if (targetSection === 'media-dashboard-section') return 'dashboard';
     if (targetSection === 'all-series-section') return 'library';
-    return 'series';
+    return activeSubmenuMediaTarget;
 }
 
 async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
@@ -146,21 +224,17 @@ async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
         await setAllSeriesStatusFilterPreference('all');
         S.setAllSeriesGenreFilter('all');
         if (DOM.allSeriesGenreFilter) DOM.allSeriesGenreFilter.value = 'all';
+        UI.setScopedLibraryMediaType('all');
         UI.renderAllSeries();
         UI.showSection('all-series-section');
         return;
     }
 
-    if (target === 'movie' || target === 'book') {
-        await setAllSeriesMediaFilterPreference(target);
-        await setAllSeriesStatusFilterPreference('all');
-        S.setAllSeriesGenreFilter('all');
-        if (DOM.allSeriesGenreFilter) DOM.allSeriesGenreFilter.value = 'all';
-        UI.renderAllSeries();
-        UI.showSection('all-series-section');
-        return;
+    if (target === 'series' || target === 'movie' || target === 'book') {
+        UI.setScopedLibraryMediaType(target);
+        UI.renderWatchlist();
+        UI.renderUnseen();
     }
-
     UI.showSection('watchlist-section');
 }
 
@@ -2062,8 +2136,8 @@ async function initializeApp(): Promise<void> {
                 UI.renderAllSeries();
             } else if (sectionFromHash === 'trending-section') {
                 S.resetSearchAbortController();
-                loadTrending('day', 'trending-scroller-day');
-                loadTrending('week', 'trending-scroller-week');
+                loadTrending('day', 'trending-scroller-day', activeSubmenuMediaTarget);
+                loadTrending('week', 'trending-scroller-week', activeSubmenuMediaTarget);
             }
         } else {
             UI.showSection('media-dashboard-section');
@@ -2119,18 +2193,28 @@ function renderRemoteErrorWithRetry(
     container.appendChild(wrapper);
 }
 
-async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
+async function loadTrending(
+    timeWindow: 'day' | 'week',
+    containerId: string,
+    mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget
+) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    if (mediaType === 'book') {
+        container.innerHTML = '<p class="empty-list-message">Tendências de livros indisponíveis via API neste momento.</p>';
+        return;
+    }
 
     container.innerHTML = '<p>A carregar tendências...</p>';
     try {
         const section: ObservabilitySection = timeWindow === 'day' ? 'trending-day' : 'trending-week';
+        const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
         const data = await runObservedSection(
             section,
-            `/api/tmdb/trending/tv/${timeWindow}`,
-            () => API.fetchTrending(timeWindow, S.searchAbortController.signal),
-            { containerId, timeWindow }
+            `/api/tmdb/trending/${tmdbMediaType}/${timeWindow}`,
+            () => API.fetchTrending(timeWindow, S.searchAbortController.signal, mediaType),
+            { containerId, timeWindow, mediaType }
         );
         UI.renderTrending(data.results, container);
     } catch (error) {
@@ -2149,7 +2233,7 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
                 container,
                 () => {
                     S.resetSearchAbortController();
-                    loadTrending(timeWindow, containerId);
+                    loadTrending(timeWindow, containerId, mediaType);
                 },
                 {
                     offlineMessage: 'Sem ligação à internet. As tendências não podem ser carregadas offline.',
@@ -2162,6 +2246,7 @@ async function loadTrending(timeWindow: 'day' | 'week', containerId: string) {
 
 let allPopularSeries: Series[] = [];
 let popularSeriesDisplayedCount = 0;
+let popularSeriesCacheMediaType: SubmenuMediaTarget | null = null;
 const POPULAR_SERIES_DISPLAY_BATCH_SIZE = 50;
 const POPULAR_SERIES_TARGET_TOTAL = 250;
 const POPULAR_FETCH_CONCURRENCY = 4;
@@ -2222,6 +2307,12 @@ function updateTopRatedFilterToggleButton() {
     }
 }
 
+function updateTopRatedFilterControlVisibility(mediaType: SubmenuMediaTarget): void {
+    const topRatedFilterControl = document.querySelector<HTMLElement>('.top-rated-filter-control');
+    if (!topRatedFilterControl) return;
+    topRatedFilterControl.style.display = mediaType === 'series' ? 'inline-flex' : 'none';
+}
+
 function updatePopularLoadMoreVisibility() {
     const canShowMoreNow = popularSeriesDisplayedCount < allPopularSeries.length;
     const hasMoreLoading = isPopularBootstrapping || isPopularBackgroundLoading;
@@ -2248,7 +2339,9 @@ function renderVisiblePopularSeries() {
     UI.renderPopularSeries(allPopularSeries.slice(0, visibleCount));
 }
 
-function renderTopRatedFromCache(): boolean {
+function renderTopRatedFromCache(mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget): boolean {
+    updateTopRatedFilterControlVisibility(mediaType);
+    if (popularSeriesCacheMediaType !== mediaType) return false;
     if (allPopularSeries.length === 0) return false;
     popularSeriesDisplayedCount = Math.max(
         POPULAR_SERIES_DISPLAY_BATCH_SIZE,
@@ -2287,7 +2380,22 @@ async function fetchPopularPagesChunk(
     mergePopularSeries(mergedResults);
 }
 
-async function loadPopularSeries(loadMore = false) {
+async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget) {
+    updateTopRatedFilterControlVisibility(mediaType);
+
+    if (mediaType === 'book') {
+        popularSeriesCacheMediaType = 'book';
+        allPopularSeries = [];
+        popularSeriesDisplayedCount = 0;
+        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Top rated de livros indisponível via API neste momento.</p>';
+        DOM.popularLoadMoreContainer.style.display = 'none';
+        return;
+    }
+
+    if (popularSeriesCacheMediaType !== mediaType && loadMore) {
+        loadMore = false;
+    }
+
     if (loadMore) {
         if (allPopularSeries.length === 0) {
             updatePopularLoadMoreVisibility();
@@ -2315,20 +2423,24 @@ async function loadPopularSeries(loadMore = false) {
     const currentLoadToken = ++popularLoadToken;
     isPopularBootstrapping = true;
     isPopularBackgroundLoading = false;
+    popularSeriesCacheMediaType = mediaType;
     allPopularSeries = [];
     popularSeriesDisplayedCount = POPULAR_SERIES_DISPLAY_BATCH_SIZE;
-    DOM.popularContainer.innerHTML = '<p>A carregar séries top rated...</p>';
+    DOM.popularContainer.innerHTML = mediaType === 'movie'
+        ? '<p>A carregar filmes top rated...</p>'
+        : '<p>A carregar séries top rated...</p>';
     updatePopularLoadMoreVisibility();
 
     const fetchAndProcessChunk = async (page: number): Promise<{ results: Series[]; totalPages: number }> => {
+        const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
         const tmdbData = await runObservedSection(
             'popular',
-            '/api/tmdb/tv/top_rated',
-            () => API.fetchPopularSeries(page),
-            { page, source: 'tmdb-top-rated' }
+            `/api/tmdb/${tmdbMediaType}/top_rated`,
+            () => API.fetchPopularSeries(page, mediaType),
+            { page, source: `${tmdbMediaType}-top-rated`, mediaType }
         );
         return {
-            results: applyTopRatedFilters(tmdbData.results),
+            results: mediaType === 'series' ? applyTopRatedFilters(tmdbData.results) : tmdbData.results,
             totalPages: tmdbData.total_pages || 0,
         };
     };
@@ -2394,10 +2506,12 @@ async function loadPopularSeries(loadMore = false) {
         console.error('Erro ao carregar séries top rated:', error);
         renderRemoteErrorWithRetry(
             DOM.popularContainer,
-            () => loadPopularSeries(),
+            () => loadPopularSeries(false, mediaType),
             {
                 offlineMessage: 'Sem ligação à internet. A secção Top Rated não está disponível offline.',
-                onlineMessage: 'Não foi possível carregar as séries top rated.',
+                onlineMessage: mediaType === 'movie'
+                    ? 'Não foi possível carregar os filmes top rated.'
+                    : 'Não foi possível carregar as séries top rated.',
             }
         );
     } finally {
@@ -2411,7 +2525,13 @@ async function loadPopularSeries(loadMore = false) {
 let premieresSeriesPage = 1;
 let isLoadingPremieres = false;
 const loadedPremieresSeriesIds = new Set<number>();
-async function loadPremieresSeries(loadMore = false) {
+async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget) {
+    if (mediaType === 'book') {
+        DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Estreias de livros indisponíveis via API neste momento.</p>';
+        DOM.premieresLoadMoreContainer.style.display = 'none';
+        return;
+    }
+
     if (isLoadingPremieres) return;
     isLoadingPremieres = true;
     if (DOM.premieresLoadMoreBtn) {
@@ -2422,7 +2542,9 @@ async function loadPremieresSeries(loadMore = false) {
     if (!loadMore) {
         premieresSeriesPage = 1;
         loadedPremieresSeriesIds.clear();
-        DOM.premieresContainer.innerHTML = '<p>A carregar estreias...</p>';
+        DOM.premieresContainer.innerHTML = mediaType === 'movie'
+            ? '<p>A carregar estreias de filmes...</p>'
+            : '<p>A carregar estreias...</p>';
         DOM.premieresLoadMoreContainer.style.display = 'none';
     }
 
@@ -2430,11 +2552,12 @@ async function loadPremieresSeries(loadMore = false) {
     const startingRank = loadMore ? DOM.premieresContainer.childElementCount + 1 : 1;
 
     try {        
+        const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
         const data = await runObservedSection(
             'premieres',
-            '/api/tmdb/discover/tv',
-            () => API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal),
-            { page: premieresSeriesPage, loadMore }
+            `/api/tmdb/discover/${tmdbMediaType}`,
+            () => API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal, mediaType),
+            { page: premieresSeriesPage, loadMore, mediaType }
         );
         
         if (!loadMore) {
@@ -2464,15 +2587,17 @@ async function loadPremieresSeries(loadMore = false) {
             console.log('Premieres fetch aborted');
             return;
         }
-        recordSectionFailure('premieres', '/premieres/render', error, { loadMore });
+        recordSectionFailure('premieres', '/premieres/render', error, { loadMore, mediaType });
         persistObservabilitySnapshot();
         console.error('Erro ao carregar as estreias:', error);
         renderRemoteErrorWithRetry(
             DOM.premieresContainer,
-            () => loadPremieresSeries(loadMore),
+            () => loadPremieresSeries(loadMore, mediaType),
             {
                 offlineMessage: 'Sem ligação à internet. A secção Estreias não está disponível offline.',
-                onlineMessage: 'Não foi possível carregar as estreias.',
+                onlineMessage: mediaType === 'movie'
+                    ? 'Não foi possível carregar as estreias de filmes.'
+                    : 'Não foi possível carregar as estreias.',
             }
         );
     } finally {
@@ -2505,22 +2630,32 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const targetId = (link as HTMLElement).dataset.target;
             if (targetId) {
-                if (targetId === 'media-dashboard-section') {
+                if (targetId === 'watchlist-section') {
+                    UI.renderWatchlist();
+                } else if (targetId === 'unseen-section') {
+                    UI.renderUnseen();
+                } else if (targetId === 'next-aired-section') {
+                    if (activeSubmenuMediaTarget !== 'series') {
+                        UI.showNotification('Próximo Episódio disponível apenas para séries.');
+                        return;
+                    }
+                    void updateNextAired();
+                } else if (targetId === 'media-dashboard-section') {
                     UI.renderMediaDashboard();
                 } else if (targetId === 'all-series-section') {
                     UI.renderAllSeries();
                 } else if (targetId === 'trending-section') {
                     S.resetSearchAbortController();
-                    loadTrending('day', 'trending-scroller-day');
-                    loadTrending('week', 'trending-scroller-week');
+                    loadTrending('day', 'trending-scroller-day', activeSubmenuMediaTarget);
+                    loadTrending('week', 'trending-scroller-week', activeSubmenuMediaTarget);
                 } else if (targetId === 'popular-section') {
-                    if (!renderTopRatedFromCache()) {
+                    if (!renderTopRatedFromCache(activeSubmenuMediaTarget)) {
                         S.resetSearchAbortController();
-                        loadPopularSeries();
+                        loadPopularSeries(false, activeSubmenuMediaTarget);
                     }
                 } else if (targetId === 'premieres-section') {
                     S.resetSearchAbortController();
-                    loadPremieresSeries();
+                    loadPremieresSeries(false, activeSubmenuMediaTarget);
                 }
                 UI.showSection(targetId);
                 updateMainMenuActiveState(getMainMenuTargetFromSection(targetId));
@@ -2534,12 +2669,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupViewToggle(DOM.archiveViewToggle, DOM.archiveContainer, C.ARCHIVE_VIEW_MODE_KEY, UI.renderArchive);
     setupViewToggle(DOM.allSeriesViewToggle, DOM.allSeriesContainer, C.ALL_SERIES_VIEW_MODE_KEY, UI.renderAllSeries);
     setupViewToggle(DOM.popularViewToggle, DOM.popularContainer, 'popular_view_mode', () => {
-        if (!renderTopRatedFromCache()) {
+        if (!renderTopRatedFromCache(activeSubmenuMediaTarget)) {
             S.resetSearchAbortController();
-            loadPopularSeries();
+            loadPopularSeries(false, activeSubmenuMediaTarget);
         }
     });
-    setupViewToggle(DOM.premieresViewToggle, DOM.premieresContainer, 'premieres_view_mode', () => loadPremieresSeries());
+    setupViewToggle(DOM.premieresViewToggle, DOM.premieresContainer, 'premieres_view_mode', () => loadPremieresSeries(false, activeSubmenuMediaTarget));
 
     DOM.allSeriesGenreFilter?.addEventListener('change', (event) => {
         const { value } = event.target as HTMLSelectElement;
@@ -2613,7 +2748,8 @@ document.addEventListener('DOMContentLoaded', () => {
             S.resetSearchAbortController();
             DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
             UI.showSection('add-series-section');
-            updateMainMenuActiveState('series');
+            const menuTarget: MainMenuTarget = mediaType === 'movie' ? 'movie' : mediaType === 'book' ? 'book' : 'series';
+            updateMainMenuActiveState(menuTarget);
             runObservedSection(
                 'search',
                 endpoint,
@@ -3018,11 +3154,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     DOM.popularLoadMoreBtn?.addEventListener('click', () => {
-        loadPopularSeries(true);
+        loadPopularSeries(true, activeSubmenuMediaTarget);
     });
 
     DOM.premieresLoadMoreBtn?.addEventListener('click', () => {
-        loadPremieresSeries(true);
+        loadPremieresSeries(true, activeSubmenuMediaTarget);
     });
 
     // Modals
@@ -3240,7 +3376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const popularSection = document.getElementById('popular-section');
         if (popularSection && popularSection.style.display !== 'none') {
             S.resetSearchAbortController();
-            loadPopularSeries();
+            loadPopularSeries(false, activeSubmenuMediaTarget);
         }
     });
     DOM.rescanSeriesBtn?.addEventListener('click', rescanAllSeries);
