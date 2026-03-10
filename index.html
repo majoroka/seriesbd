@@ -152,43 +152,97 @@
                     <div class="section-header">
                         <h2><i class="fas fa-table-cells-large"></i> Dashboard</h2>
                     </div>
-                    <div class="media-dashboard-grid" role="list" aria-label="Secções principais da biblioteca">
-                        <button class="dashboard-media-card" type="button" data-media-type="series" aria-label="Abrir secção de séries">
-                            <div class="dashboard-media-card-header">
-                                <span class="dashboard-media-card-icon"><i class="fas fa-tv" aria-hidden="true"></i></span>
-                                <h3>Séries</h3>
+                    <div class="media-dashboard-layout">
+                        <div class="media-dashboard-grid media-dashboard-grid--kpi" role="list" aria-label="Secções principais da biblioteca">
+                            <button class="dashboard-media-card" type="button" data-media-type="series" aria-label="Abrir secção de séries">
+                                <div class="dashboard-media-card-header">
+                                    <span class="dashboard-media-card-icon"><i class="fas fa-tv" aria-hidden="true"></i></span>
+                                    <h3>Séries</h3>
+                                </div>
+                                <p class="dashboard-media-card-subtitle">Acompanhar temporadas, episódios e progresso.</p>
+                                <dl class="dashboard-media-card-metrics">
+                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                </dl>
+                            </button>
+                            <button class="dashboard-media-card" type="button" data-media-type="movie" aria-label="Abrir secção de filmes">
+                                <div class="dashboard-media-card-header">
+                                    <span class="dashboard-media-card-icon"><i class="fas fa-film" aria-hidden="true"></i></span>
+                                    <h3>Filmes</h3>
+                                </div>
+                                <p class="dashboard-media-card-subtitle">Gerir vistos, por ver e detalhes rápidos.</p>
+                                <dl class="dashboard-media-card-metrics">
+                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                </dl>
+                            </button>
+                            <button class="dashboard-media-card" type="button" data-media-type="book" aria-label="Abrir secção de livros">
+                                <div class="dashboard-media-card-header">
+                                    <span class="dashboard-media-card-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
+                                    <h3>Livros</h3>
+                                </div>
+                                <p class="dashboard-media-card-subtitle">Controlar leitura, progresso e concluídos.</p>
+                                <dl class="dashboard-media-card-metrics">
+                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                </dl>
+                            </button>
+                            <button class="dashboard-media-card dashboard-media-card--overall" type="button" data-media-type="all" aria-label="Estatísticas gerais da biblioteca">
+                                <div class="dashboard-media-card-header">
+                                    <span class="dashboard-media-card-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                                    <h3>Estatísticas</h3>
+                                </div>
+                                <p class="dashboard-media-card-subtitle">Visão consolidada do consumo em toda a biblioteca.</p>
+                                <dl class="dashboard-media-card-metrics">
+                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
+                                    <div><dt>Ativos</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                </dl>
+                            </button>
+                        </div>
+
+                        <section class="dashboard-panel dashboard-panel-analytics" aria-label="Gráfico de desempenho">
+                            <div class="dashboard-panel-header">
+                                <h3>GRÁFICO DE DESEMPENHO</h3>
                             </div>
-                            <p class="dashboard-media-card-subtitle">Acompanhar temporadas, episódios e progresso.</p>
-                            <dl class="dashboard-media-card-metrics">
-                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
-                            </dl>
-                        </button>
-                        <button class="dashboard-media-card" type="button" data-media-type="movie" aria-label="Abrir secção de filmes">
-                            <div class="dashboard-media-card-header">
-                                <span class="dashboard-media-card-icon"><i class="fas fa-film" aria-hidden="true"></i></span>
-                                <h3>Filmes</h3>
+                            <div class="dashboard-analytics-grid">
+                                <article class="dashboard-chart-card">
+                                    <h4>Mensal (Horas)</h4>
+                                    <canvas id="dashboard-evolution-chart" aria-label="Desempenho mensal de consumo por tipo de media"></canvas>
+                                </article>
+                                <article class="dashboard-chart-card dashboard-chart-card--genres">
+                                    <h4>Distribuição por Géneros</h4>
+                                    <canvas id="dashboard-genres-chart" aria-label="Distribuição por géneros na biblioteca"></canvas>
+                                    <ul id="dashboard-genres-legend" class="dashboard-genres-legend" aria-label="Legenda de géneros"></ul>
+                                </article>
                             </div>
-                            <p class="dashboard-media-card-subtitle">Gerir vistos, por ver e detalhes rápidos.</p>
-                            <dl class="dashboard-media-card-metrics">
-                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
-                            </dl>
-                        </button>
-                        <button class="dashboard-media-card" type="button" data-media-type="book" aria-label="Abrir secção de livros">
-                            <div class="dashboard-media-card-header">
-                                <span class="dashboard-media-card-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
-                                <h3>Livros</h3>
+                        </section>
+
+                        <aside class="media-dashboard-side-column">
+                            <section class="dashboard-panel dashboard-launches-panel" aria-label="Próximos lançamentos aguardados">
+                                <div class="dashboard-panel-header">
+                                    <h3>PRÓXIMOS LANÇAMENTOS AGUARDADOS</h3>
+                                </div>
+                                <div id="dashboard-upcoming-list" class="dashboard-upcoming-list"></div>
+                            </section>
+                        </aside>
+
+                        <section class="dashboard-panel dashboard-panel-recent" aria-label="Conteúdos vistos ou lidos recentemente">
+                            <div class="dashboard-panel-header">
+                                <h3>RECENTEMENTE VISTOS / LIDOS</h3>
                             </div>
-                            <p class="dashboard-media-card-subtitle">Controlar leitura, progresso e concluídos.</p>
-                            <dl class="dashboard-media-card-metrics">
-                                <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
-                            </dl>
-                        </button>
+                            <div id="dashboard-recent-carousel" class="dashboard-recent-carousel" role="list"></div>
+                        </section>
+
+                        <section class="dashboard-panel dashboard-panel-suggestions" aria-label="Sugestões personalizadas">
+                            <div class="dashboard-panel-header">
+                                <h3>SUGESTÕES PARA TI</h3>
+                            </div>
+                            <div id="dashboard-suggestions-carousel" class="dashboard-recent-carousel" role="list"></div>
+                        </section>
                     </div>
                 </section>
 

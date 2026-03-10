@@ -8,6 +8,7 @@ import { createMediaKey, getSeriesMediaKey, normalizeSeries, normalizeSeriesColl
 export let myWatchlist: Series[] = [];
 export let myArchive: Series[] = [];
 export let currentSearchResults: Series[] = [];
+export let dashboardSuggestedMedia: Series[] = [];
 export let charts: { [key: string]: any } = {};
 export let watchedState: WatchedState = {};
 export let userData: UserData = {};
@@ -39,6 +40,7 @@ export function setMyArchive(data: Series[]) { myArchive = normalizeSeriesCollec
 export function setWatchedState(data: WatchedState) { watchedState = data; }
 export function setUserData(data: UserData) { userData = data; }
 export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data.map(normalizeSeries); }
+export function setDashboardSuggestedMedia(data: Series[]) { dashboardSuggestedMedia = normalizeSeriesCollection(data); }
 export function setCharts(data: { [key: string]: any }) { charts = data; }
 export function getSeries(seriesId: number): Series | undefined {
     return [...myWatchlist, ...myArchive].find(s => s.media_type === 'series' && s.id === seriesId);
