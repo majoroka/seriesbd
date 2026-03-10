@@ -48,6 +48,7 @@ type DetailReturnContext = {
     sectionId: string;
     scrollTop: number;
 };
+type MainMenuTarget = 'dashboard' | 'series' | 'movie' | 'book' | 'library';
 
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
@@ -88,6 +89,13 @@ function parseMediaType(value: string | null | undefined): MediaType {
     return 'series';
 }
 
+function parseMainMenuTarget(value: string | null | undefined): MainMenuTarget {
+    if (value === 'dashboard' || value === 'series' || value === 'movie' || value === 'book' || value === 'library') {
+        return value;
+    }
+    return 'dashboard';
+}
+
 function getMediaTypeLabel(mediaType: MediaType): string {
     if (mediaType === 'movie') return 'Filmes';
     if (mediaType === 'book') return 'Livros';
@@ -104,6 +112,72 @@ function getSearchEmptyMessage(mediaType: MediaType): string {
     if (mediaType === 'movie') return 'Escreva na barra de pesquisa para encontrar novos filmes.';
     if (mediaType === 'book') return 'Escreva na barra de pesquisa para encontrar novos livros.';
     return 'Escreva na barra de pesquisa para encontrar novas séries.';
+}
+
+function updateMainMenuActiveState(target: MainMenuTarget): void {
+    DOM.mainMenuLinks.forEach((link) => {
+        link.classList.toggle('active', parseMainMenuTarget(link.dataset.mainTarget) === target);
+    });
+}
+
+function getMainMenuTargetFromSection(targetSection: string): MainMenuTarget {
+    if (targetSection === 'media-dashboard-section') return 'dashboard';
+    if (targetSection === 'all-series-section') return 'library';
+    return 'series';
+}
+
+async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
+    updateMainMenuActiveState(target);
+    if (target === 'dashboard') {
+        UI.renderMediaDashboard();
+        UI.showSection('media-dashboard-section');
+        return;
+    }
+
+    if (target === 'library') {
+        await setAllSeriesMediaFilterPreference('all');
+        await setAllSeriesStatusFilterPreference('all');
+        S.setAllSeriesGenreFilter('all');
+        if (DOM.allSeriesGenreFilter) DOM.allSeriesGenreFilter.value = 'all';
+        UI.renderAllSeries();
+        UI.showSection('all-series-section');
+        return;
+    }
+
+    if (target === 'movie' || target === 'book') {
+        await setAllSeriesMediaFilterPreference(target);
+        await setAllSeriesStatusFilterPreference('all');
+        S.setAllSeriesGenreFilter('all');
+        if (DOM.allSeriesGenreFilter) DOM.allSeriesGenreFilter.value = 'all';
+        UI.renderAllSeries();
+        UI.showSection('all-series-section');
+        return;
+    }
+
+    UI.showSection('watchlist-section');
+}
+
+function getBestUserDisplayName(user: User | null): string {
+    if (!user) return 'visitante';
+    const metadata = user.user_metadata as { full_name?: string } | undefined;
+    const fullName = typeof metadata?.full_name === 'string' ? metadata.full_name.trim() : '';
+    if (fullName) return fullName;
+    const email = String(user.email || '').trim();
+    if (!email) return 'utilizador';
+    return email.split('@')[0] || 'utilizador';
+}
+
+function updateTopbarIdentity(user: User | null): void {
+    if (DOM.topbarGreeting) {
+        DOM.topbarGreeting.textContent = `Olá, ${getBestUserDisplayName(user)}!`;
+    }
+    if (DOM.topbarAccountName) {
+        DOM.topbarAccountName.textContent = user ? getBestUserDisplayName(user) : 'Conta';
+    }
+    if (DOM.topbarAccountAvatar) {
+        const baseName = user ? getBestUserDisplayName(user) : 'Conta';
+        DOM.topbarAccountAvatar.textContent = baseName.charAt(0).toUpperCase();
+    }
 }
 
 function persistObservabilitySnapshot() {
@@ -577,6 +651,7 @@ function renderLibraryStateFromMemory() {
 
 function setAuthenticatedUi(user: User | null) {
     currentAuthenticatedUserId = user?.id ?? null;
+    updateTopbarIdentity(user);
     if (currentAuthenticatedUserId) {
         scheduleInactivityLogoutTimer();
     } else {
@@ -989,6 +1064,7 @@ function navigateBackFromSeriesDetails() {
     const targetSection = detailReturnContext?.sectionId || fallbackSection;
     const targetScrollTop = detailReturnContext?.scrollTop ?? 0;
     UI.showSection(targetSection);
+    updateMainMenuActiveState(getMainMenuTargetFromSection(targetSection));
     const mainContent = getMainContentScrollContainer();
     if (mainContent) {
         requestAnimationFrame(() => {
@@ -1854,6 +1930,7 @@ async function initializeApp(): Promise<void> {
             clearInMemoryLibraryState();
             renderLibraryStateFromMemory();
             UI.showSection('media-dashboard-section');
+            updateMainMenuActiveState('dashboard');
             return;
         }
 
@@ -1884,6 +1961,7 @@ async function initializeApp(): Promise<void> {
         const sectionFromHash = rawSectionFromHash === 'archive-section' ? 'all-series-section' : rawSectionFromHash;
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
+            updateMainMenuActiveState(getMainMenuTargetFromSection(sectionFromHash));
             if (sectionFromHash === 'media-dashboard-section') {
                 UI.renderMediaDashboard();
             } else if (sectionFromHash === 'all-series-section') {
@@ -1895,6 +1973,7 @@ async function initializeApp(): Promise<void> {
             }
         } else {
             UI.showSection('media-dashboard-section');
+            updateMainMenuActiveState('dashboard');
         }
     } catch (error) {
         recordSectionFailure('initialize', '/initialize/app', error, { phase: 'initialize' });
@@ -2319,6 +2398,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Navigation
+    DOM.mainMenuLinks.forEach(link => {
+        link.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const target = parseMainMenuTarget((link as HTMLElement).dataset.mainTarget);
+            await navigateMainMenu(target);
+        });
+    });
+
     DOM.mainNavLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -2342,6 +2429,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadPremieresSeries();
                 }
                 UI.showSection(targetId);
+                updateMainMenuActiveState(getMainMenuTargetFromSection(targetId));
             }
         });
     });
@@ -2386,6 +2474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.backToDashboardFromLibraryBtn?.addEventListener('click', () => {
         UI.renderMediaDashboard();
         UI.showSection('media-dashboard-section');
+        updateMainMenuActiveState('dashboard');
     });
 
     DOM.mediaDashboardSection?.addEventListener('click', async (event) => {
@@ -2402,6 +2491,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         UI.renderAllSeries();
         UI.showSection('all-series-section');
+        if (cardMediaType === 'series' || cardMediaType === 'movie' || cardMediaType === 'book') {
+            updateMainMenuActiveState(cardMediaType);
+        } else {
+            updateMainMenuActiveState('library');
+        }
     });
 
     // Header Search
@@ -2425,6 +2519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             S.resetSearchAbortController();
             DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
             UI.showSection('add-series-section');
+            updateMainMenuActiveState('series');
             runObservedSection(
                 'search',
                 endpoint,
@@ -2843,6 +2938,9 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.trailerModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.trailerModal && UI.closeTrailerModal());
     DOM.notificationOkBtn?.addEventListener('click', UI.closeNotificationModal);
     DOM.notificationModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.notificationModal && UI.closeNotificationModal());
+    DOM.notificationsBtn?.addEventListener('click', () => {
+        UI.showNotification('Centro de notificações em preparação para os próximos passos.');
+    });
     DOM.openLibrarySearchBtn?.addEventListener('click', UI.openLibrarySearchModal);
     DOM.librarySearchModalCloseBtn?.addEventListener('click', UI.closeLibrarySearchModal);
     DOM.librarySearchModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.librarySearchModal && UI.closeLibrarySearchModal());
