@@ -658,6 +658,10 @@ type DashboardUpcomingEntry = {
     label: string;
     source: 'library' | 'suggested-movie' | 'suggested-book';
 };
+type DashboardSuggestionEntry = {
+    item: Series;
+    reason: string;
+};
 
 type DashboardTopGenre = {
     label: string;
@@ -672,11 +676,20 @@ const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
 const DASHBOARD_UPCOMING_RECENT_BOOK_DAYS = 365;
 const DASHBOARD_UPCOMING_CACHE_TTL_MS = 20 * 60 * 1000;
+const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
+const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
+const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
+const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
 let dashboardUpcomingCacheExpiresAt = 0;
 let dashboardUpcomingInFlight: Promise<void> | null = null;
 let dashboardUpcomingRequestVersion = 0;
+let dashboardSuggestedRecommendationEntries: DashboardSuggestionEntry[] = [];
+let dashboardSuggestedCacheSignature = '';
+let dashboardSuggestedCacheExpiresAt = 0;
+let dashboardSuggestedInFlight: Promise<void> | null = null;
+let dashboardSuggestedRequestVersion = 0;
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -887,6 +900,7 @@ function renderDashboardEvolutionChart(): void {
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointStyle: 'line',
                 },
                 {
                     label: 'Filmes',
@@ -896,6 +910,7 @@ function renderDashboardEvolutionChart(): void {
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointStyle: 'line',
                 },
                 {
                     label: 'Livros',
@@ -905,6 +920,7 @@ function renderDashboardEvolutionChart(): void {
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointStyle: 'line',
                 },
             ],
         },
@@ -916,6 +932,11 @@ function renderDashboardEvolutionChart(): void {
                     position: 'bottom',
                     labels: {
                         color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
+                        usePointStyle: true,
+                        pointStyle: 'line',
+                        boxWidth: 34,
+                        boxHeight: 3,
+                        padding: 16,
                     },
                 },
             },
@@ -1061,6 +1082,54 @@ function renderDashboardRecentCarousel(): void {
     });
 }
 
+function renderDashboardSuggestionsCarousel(): void {
+    if (!DOM.dashboardSuggestionsCarousel) return;
+
+    const topGenres = buildTopDashboardGenres();
+    void ensureDashboardRecommendations(topGenres);
+
+    const visibleItems = dashboardSuggestedRecommendationEntries.slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
+    DOM.dashboardSuggestionsCarousel.innerHTML = '';
+
+    if (visibleItems.length === 0) {
+        DOM.dashboardSuggestionsCarousel.innerHTML = dashboardSuggestedInFlight
+            ? '<p class="dashboard-empty-message">A preparar sugestões para ti...</p>'
+            : '<p class="dashboard-empty-message">Adiciona mais conteúdos para gerar sugestões personalizadas.</p>';
+        return;
+    }
+
+    visibleItems.forEach(({ item, reason }) => {
+        const mediaType = item.media_type || 'series';
+        const posterPath = buildPosterUrl(item.poster_path, 'w185', '/placeholders/poster.svg');
+        const releaseYear = item.first_air_date && !Number.isNaN(new Date(item.first_air_date).getTime())
+            ? ` (${new Date(item.first_air_date).getFullYear()})`
+            : '';
+        const badgeLabel = mediaType === 'book' ? 'LIVRO' : mediaType === 'movie' ? 'FILME' : 'SÉRIE';
+        const badgeClass = mediaType === 'book'
+            ? 'is-suggestion-book'
+            : mediaType === 'movie'
+                ? 'is-suggestion-movie'
+                : 'is-suggestion-series';
+
+        const card = el('article', {
+            class: 'dashboard-recent-item dashboard-recent-item--suggested',
+            'data-series-id': String(item.id),
+            'data-media-type': mediaType,
+            role: 'listitem',
+            tabindex: '0',
+            'aria-label': `Abrir sugestão de ${item.name}`,
+            title: `${item.name} • ${reason}`,
+        }, [
+            createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-recent-poster', '/placeholders/poster.svg'),
+            el('div', { class: 'dashboard-recent-content' }, [
+                el('h4', { text: `${item.name}${releaseYear}` }),
+                el('span', { class: `dashboard-status-badge ${badgeClass}`, text: badgeLabel }),
+            ]),
+        ]);
+        DOM.dashboardSuggestionsCarousel.appendChild(card);
+    });
+}
+
 function parseDateOnly(value: string | null | undefined): Date | null {
     if (!value) return null;
     const normalized = String(value).trim();
@@ -1137,6 +1206,261 @@ function buildTopDashboardGenres(): DashboardTopGenre[] {
             movieGenreId: resolveMovieGenreId(normalized),
             bookQuery: data.label,
         }));
+}
+
+function getDashboardMediaKey(item: Series): string {
+    const mediaType = item.media_type || 'series';
+    return `${mediaType}:${item.id}`;
+}
+
+function dedupeSeriesByMedia(items: Series[]): Series[] {
+    const deduped = new Map<string, Series>();
+    items.forEach((item) => {
+        const key = getDashboardMediaKey(item);
+        if (!deduped.has(key)) {
+            deduped.set(key, item);
+        }
+    });
+    return Array.from(deduped.values());
+}
+
+function pickSuggestionItems(
+    candidates: Series[],
+    expectedMediaType: MediaType,
+    libraryKeys: Set<string>,
+    usedKeys: Set<string>,
+    limit: number
+): Series[] {
+    const picked: Series[] = [];
+    candidates.forEach((candidate) => {
+        if (picked.length >= limit) return;
+        const mediaType = candidate.media_type || 'series';
+        if (mediaType !== expectedMediaType) return;
+        const key = getDashboardMediaKey(candidate);
+        if (libraryKeys.has(key) || usedKeys.has(key)) return;
+        if (!candidate.id || !candidate.name) return;
+        usedKeys.add(key);
+        picked.push(candidate);
+    });
+    return picked;
+}
+
+function buildDashboardSuggestedMediaPayload(): Series[] {
+    const allItems = [
+        ...dashboardSuggestedUpcomingEntries.map((entry) => entry.item),
+        ...dashboardSuggestedRecommendationEntries.map((entry) => entry.item),
+    ];
+    return dedupeSeriesByMedia(allItems);
+}
+
+function syncDashboardSuggestedMediaStore(): void {
+    S.setDashboardSuggestedMedia(buildDashboardSuggestedMediaPayload());
+}
+
+async function fetchSuggestedSeriesEntries(
+    topGenres: DashboardTopGenre[],
+    libraryKeys: Set<string>,
+    preferHistory: boolean
+): Promise<DashboardSuggestionEntry[]> {
+    const candidates: Series[] = [];
+    if (preferHistory) {
+        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+        const searchResults = await Promise.allSettled(
+            queries.map((query) => API.searchSeries(query, new AbortController().signal))
+        );
+        searchResults.forEach((result) => {
+            if (result.status !== 'fulfilled') return;
+            candidates.push(...result.value.results);
+        });
+    }
+
+    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+        try {
+            const trending = await API.fetchTrending('week', new AbortController().signal, 'series');
+            candidates.push(...trending.results);
+        } catch (error) {
+            console.warn('[dashboard] Falha ao carregar sugestões de séries em tendência.', error);
+        }
+    }
+
+    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+        try {
+            const topRated = await API.fetchPopularSeries(1, 'series');
+            candidates.push(...topRated.results);
+        } catch (error) {
+            console.warn('[dashboard] Falha ao carregar sugestões de séries top rated.', error);
+        }
+    }
+
+    const dedupedCandidates = dedupeSeriesByMedia(candidates);
+    const usedKeys = new Set<string>();
+    const picked = pickSuggestionItems(dedupedCandidates, 'series', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const reason = preferHistory && topGenres[0]?.label
+        ? `Baseado em ${topGenres[0].label}`
+        : 'Baseado nas tendências';
+    return picked.map((item) => ({ item, reason }));
+}
+
+async function fetchSuggestedMovieEntries(
+    topGenres: DashboardTopGenre[],
+    libraryKeys: Set<string>,
+    preferHistory: boolean
+): Promise<DashboardSuggestionEntry[]> {
+    const candidates: Series[] = [];
+    if (preferHistory) {
+        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+        const searchResults = await Promise.allSettled(
+            queries.map((query) => API.searchMovies(query, new AbortController().signal))
+        );
+        searchResults.forEach((result) => {
+            if (result.status !== 'fulfilled') return;
+            candidates.push(...result.value.results);
+        });
+    }
+
+    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+        try {
+            const trending = await API.fetchTrending('week', new AbortController().signal, 'movie');
+            candidates.push(...trending.results);
+        } catch (error) {
+            console.warn('[dashboard] Falha ao carregar sugestões de filmes em tendência.', error);
+        }
+    }
+
+    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+        try {
+            const topRated = await API.fetchPopularSeries(1, 'movie');
+            candidates.push(...topRated.results);
+        } catch (error) {
+            console.warn('[dashboard] Falha ao carregar sugestões de filmes top rated.', error);
+        }
+    }
+
+    const dedupedCandidates = dedupeSeriesByMedia(candidates);
+    const usedKeys = new Set<string>();
+    const picked = pickSuggestionItems(dedupedCandidates, 'movie', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const reason = preferHistory && topGenres[0]?.label
+        ? `Baseado em ${topGenres[0].label}`
+        : 'Baseado nas tendências';
+    return picked.map((item) => ({ item, reason }));
+}
+
+async function fetchSuggestedBookEntries(
+    topGenres: DashboardTopGenre[],
+    libraryKeys: Set<string>,
+    preferHistory: boolean
+): Promise<DashboardSuggestionEntry[]> {
+    const candidates: Series[] = [];
+    const preferredQueries = topGenres
+        .map((genre) => genre.bookQuery.trim())
+        .filter((query) => query.length >= 2)
+        .slice(0, 3)
+        .map((query) => `subject:${query}`);
+    const fallbackQueries = ['subject:fiction', 'subject:drama'];
+    const queries = preferHistory && preferredQueries.length > 0 ? preferredQueries : fallbackQueries;
+
+    const searchResults = await Promise.allSettled(
+        queries.map((query) => API.searchBooks(query, new AbortController().signal))
+    );
+    searchResults.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        candidates.push(...result.value.results);
+    });
+
+    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+        try {
+            const bestsellers = await API.searchBooks('bestsellers', new AbortController().signal);
+            candidates.push(...bestsellers.results);
+        } catch (error) {
+            console.warn('[dashboard] Falha ao carregar sugestões de livros populares.', error);
+        }
+    }
+
+    const dedupedCandidates = dedupeSeriesByMedia(candidates);
+    const usedKeys = new Set<string>();
+    const picked = pickSuggestionItems(dedupedCandidates, 'book', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const reason = preferHistory && topGenres[0]?.label
+        ? `Baseado em ${topGenres[0].label}`
+        : 'Baseado em preferências gerais';
+    return picked.map((item) => ({ item, reason }));
+}
+
+function interleaveSuggestionEntries(
+    seriesEntries: DashboardSuggestionEntry[],
+    movieEntries: DashboardSuggestionEntry[],
+    bookEntries: DashboardSuggestionEntry[]
+): DashboardSuggestionEntry[] {
+    const pools = [seriesEntries, movieEntries, bookEntries];
+    const indexes = [0, 0, 0];
+    const picked: DashboardSuggestionEntry[] = [];
+    const seenKeys = new Set<string>();
+
+    while (picked.length < DASHBOARD_SUGGESTED_MAX_TOTAL) {
+        let addedInRound = false;
+        for (let poolIndex = 0; poolIndex < pools.length; poolIndex += 1) {
+            const pool = pools[poolIndex];
+            const idx = indexes[poolIndex];
+            if (idx >= pool.length) continue;
+            indexes[poolIndex] += 1;
+            const candidate = pool[idx];
+            const key = getDashboardMediaKey(candidate.item);
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+            picked.push(candidate);
+            addedInRound = true;
+            if (picked.length >= DASHBOARD_SUGGESTED_MAX_TOTAL) break;
+        }
+        if (!addedInRound) break;
+    }
+
+    return picked;
+}
+
+async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): Promise<void> {
+    const libraryCount = S.myWatchlist.length + S.myArchive.length;
+    const signature = [
+        `watchlist:${S.myWatchlist.length}`,
+        `archive:${S.myArchive.length}`,
+        ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
+    ].join('|');
+
+    const now = Date.now();
+    if (
+        signature === dashboardSuggestedCacheSignature
+        && now < dashboardSuggestedCacheExpiresAt
+    ) {
+        return;
+    }
+    if (dashboardSuggestedInFlight) return;
+
+    const requestVersion = ++dashboardSuggestedRequestVersion;
+    const libraryKeys = new Set(
+        [...S.myWatchlist, ...S.myArchive].map((item) => getDashboardMediaKey(item))
+    );
+    const preferHistory = libraryCount >= DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS && topGenres.length > 0;
+
+    dashboardSuggestedInFlight = (async () => {
+        const [seriesEntries, movieEntries, bookEntries] = await Promise.all([
+            fetchSuggestedSeriesEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
+            fetchSuggestedMovieEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
+            fetchSuggestedBookEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
+        ]);
+
+        if (requestVersion !== dashboardSuggestedRequestVersion) return;
+        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries);
+        dashboardSuggestedCacheSignature = signature;
+        dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
+        syncDashboardSuggestedMediaStore();
+        renderDashboardSuggestionsCarousel();
+    })()
+        .catch((error) => {
+            console.warn('[dashboard] Falha ao gerar sugestões para ti.', error);
+        })
+        .finally(() => {
+            if (requestVersion === dashboardSuggestedRequestVersion) {
+                dashboardSuggestedInFlight = null;
+            }
+        });
 }
 
 function dedupeUpcomingEntries(entries: DashboardUpcomingEntry[]): DashboardUpcomingEntry[] {
@@ -1311,7 +1635,7 @@ async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[]
         dashboardSuggestedUpcomingEntries = [];
         dashboardUpcomingCacheSignature = '';
         dashboardUpcomingCacheExpiresAt = 0;
-        S.setDashboardSuggestedMedia([]);
+        syncDashboardSuggestedMediaStore();
         if (hadSuggestions) {
             renderDashboardUpcomingReleases();
         }
@@ -1340,7 +1664,7 @@ async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[]
         ]);
         if (requestVersion !== dashboardUpcomingRequestVersion) return;
         dashboardSuggestedUpcomingEntries = [...movieSuggestions, ...bookSuggestions];
-        S.setDashboardSuggestedMedia(dashboardSuggestedUpcomingEntries.map((entry) => entry.item));
+        syncDashboardSuggestedMediaStore();
         dashboardUpcomingCacheSignature = signature;
         dashboardUpcomingCacheExpiresAt = Date.now() + DASHBOARD_UPCOMING_CACHE_TTL_MS;
         renderDashboardUpcomingReleases();
@@ -1434,6 +1758,7 @@ export function renderMediaDashboard() {
     renderDashboardEvolutionChart();
     renderDashboardGenresChart();
     renderDashboardRecentCarousel();
+    renderDashboardSuggestionsCarousel();
     renderDashboardUpcomingReleases();
 }
 

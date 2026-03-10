@@ -38,6 +38,7 @@ export const dashboardEvolutionChart = document.getElementById('dashboard-evolut
 export const dashboardGenresChart = document.getElementById('dashboard-genres-chart') as HTMLCanvasElement;
 export const dashboardGenresLegend = document.getElementById('dashboard-genres-legend') as HTMLUListElement;
 export const dashboardRecentCarousel = document.getElementById('dashboard-recent-carousel') as HTMLDivElement;
+export const dashboardSuggestionsCarousel = document.getElementById('dashboard-suggestions-carousel') as HTMLDivElement;
 export const dashboardUpcomingList = document.getElementById('dashboard-upcoming-list') as HTMLDivElement;
 export const seriesViewSection = document.getElementById('series-view-section') as HTMLElement;
 export const episodeModal = document.getElementById('episode-modal') as HTMLDivElement;
