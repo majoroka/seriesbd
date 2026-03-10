@@ -828,15 +828,19 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
     };
 }
 
-function getLastSixMonthLabels(): string[] {
+function getLastTwelveMonthTimeline(): { labels: string[]; keys: string[] } {
     const labels: string[] = [];
+    const keys: string[] = [];
     const now = new Date();
-    for (let offset = 5; offset >= 0; offset -= 1) {
+    for (let offset = 11; offset >= 0; offset -= 1) {
         const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
         const shortMonth = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '');
-        labels.push(shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1));
+        const yearShort = date.getFullYear().toString().slice(-2);
+        labels.push(`${shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1)} ${yearShort}`);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        keys.push(monthKey);
     }
-    return labels;
+    return { labels, keys };
 }
 
 function renderDashboardEvolutionChart(): void {
@@ -844,7 +848,8 @@ function renderDashboardEvolutionChart(): void {
     const ctx = DOM.dashboardEvolutionChart.getContext('2d');
     if (!ctx) return;
 
-    const labels = getLastSixMonthLabels();
+    const { labels, keys } = getLastTwelveMonthTimeline();
+    const keyToIndex = new Map<string, number>(keys.map((key, index) => [key, index]));
     const evolutionBuckets: Record<MediaType, number[]> = {
         series: new Array(labels.length).fill(0),
         movie: new Array(labels.length).fill(0),
@@ -856,18 +861,13 @@ function renderDashboardEvolutionChart(): void {
         const mediaType = item.media_type || 'series';
         const consumedHours = getItemConsumedHours(item);
         if (!Number.isFinite(consumedHours) || consumedHours <= 0) return;
-
-        const progress = resolveDashboardProgress(item);
-        const span = isItemArchived(item) || progress >= 100 ? labels.length : Math.min(labels.length, progress > 0 ? 4 : 2);
-        const weights = Array.from({ length: span }, (_, index) => span - index);
-        const totalWeight = weights.reduce((sum, value) => sum + value, 0);
-        if (totalWeight <= 0) return;
-
-        for (let step = 0; step < span; step += 1) {
-            const targetIndex = labels.length - 1 - step;
-            if (targetIndex < 0) break;
-            evolutionBuckets[mediaType][targetIndex] += (consumedHours * weights[step]) / totalWeight;
-        }
+        const anchorDateRaw = item._lastUpdated || item.first_air_date || '';
+        const anchorDate = new Date(anchorDateRaw);
+        if (Number.isNaN(anchorDate.getTime())) return;
+        const monthKey = `${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, '0')}`;
+        const bucketIndex = keyToIndex.get(monthKey);
+        if (typeof bucketIndex !== 'number') return;
+        evolutionBuckets[mediaType][bucketIndex] += consumedHours;
     });
 
     if (S.charts.dashboardEvolution) {
@@ -923,6 +923,8 @@ function renderDashboardEvolutionChart(): void {
                 x: {
                     ticks: {
                         color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
+                        autoSkip: true,
+                        maxRotation: 0,
                     },
                     grid: {
                         color: getComputedStyle(document.body).getPropertyValue('--chart-grid-color').trim(),
