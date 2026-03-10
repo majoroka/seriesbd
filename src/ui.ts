@@ -944,9 +944,7 @@ function renderDashboardEvolutionChart(): void {
 }
 
 function renderDashboardGenresChart(): void {
-    if (!DOM.dashboardGenresChart || !DOM.dashboardGenresLegend) return;
-    const ctx = DOM.dashboardGenresChart.getContext('2d');
-    if (!ctx) return;
+    if (!DOM.dashboardGenresLegend) return;
 
     const allItems = [...S.myWatchlist, ...S.myArchive];
     const genreCounts: Record<string, number> = {};
@@ -963,44 +961,15 @@ function renderDashboardGenresChart(): void {
     const otherCount = sortedGenres.slice(5).reduce((sum, [, count]) => sum + count, 0);
     if (otherCount > 0) topGenres.push(['Outros', otherCount]);
 
-    const labels = topGenres.map(([name]) => name);
     const values = topGenres.map(([, count]) => count);
     const hasData = values.length > 0;
     const total = values.reduce((sum, value) => sum + value, 0);
-    const chartLabels = hasData ? labels : ['Sem dados'];
-    const chartValues = hasData ? values : [1];
     const palette = ['#47ABD2', '#D24665', '#7DC86E', '#F08F44', '#6DB0FF', '#BED984'];
-    const chartColors = hasData ? chartLabels.map((_, index) => palette[index % palette.length]) : ['#4A4A4A'];
 
     if (S.charts.dashboardGenres) {
         S.charts.dashboardGenres.destroy();
+        delete S.charts.dashboardGenres;
     }
-
-    S.charts.dashboardGenres = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: chartLabels,
-            datasets: [
-                {
-                    data: chartValues,
-                    backgroundColor: chartColors,
-                    borderColor: getComputedStyle(document.body).getPropertyValue('--bg-card').trim(),
-                    borderWidth: 2,
-                    hoverOffset: 6,
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '46%',
-            plugins: {
-                legend: {
-                    display: false,
-                },
-            },
-        },
-    });
 
     DOM.dashboardGenresLegend.innerHTML = '';
     if (!hasData) {
@@ -1011,12 +980,20 @@ function renderDashboardGenresChart(): void {
     topGenres.forEach(([name, count], index) => {
         const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
         const item = el('li', { class: 'dashboard-legend-item' }, [
-            el('span', {
-                class: 'dashboard-legend-color',
-                style: `background-color: ${palette[index % palette.length]}`,
-            }),
-            el('span', { class: 'dashboard-legend-label', text: name }),
-            el('span', { class: 'dashboard-legend-value', text: `${percentage}%` }),
+            el('div', { class: 'dashboard-legend-head' }, [
+                el('span', {
+                    class: 'dashboard-legend-color',
+                    style: `background-color: ${palette[index % palette.length]}`,
+                }),
+                el('span', { class: 'dashboard-legend-label', text: name }),
+                el('span', { class: 'dashboard-legend-value', text: `${percentage}%` }),
+            ]),
+            el('div', { class: 'dashboard-legend-track' }, [
+                el('span', {
+                    class: 'dashboard-legend-fill',
+                    style: `width:${percentage}%;background-color:${palette[index % palette.length]}`,
+                }),
+            ]),
         ]);
         DOM.dashboardGenresLegend.appendChild(item);
     });
