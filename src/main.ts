@@ -165,11 +165,13 @@ function applySubmenuForMainTarget(mainTarget: MainMenuTarget): void {
     const mediaTarget = getSubmenuMediaTarget(mainTarget);
     if (!mediaTarget) {
         UI.setScopedLibraryMediaType('all');
+        UI.setScopedStatsMediaType('all');
         return;
     }
 
     activeSubmenuMediaTarget = mediaTarget;
     UI.setScopedLibraryMediaType(mediaTarget);
+    UI.setScopedStatsMediaType(mediaTarget);
     updateSectionHeadingsForMediaTarget(mediaTarget);
 
     const labels = getSubmenuLabels(mediaTarget);
@@ -214,6 +216,7 @@ function getMainMenuTargetFromSection(targetSection: string): MainMenuTarget {
 async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
     updateMainMenuActiveState(target);
     if (target === 'dashboard') {
+        UI.setScopedStatsMediaType('all');
         UI.renderMediaDashboard();
         UI.showSection('media-dashboard-section');
         return;
@@ -225,6 +228,7 @@ async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
         S.setAllSeriesGenreFilter('all');
         if (DOM.allSeriesGenreFilter) DOM.allSeriesGenreFilter.value = 'all';
         UI.setScopedLibraryMediaType('all');
+        UI.setScopedStatsMediaType('all');
         UI.renderAllSeries();
         UI.showSection('all-series-section');
         return;
@@ -232,6 +236,7 @@ async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
 
     if (target === 'series' || target === 'movie' || target === 'book') {
         UI.setScopedLibraryMediaType(target);
+        UI.setScopedStatsMediaType(target);
         UI.renderWatchlist();
         UI.renderUnseen();
     }

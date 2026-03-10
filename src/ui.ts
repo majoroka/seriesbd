@@ -19,6 +19,7 @@ const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]
 const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[] = [];
 let modalA11yInitialized = false;
 let scopedLibraryMediaType: 'all' | MediaType = 'all';
+let scopedStatsMediaType: 'all' | MediaType = 'all';
 
 export function setScopedLibraryMediaType(mediaType: 'all' | MediaType): void {
     if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book' || mediaType === 'all') {
@@ -26,6 +27,14 @@ export function setScopedLibraryMediaType(mediaType: 'all' | MediaType): void {
         return;
     }
     scopedLibraryMediaType = 'all';
+}
+
+export function setScopedStatsMediaType(mediaType: 'all' | MediaType): void {
+    if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book' || mediaType === 'all') {
+        scopedStatsMediaType = mediaType;
+        return;
+    }
+    scopedStatsMediaType = 'all';
 }
 
 function getMediaTypeLabel(mediaType: MediaType): string {
@@ -342,6 +351,11 @@ export function closeAuthModal() {
 }
 
 export function openAllRatingsModal() {
+    const summary = buildStatsSummary();
+    const allRatingsTitle = document.getElementById('all-ratings-modal-title');
+    if (allRatingsTitle) {
+        allRatingsTitle.textContent = `As Minhas Avaliações (${summary.meta.ratingPlural})`;
+    }
     renderRatingsSummary();
     showModal(DOM.allRatingsModal, DOM.allRatingsModalCloseBtn);
 }
@@ -351,7 +365,8 @@ export function closeAllRatingsModal() {
 }
 
 export function openSeriesByRatingModal(rating: number) {
-    DOM.seriesByRatingModalTitle.textContent = `Séries com ${rating} Estrela${rating > 1 ? 's' : ''}`;
+    const summary = buildStatsSummary();
+    DOM.seriesByRatingModalTitle.textContent = `${summary.meta.ratingPlural} com ${rating} Estrela${rating > 1 ? 's' : ''}`;
     renderRatedSeriesByRating(rating);
     showModal(DOM.seriesByRatingModal, DOM.seriesByRatingModalCloseBtn);
 }
@@ -1620,35 +1635,273 @@ export function updateSeasonProgressUI(seriesId: number, seasonNumber: number) {
     }
 }
 
-export function updateKeyStats(animate = false): { totalSeries: number, activeSeries: number, watchedEpisodes: number, unwatchedEpisodes: number, watchTime: number } {
-    const allUserSeries = [...S.myWatchlist, ...S.myArchive];
-    let totalWatchedEpisodes = 0;
-    let totalEpisodesInLibrary = 0;
-    let totalWatchTimeMinutes = 0;
-    let activeSeriesCount = 0;
-    allUserSeries.forEach(series => {
-        if ((series.media_type || 'series') !== 'series') {
-            if (getMediaProgressPercent(series) > 0) activeSeriesCount++;
+type StatsMediaContext = 'series' | 'movie' | 'book' | 'all';
+type StatsTertiaryMode = 'duration' | 'percent';
+
+type StatsUiMeta = {
+    sectionTitle: string;
+    primaryLabel: string;
+    secondaryLabel: string;
+    tertiaryLabel: string;
+    doughnutTitle: string;
+    genresTitle: string;
+    yearsTitle: string;
+    topRatedTitle: string;
+    topRatedEmptyMessage: string;
+    noRatedAtValueMessage: string;
+    viewAllRatingsLabel: string;
+    ratingSingular: string;
+    ratingPlural: string;
+    doughnutPendingLabel: string;
+    doughnutConsumedLabel: string;
+    doughnutCenterLabel: string;
+    genreDatasetLabel: string;
+    yearDatasetLabel: string;
+    tertiaryMode: StatsTertiaryMode;
+};
+
+type StatsSummary = {
+    context: StatsMediaContext;
+    meta: StatsUiMeta;
+    totalItems: number;
+    inProgressItems: number;
+    completedItems: number;
+    activeItems: number;
+    consumedUnits: number;
+    pendingUnits: number;
+    totalTimeMinutes: number;
+    averageProgressPercent: number;
+    primaryValue: number;
+    secondaryValue: number;
+    tertiaryValue: number;
+};
+
+function getStatsMediaContext(): StatsMediaContext {
+    if (scopedStatsMediaType === 'series' || scopedStatsMediaType === 'movie' || scopedStatsMediaType === 'book') {
+        return scopedStatsMediaType;
+    }
+    return 'all';
+}
+
+function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
+    if (context === 'movie') {
+        return {
+            sectionTitle: 'Estatísticas de Filmes',
+            primaryLabel: 'Filmes Vistos',
+            secondaryLabel: 'Filmes por Ver',
+            tertiaryLabel: 'Tempo de Cinema',
+            doughnutTitle: 'Filmes Vistos vs. Por Ver',
+            genresTitle: 'Top Géneros de Filmes',
+            yearsTitle: 'Filmes por Ano de Lançamento',
+            topRatedTitle: 'Os Meus Filmes Favoritos',
+            topRatedEmptyMessage: 'Ainda não avaliou nenhum filme.',
+            noRatedAtValueMessage: 'Nenhum filme com esta classificação.',
+            viewAllRatingsLabel: 'Ver Todas as Avaliações',
+            ratingSingular: 'Filme',
+            ratingPlural: 'Filmes',
+            doughnutPendingLabel: 'Por Ver',
+            doughnutConsumedLabel: 'Vistos',
+            doughnutCenterLabel: 'Filmes Ativos',
+            genreDatasetLabel: 'Nº de Filmes',
+            yearDatasetLabel: 'Nº de Filmes',
+            tertiaryMode: 'duration',
+        };
+    }
+    if (context === 'book') {
+        return {
+            sectionTitle: 'Estatísticas de Livros',
+            primaryLabel: 'Livros Concluídos',
+            secondaryLabel: 'Livros por Ler',
+            tertiaryLabel: 'Progresso Médio',
+            doughnutTitle: 'Livros Concluídos vs. Por Ler',
+            genresTitle: 'Top Géneros de Livros',
+            yearsTitle: 'Livros por Ano de Publicação',
+            topRatedTitle: 'Os Meus Livros Favoritos',
+            topRatedEmptyMessage: 'Ainda não avaliou nenhum livro.',
+            noRatedAtValueMessage: 'Nenhum livro com esta classificação.',
+            viewAllRatingsLabel: 'Ver Todas as Avaliações',
+            ratingSingular: 'Livro',
+            ratingPlural: 'Livros',
+            doughnutPendingLabel: 'Por Ler',
+            doughnutConsumedLabel: 'Concluídos',
+            doughnutCenterLabel: 'Livros Ativos',
+            genreDatasetLabel: 'Nº de Livros',
+            yearDatasetLabel: 'Nº de Livros',
+            tertiaryMode: 'percent',
+        };
+    }
+    if (context === 'all') {
+        return {
+            sectionTitle: 'Estatísticas Gerais',
+            primaryLabel: 'Itens Concluídos',
+            secondaryLabel: 'Itens por Concluir',
+            tertiaryLabel: 'Progresso Médio',
+            doughnutTitle: 'Concluídos vs. Por Concluir',
+            genresTitle: 'Top Géneros na Biblioteca',
+            yearsTitle: 'Conteúdos por Ano de Lançamento',
+            topRatedTitle: 'Os Meus Favoritos',
+            topRatedEmptyMessage: 'Ainda não avaliou conteúdos.',
+            noRatedAtValueMessage: 'Nenhum conteúdo com esta classificação.',
+            viewAllRatingsLabel: 'Ver Todas as Avaliações',
+            ratingSingular: 'Item',
+            ratingPlural: 'Itens',
+            doughnutPendingLabel: 'Por Concluir',
+            doughnutConsumedLabel: 'Concluídos',
+            doughnutCenterLabel: 'Itens Ativos',
+            genreDatasetLabel: 'Nº de Itens',
+            yearDatasetLabel: 'Nº de Itens',
+            tertiaryMode: 'percent',
+        };
+    }
+    return {
+        sectionTitle: 'Estatísticas de Séries',
+        primaryLabel: 'Episódios Vistos',
+        secondaryLabel: 'Episódios por Ver',
+        tertiaryLabel: 'Tempo na TV',
+        doughnutTitle: 'Episódios Vistos vs. Por Ver',
+        genresTitle: 'Top Géneros na Biblioteca',
+        yearsTitle: 'Séries por Ano de Lançamento',
+        topRatedTitle: 'As Minhas Séries Favoritas',
+        topRatedEmptyMessage: 'Ainda não avaliou nenhuma série.',
+        noRatedAtValueMessage: 'Nenhuma série com esta classificação.',
+        viewAllRatingsLabel: 'Ver Todas as Avaliações',
+        ratingSingular: 'Série',
+        ratingPlural: 'Séries',
+        doughnutPendingLabel: 'Por Ver',
+        doughnutConsumedLabel: 'Vistos',
+        doughnutCenterLabel: 'Séries Ativas',
+        genreDatasetLabel: 'Nº de Séries',
+        yearDatasetLabel: 'Nº de Séries',
+        tertiaryMode: 'duration',
+    };
+}
+
+function getContextItems(context: StatsMediaContext): Series[] {
+    const allItems = [...S.myWatchlist, ...S.myArchive];
+    if (context === 'all') return allItems;
+    return allItems.filter((item) => (item.media_type || 'series') === context);
+}
+
+function buildStatsSummary(): StatsSummary {
+    const context = getStatsMediaContext();
+    const meta = getStatsUiMeta(context);
+    const items = getContextItems(context);
+
+    let completedItems = 0;
+    let inProgressItems = 0;
+    let consumedUnits = 0;
+    let pendingUnits = 0;
+    let totalTimeMinutes = 0;
+    let progressSum = 0;
+
+    items.forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        const isArchived = S.myArchive.some((archived) => archived.media_type === mediaType && archived.id === item.id);
+
+        if (mediaType === 'series') {
+            const watchedCount = S.watchedState[item.id]?.length || 0;
+            const totalEpisodes = item.total_episodes || 0;
+            const episodeProgress = totalEpisodes > 0 ? Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100)) : 0;
+            const isCompleted = isArchived || (totalEpisodes > 0 && watchedCount >= totalEpisodes);
+
+            progressSum += isCompleted ? 100 : episodeProgress;
+            if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
+            if (isCompleted) completedItems += 1;
+
+            totalTimeMinutes += watchedCount * (item.episode_run_time || 30);
+
+            if (context === 'series') {
+                consumedUnits += watchedCount;
+                pendingUnits += Math.max(totalEpisodes - watchedCount, 0);
+            } else {
+                if (isCompleted) consumedUnits += 1;
+                else pendingUnits += 1;
+            }
             return;
         }
-        const watchedCount = S.watchedState[series.id]?.length || 0;
-        const isInArchive = S.myArchive.some(s => s.id === series.id);
-        if (watchedCount > 0 || isInArchive) activeSeriesCount++;
-        totalWatchedEpisodes += watchedCount;
-        totalEpisodesInLibrary += series.total_episodes || 0;
-        totalWatchTimeMinutes += watchedCount * (series.episode_run_time || 30);
+
+        const progress = isArchived ? 100 : getMediaProgressPercent(item);
+        const isCompleted = isArchived || progress >= 100;
+        progressSum += isCompleted ? 100 : progress;
+        if (progress > 0 && progress < 100) inProgressItems += 1;
+        if (isCompleted) completedItems += 1;
+
+        if (isCompleted) consumedUnits += 1;
+        else pendingUnits += 1;
+
+        if (mediaType === 'movie') {
+            const runtime = typeof item.episode_run_time === 'number' && item.episode_run_time > 0 ? item.episode_run_time : 0;
+            totalTimeMinutes += Math.round(runtime * (Math.max(0, Math.min(100, progress)) / 100));
+        }
     });
-    const totalUnwatchedEpisodes = totalEpisodesInLibrary - totalWatchedEpisodes;
+
+    const totalItems = items.length;
+    const activeItems = inProgressItems + completedItems;
+    const averageProgressPercent = totalItems > 0 ? Math.round(progressSum / totalItems) : 0;
+    const primaryValue = context === 'series' ? consumedUnits : completedItems;
+    const secondaryValue = context === 'series' ? pendingUnits : Math.max(totalItems - completedItems, 0);
+    const tertiaryValue = meta.tertiaryMode === 'duration' ? totalTimeMinutes : averageProgressPercent;
+
+    return {
+        context,
+        meta,
+        totalItems,
+        inProgressItems,
+        completedItems,
+        activeItems,
+        consumedUnits: Math.max(0, consumedUnits),
+        pendingUnits: Math.max(0, pendingUnits),
+        totalTimeMinutes: Math.max(0, totalTimeMinutes),
+        averageProgressPercent: Math.max(0, Math.min(100, averageProgressPercent)),
+        primaryValue: Math.max(0, primaryValue),
+        secondaryValue: Math.max(0, secondaryValue),
+        tertiaryValue: Math.max(0, tertiaryValue),
+    };
+}
+
+function applyStatsLabels(summary: StatsSummary): void {
+    const sectionTitle = document.getElementById('stats-section-title');
+    const primaryLabel = document.getElementById('stats-primary-label');
+    const secondaryLabel = document.getElementById('stats-secondary-label');
+    const tertiaryLabel = document.getElementById('stats-tertiary-label');
+    const doughnutTitle = document.getElementById('stats-doughnut-title');
+    const genresTitle = document.getElementById('stats-genres-title');
+    const yearsTitle = document.getElementById('stats-years-title');
+    const topRatedTitle = document.getElementById('stats-top-rated-title');
+
+    if (sectionTitle) sectionTitle.innerHTML = `<i class="fas fa-chart-pie"></i> ${summary.meta.sectionTitle}`;
+    if (primaryLabel) primaryLabel.textContent = summary.meta.primaryLabel;
+    if (secondaryLabel) secondaryLabel.textContent = summary.meta.secondaryLabel;
+    if (tertiaryLabel) tertiaryLabel.textContent = summary.meta.tertiaryLabel;
+    if (doughnutTitle) doughnutTitle.textContent = summary.meta.doughnutTitle;
+    if (genresTitle) genresTitle.textContent = summary.meta.genresTitle;
+    if (yearsTitle) yearsTitle.textContent = summary.meta.yearsTitle;
+    if (topRatedTitle) topRatedTitle.textContent = summary.meta.topRatedTitle;
+}
+
+export function updateKeyStats(animate = false): StatsSummary {
+    const summary = buildStatsSummary();
+    applyStatsLabels(summary);
+
     if (animate) {
-        animateValue(DOM.statWatchedEpisodes, 0, totalWatchedEpisodes, 3000);
-        animateValue(DOM.statUnwatchedEpisodes, 0, totalUnwatchedEpisodes > 0 ? totalUnwatchedEpisodes : 0, 3000);
-        animateDuration(DOM.statWatchTime, 0, totalWatchTimeMinutes, 3000);
+        animateValue(DOM.statWatchedEpisodes, 0, summary.primaryValue, 3000);
+        animateValue(DOM.statUnwatchedEpisodes, 0, summary.secondaryValue, 3000);
+        if (summary.meta.tertiaryMode === 'duration') {
+            animateDuration(DOM.statWatchTime, 0, summary.tertiaryValue, 3000);
+        } else {
+            DOM.statWatchTime.textContent = `${Math.round(summary.tertiaryValue)}%`;
+        }
     } else {
-        DOM.statWatchedEpisodes.textContent = totalWatchedEpisodes.toLocaleString('pt-PT');
-        DOM.statUnwatchedEpisodes.textContent = (totalUnwatchedEpisodes > 0 ? totalUnwatchedEpisodes : 0).toLocaleString('pt-PT');
-        DOM.statWatchTime.innerHTML = formatDuration(totalWatchTimeMinutes, true);
+        DOM.statWatchedEpisodes.textContent = summary.primaryValue.toLocaleString('pt-PT');
+        DOM.statUnwatchedEpisodes.textContent = summary.secondaryValue.toLocaleString('pt-PT');
+        if (summary.meta.tertiaryMode === 'duration') {
+            DOM.statWatchTime.innerHTML = formatDuration(summary.tertiaryValue, true);
+        } else {
+            DOM.statWatchTime.textContent = `${Math.round(summary.tertiaryValue)}%`;
+        }
     }
-    return { totalSeries: allUserSeries.length, activeSeries: activeSeriesCount, watchedEpisodes: totalWatchedEpisodes, unwatchedEpisodes: totalUnwatchedEpisodes > 0 ? totalUnwatchedEpisodes : 0, watchTime: totalWatchTimeMinutes };
+
+    return summary;
 }
 
 function getChartColors() {
@@ -1668,12 +1921,12 @@ function getChartColors() {
     };
 }
 
-function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatchedEpisodes: number, activeSeries: number }) {
+function renderWatchedUnwatchedChart(stats: StatsSummary) {
     const canvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const watchedCount = stats.watchedEpisodes;
-    const unwatchedCount = stats.unwatchedEpisodes;
+    const watchedCount = stats.consumedUnits;
+    const unwatchedCount = stats.pendingUnits;
     const colors = getChartColors();
     const isMobile = window.innerWidth <= 768;
     
@@ -1699,7 +1952,7 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
     if (ctx) S.charts.watchedUnwatched = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Por Ver', 'Vistos'],
+            labels: [stats.meta.doughnutPendingLabel, stats.meta.doughnutConsumedLabel],
             datasets: [{ data: [unwatchedCount, watchedCount], backgroundColor: [colors.secondaryAccentTransparent, colors.primaryAccentTransparent.replace('0.7', '0.8')], borderColor: colors.cardBg, borderWidth: borderWidths, borderAlign: 'inner', hoverOffset: 8 }]
         },
         options: {
@@ -1738,13 +1991,13 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
                 chartCtx.fillText(totalSeriesText, centerX, centerY - 12);
                 chartCtx.font = `600 0.7rem ${getComputedStyle(document.body).getPropertyValue('--font-main').trim()}`;
                 chartCtx.fillStyle = colors.textColor;
-                chartCtx.fillText('Séries Ativas', centerX, centerY + 12);
+                chartCtx.fillText(stats.meta.doughnutCenterLabel, centerX, centerY + 12);
             }
         }]
     });
 
     const chart = S.charts.watchedUnwatched;
-    const end = stats.activeSeries;
+    const end = stats.activeItems;
     if (end === 0) {
         chart.options.plugins.doughnutCenterText.animatedValue = end;
         chart.update('none');
@@ -1762,12 +2015,12 @@ function renderWatchedUnwatchedChart(stats: { watchedEpisodes: number, unwatched
 }
 
 
-function renderGenresChart() {
+function renderGenresChart(stats: StatsSummary) {
     const canvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
-    const allSeries = [...S.myWatchlist, ...S.myArchive];
+    const allSeries = getContextItems(stats.context);
     const genreCounts: Record<string, number> = {};
     allSeries.forEach(series => {
         if (!Array.isArray(series.genres)) return;
@@ -1806,7 +2059,7 @@ function renderGenresChart() {
             data: {
                 labels,
                 datasets: [{
-                    label: 'Nº de Séries',
+                    label: stats.meta.genreDatasetLabel,
                     data,
                     backgroundColor: backgroundColors,
                     borderColor: borderColors,
@@ -1841,7 +2094,7 @@ function renderGenresChart() {
     }
 }
 
-function renderAiredYearsChart() {
+function renderAiredYearsChart(stats: StatsSummary) {
     const canvas = document.getElementById('aired-years-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1851,7 +2104,7 @@ function renderAiredYearsChart() {
     if (isMobile) {
         // Em mobile, a altura é controlada pelo CSS.
     }
-    const allSeries = [...S.myWatchlist, ...S.myArchive];
+    const allSeries = getContextItems(stats.context);
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
         if (series.first_air_date) {
@@ -1872,7 +2125,7 @@ function renderAiredYearsChart() {
         data: { 
             labels, 
             datasets: [{ 
-                label: 'Nº de Séries',
+                label: stats.meta.yearDatasetLabel,
                 data,
                 fill: true,
                 backgroundColor: colors.primaryAccentLine,
@@ -1900,12 +2153,12 @@ function renderAiredYearsChart() {
     }
 }
 
-function renderTopRatedSeries() {
+function renderTopRatedSeries(stats: StatsSummary) {
     const container = document.getElementById('top-rated-series-list');
     if (!container) return;
     const existingBtn = container.parentElement?.querySelector('.view-all-btn');
     if (existingBtn) existingBtn.remove();
-    const allSeries = [...S.myWatchlist, ...S.myArchive];
+    const allSeries = getContextItems(stats.context);
     const ratedSeries: (Series & { userRating: number })[] = allSeries.map(series => {
         const userRating = getMediaRating(series);
         if (userRating > 0) return { ...series, userRating };
@@ -1915,7 +2168,7 @@ function renderTopRatedSeries() {
     const topRated = ratedSeries.slice(0, 10);
     container.innerHTML = '';
     if (topRated.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">Ainda não avaliou nenhuma série. Dê uma nota às suas séries para as ver aqui!</p>';
+        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.topRatedEmptyMessage}</p>`;
         return;
     }
     topRated.forEach(series => {
@@ -1937,14 +2190,15 @@ function renderTopRatedSeries() {
         container.appendChild(itemElement);
     });
     if (ratedSeries.length > 10 && container.parentElement) {
-        container.parentElement.appendChild(el('button', { class: 'view-all-btn', text: 'Ver Todas as Avaliações' }));
+        container.parentElement.appendChild(el('button', { class: 'view-all-btn', text: stats.meta.viewAllRatingsLabel }));
     }
 }
 
 function renderRatingsSummary() {
     const container = document.getElementById('ratings-summary-list');
     if (!container) return;
-    const allSeries: Series[] = [...S.myWatchlist, ...S.myArchive];
+    const stats = buildStatsSummary();
+    const allSeries: Series[] = getContextItems(stats.context);
     const ratingsMap: { [key: number]: number } = {};
     allSeries.forEach(series => {
         const rating = getMediaRating(series);
@@ -1960,24 +2214,25 @@ function renderRatingsSummary() {
             hasRatings = true;
             const count = String(ratingsMap[i]);
             const itemElement = el('div', { class: 'rating-summary-item', 'data-rating': String(i) }, [
-                el('div', { class: 'rating-summary-item-label' }, [el('i', { class: 'fas fa-star' }), el('span', { text: `${i} Estrela${i > 1 ? 's' : ''}` })]),
+                el('div', { class: 'rating-summary-item-label' }, [el('i', { class: 'fas fa-star' }), el('span', { text: `${i} Estrela${i > 1 ? 's' : ''} (${stats.meta.ratingPlural})` })]),
                 el('div', { class: 'rating-summary-item-count', text: count })
             ]);
             container.appendChild(itemElement);
         }
     }
     if (!hasRatings) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">Nenhuma série avaliada encontrada.</p>';
+        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.topRatedEmptyMessage}</p>`;
     }
 }
 
 function renderRatedSeriesByRating(rating: number) {
     const container = DOM.seriesByRatingModalResults;
     container.innerHTML = '';
-    const allSeries = [...S.myWatchlist, ...S.myArchive];
+    const stats = buildStatsSummary();
+    const allSeries = getContextItems(stats.context);
     const ratedSeries = allSeries.filter(series => getMediaRating(series) === rating).sort((a, b) => a.name.localeCompare(b.name));
     if (ratedSeries.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">Nenhuma série com esta classificação.</p>';
+        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.noRatedAtValueMessage}</p>`;
         return;
     }
     ratedSeries.forEach(series => {
@@ -2000,15 +2255,15 @@ function renderRatedSeriesByRating(rating: number) {
     });
 }
 
-export function renderStatistics(stats: { totalSeries: number, activeSeries: number, watchedEpisodes: number, unwatchedEpisodes: number, watchTime: number }) {
+export function renderStatistics(stats: StatsSummary) {
     Object.values(S.charts).forEach(chart => {
         if (chart instanceof Chart) chart.destroy();
     });
     S.setCharts({});
     renderWatchedUnwatchedChart(stats);
-    renderGenresChart();
-    renderAiredYearsChart();
-    renderTopRatedSeries();
+    renderGenresChart(stats);
+    renderAiredYearsChart(stats);
+    renderTopRatedSeries(stats);
 }
 
 export function performModalLibrarySearch() {

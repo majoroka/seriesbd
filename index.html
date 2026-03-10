@@ -260,38 +260,38 @@
                 <!-- Statistics Section (Placeholder) -->
                 <section class="card" id="stats-section" style="display: none;">
                     <div class="section-header">
-                        <h2><i class="fas fa-chart-pie"></i> Estatísticas</h2>
+                        <h2 id="stats-section-title"><i class="fas fa-chart-pie"></i> Estatísticas</h2>
                         <button id="export-stats-btn" class="search-bar-button" style="align-self: center;">Exportar Estatísticas</button>
                     </div>
                     <div class="key-stats-grid">
                         <div class="key-stat-card watched-episodes">
-                            <h4>Episódios Vistos</h4>
+                            <h4 id="stats-primary-label">Episódios Vistos</h4>
                             <p id="stat-watched-episodes">0</p>
                         </div>
                         <div class="key-stat-card unwatched-episodes">
-                            <h4>Episódios por Ver</h4>
+                            <h4 id="stats-secondary-label">Episódios por Ver</h4>
                             <p id="stat-unwatched-episodes">0</p>
                         </div>
                         <div class="key-stat-card watch-time">
-                            <h4>Tempo na TV</h4>
+                            <h4 id="stats-tertiary-label">Tempo na TV</h4>
                             <p id="stat-watch-time">0m</p>
                         </div>
                     </div>
                     <div class="charts-grid">
                         <div class="chart-card">
-                            <h3>Episódios Vistos vs. Por Ver</h3>
+                            <h3 id="stats-doughnut-title">Episódios Vistos vs. Por Ver</h3>
                             <canvas id="watched-unwatched-chart"></canvas>
                         </div>
                         <div class="chart-card">
-                            <h3>Top Géneros na Biblioteca</h3>
+                            <h3 id="stats-genres-title">Top Géneros na Biblioteca</h3>
                             <canvas id="genres-chart"></canvas>
                         </div>
                         <div class="chart-card">
-                            <h3>Séries por Ano de Lançamento</h3>
+                            <h3 id="stats-years-title">Séries por Ano de Lançamento</h3>
                             <canvas id="aired-years-chart"></canvas>
                         </div>
                         <div class="chart-card" id="top-rated-series-card">
-                            <h3>As Minhas Séries Favoritas</h3>
+                            <h3 id="stats-top-rated-title">As Minhas Séries Favoritas</h3>
                             <div id="top-rated-series-list">
                                 <!-- O conteúdo será injetado pelo script.js -->
                             </div>
@@ -441,7 +441,7 @@
     <div id="series-by-rating-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="series-by-rating-modal-title" aria-hidden="true">
         <div class="modal-content series-by-rating-modal-content" tabindex="-1">
             <button class="modal-close-btn">&times;</button>
-            <h2 id="series-by-rating-modal-title">Séries Avaliadas</h2>
+            <h2 id="series-by-rating-modal-title">Conteúdos Avaliados</h2>
             <div id="series-by-rating-modal-results">
                 <!-- Scrollable list of series for a specific rating -->
             </div>
