@@ -897,9 +897,11 @@ function renderDashboardEvolutionChart(): void {
                     data: evolutionBuckets.series.map((value) => Number(value.toFixed(1))),
                     borderColor: '#47ABD2',
                     backgroundColor: 'rgba(71, 171, 210, 0.12)',
+                    borderWidth: 4,
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointHoverRadius: 5,
                     pointStyle: 'line',
                 },
                 {
@@ -907,9 +909,11 @@ function renderDashboardEvolutionChart(): void {
                     data: evolutionBuckets.movie.map((value) => Number(value.toFixed(1))),
                     borderColor: '#F08F44',
                     backgroundColor: 'rgba(240, 143, 68, 0.12)',
+                    borderWidth: 4,
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointHoverRadius: 5,
                     pointStyle: 'line',
                 },
                 {
@@ -917,9 +921,11 @@ function renderDashboardEvolutionChart(): void {
                     data: evolutionBuckets.book.map((value) => Number(value.toFixed(1))),
                     borderColor: '#7DC86E',
                     backgroundColor: 'rgba(125, 200, 110, 0.12)',
+                    borderWidth: 4,
                     tension: 0.35,
                     fill: true,
                     pointRadius: 3,
+                    pointHoverRadius: 5,
                     pointStyle: 'line',
                 },
             ],
@@ -934,8 +940,9 @@ function renderDashboardEvolutionChart(): void {
                         color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
                         usePointStyle: true,
                         pointStyle: 'line',
-                        boxWidth: 34,
-                        boxHeight: 3,
+                        pointStyleWidth: 46,
+                        boxWidth: 52,
+                        boxHeight: 10,
                         padding: 16,
                     },
                 },
@@ -1236,6 +1243,8 @@ function pickSuggestionItems(
         if (picked.length >= limit) return;
         const mediaType = candidate.media_type || 'series';
         if (mediaType !== expectedMediaType) return;
+        const hasPoster = typeof candidate.poster_path === 'string' && candidate.poster_path.trim().length > 0;
+        if (!hasPoster) return;
         const key = getDashboardMediaKey(candidate);
         if (libraryKeys.has(key) || usedKeys.has(key)) return;
         if (!candidate.id || !candidate.name) return;
