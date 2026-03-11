@@ -96,9 +96,19 @@
                         <span>Progresso Total <span class="progress-scope">(A Ver)</span>:</span>
                         <span id="global-progress-percentage" class="stats-percentage">0%</span>
                     </div>
-                    <button id="notifications-btn" class="icon-button topbar-icon-button" type="button" aria-label="Notificações">
-                        <i class="fas fa-bell"></i>
-                    </button>
+                    <div class="notifications-menu-wrapper">
+                        <button id="notifications-btn" class="icon-button topbar-icon-button" type="button" aria-label="Notificações" aria-expanded="false" aria-controls="notifications-menu">
+                            <i class="fas fa-bell"></i>
+                            <span id="notifications-badge" class="notifications-badge" hidden>0</span>
+                        </button>
+                        <div id="notifications-menu" class="notifications-menu" role="menu" aria-label="Centro de notificações">
+                            <div class="notifications-menu-header">
+                                <h4>Notificações</h4>
+                                <button id="notifications-mark-all-read-btn" class="notifications-mark-all-btn" type="button" hidden>Marcar tudo como lido</button>
+                            </div>
+                            <div id="notifications-menu-list" class="notifications-menu-list"></div>
+                        </div>
+                    </div>
                     <div class="settings-menu-wrapper account-menu-wrapper">
                         <button id="settings-btn" class="account-menu-trigger" aria-label="Menu da conta" type="button">
                             <span id="topbar-account-avatar" class="account-avatar">U</span>
