@@ -21,6 +21,8 @@
     --segment-label-color: rgba(255, 255, 255, 0.7);
     --segment-label-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
     --chart-grid-color: rgba(255, 255, 255, 0.1);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(25, 25, 25, 0.90) 150px, rgba(25, 25, 25, 0.8) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(25, 25, 25, 0.98) 20%, rgba(25, 25, 25, 0.85) 100%);
     --font-main: 'Rajdhani', sans-serif;
     --font-mono: 'Share Tech Mono', monospace;
 }
@@ -42,6 +44,8 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(22, 34, 48, 0.46) 150px, rgba(22, 34, 48, 0.24) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(22, 34, 48, 0.58) 20%, rgba(22, 34, 48, 0.32) 100%);
 }
 
 body.light-theme .genre-filter select {
@@ -76,6 +80,34 @@ body.light-theme .dashboard-status-badge.is-suggestion-movie {
 body.light-theme .dashboard-status-badge.is-suggestion-book {
     color: #2f6f2b;
     background-color: rgba(125, 200, 110, 0.16);
+}
+
+body.light-theme .v2-title h1,
+body.light-theme .v2-title .release-year,
+body.light-theme .v2-facts,
+body.light-theme .v2-action-label,
+body.light-theme .v2-overview h3,
+body.light-theme .v2-overview p,
+body.light-theme .v2-metadata-item span,
+body.light-theme .v2-metadata-item p,
+body.light-theme .v2-public-ratings .rating-item span {
+    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.42);
+}
+
+body.light-theme .v2-detail-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: rgba(34, 49, 68, 0.12);
+    -webkit-backdrop-filter: saturate(72%) brightness(88%);
+    backdrop-filter: saturate(72%) brightness(88%);
+}
+
+body.light-theme .v2-header-custom-bg {
+    position: relative;
+    z-index: 1;
 }
 
 * {
@@ -2821,8 +2853,7 @@ body.light-theme .network-logo {
 }
 
 .v2-header-custom-bg {
-    /* This creates the dark overlay with a gradient. The color is fixed to ensure text readability on any backdrop. */
-    background-image: linear-gradient(to right, rgba(25, 25, 25, 0.90) 150px, rgba(25, 25, 25, 0.8) 100%);
+    background-image: var(--detail-header-overlay-horizontal);
     padding: 2.5rem;
 }
 
@@ -3898,8 +3929,7 @@ body.light-theme .network-logo {
 
     /* --- V2 Detail View --- */
     .v2-header-custom-bg {
-        /* Change gradient for vertical layout */
-        background-image: linear-gradient(to bottom, rgba(25, 25, 25, 0.98) 20%, rgba(25, 25, 25, 0.85) 100%);
+        background-image: var(--detail-header-overlay-vertical);
     }
 
     .v2-header-content {

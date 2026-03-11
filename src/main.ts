@@ -91,6 +91,7 @@ let notificationReadStateLoaded = false;
 let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
+const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
 const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
@@ -101,6 +102,9 @@ const NOTIFICATION_EPISODE_LOOKAHEAD_DAYS = 30;
 const NOTIFICATION_MOVIE_LOOKAHEAD_DAYS = 60;
 const NOTIFICATION_BOOK_LOOKAHEAD_DAYS = 90;
 const NOTIFICATION_RECENT_RELEASE_DAYS = 7;
+const NEXT_AIRED_BATCH_SIZE = 2;
+const NEXT_AIRED_BATCH_DELAY_MS = 1500;
+const NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS = 90_000;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -1567,6 +1571,8 @@ async function updateNextAired() {
 
     const seriesToFetch = allUserSeries.filter(series => {
         if (series._details?.status === 'Ended') return false; // Não busca atualizações para séries terminadas
+        const retryAt = nextAiredRetryAt.get(series.id) ?? 0;
+        if (retryAt > now) return false;
         if (!series._lastUpdated) return true;
         const lastUpdatedTime = new Date(series._lastUpdated).getTime();
         if (isNaN(lastUpdatedTime)) return true;
@@ -1582,14 +1588,25 @@ async function updateNextAired() {
                     next_episode_to_air: details.next_episode_to_air
                 };
                 series._lastUpdated = new Date().toISOString();
+                nextAiredRetryAt.delete(series.id);
             }).catch(err => {
+                const status = getErrorStatus(err);
+                if (status === 429) {
+                    const retryAtMs = Date.now() + NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS;
+                    nextAiredRetryAt.set(series.id, retryAtMs);
+                    // Atualiza com um "timestamp virtual" para permitir retry em curto prazo
+                    // sem voltar a tentar imediatamente na mesma janela de rate limit.
+                    series._lastUpdated = new Date(Date.now() - oneDay + NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS).toISOString();
+                    console.warn(`Rate limit ao buscar detalhes para ${series.name}. Novo retry em ~${Math.round(NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS / 1000)}s.`);
+                    return;
+                }
                 console.error(`Falha ao buscar detalhes para ${series.name}`, err);
-                // Mesmo em caso de erro, atualiza o timestamp para não tentar novamente de imediato
-                series._lastUpdated = new Date().toISOString(); 
+                // Em erro não-429, atualiza timestamp para evitar loops agressivos.
+                series._lastUpdated = new Date().toISOString();
             });
 
         // Processa em lotes para não sobrecarregar a API
-        const results = await processInBatches(seriesToFetch, 5, 1000, task);
+        const results = await processInBatches(seriesToFetch, NEXT_AIRED_BATCH_SIZE, NEXT_AIRED_BATCH_DELAY_MS, task);
         const updatedSeries = seriesToFetch.filter((_, index) => results[index].status === 'fulfilled');
         if (updatedSeries.length > 0) {
             await db.watchlist.bulkPut(updatedSeries.filter(s => S.myWatchlist.some(ws => ws.id === s.id)));
@@ -1631,7 +1648,7 @@ async function updateNextAired() {
                 await S.updateSeries(series);
             }
         };
-        await processInBatches(justAiredSeriesIds, 5, 1000, refreshTask);
+        await processInBatches(justAiredSeriesIds, NEXT_AIRED_BATCH_SIZE, NEXT_AIRED_BATCH_DELAY_MS, refreshTask);
     }
 
     const upcomingEpisodes = allUserSeries
@@ -1868,6 +1885,11 @@ async function displaySeriesDetails(seriesId: number) {
         persistObservabilitySnapshot();
         console.error('Erro ao exibir detalhes da série:', typedError.message);
         DOM.seriesViewSection.innerHTML = `<p>Não foi possível carregar os detalhes da série. Tente novamente mais tarde.</p>`;
+        const status = getErrorStatus(typedError);
+        if (status === 429) {
+            UI.showNotification('Demasiados pedidos em pouco tempo. Tente novamente dentro de 1 minuto.');
+            return;
+        }
         UI.showNotification(`Erro ao carregar série: ${typedError.message}`);
     }
 }
