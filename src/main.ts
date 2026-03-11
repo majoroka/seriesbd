@@ -2200,6 +2200,29 @@ function renderRemoteErrorWithRetry(
     container.appendChild(wrapper);
 }
 
+function renderComingSoonState(container: HTMLElement, title: string, description: string) {
+    container.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'coming-soon-state';
+
+    const badge = document.createElement('span');
+    badge.className = 'coming-soon-badge';
+    badge.textContent = 'Brevemente';
+
+    const heading = document.createElement('p');
+    heading.className = 'coming-soon-title';
+    heading.textContent = title;
+
+    const text = document.createElement('p');
+    text.className = 'coming-soon-description';
+    text.textContent = description;
+
+    wrapper.appendChild(badge);
+    wrapper.appendChild(heading);
+    wrapper.appendChild(text);
+    container.appendChild(wrapper);
+}
+
 async function loadTrending(
     timeWindow: 'day' | 'week',
     containerId: string,
@@ -2209,7 +2232,11 @@ async function loadTrending(
     if (!container) return;
 
     if (mediaType === 'book') {
-        container.innerHTML = '<p class="empty-list-message">Tendências de livros indisponíveis via API neste momento.</p>';
+        renderComingSoonState(
+            container,
+            'Tendências de Livros',
+            'Estamos a preparar uma fonte robusta para esta secção.'
+        );
         return;
     }
 
@@ -2394,7 +2421,11 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
         popularSeriesCacheMediaType = 'book';
         allPopularSeries = [];
         popularSeriesDisplayedCount = 0;
-        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Top rated de livros indisponível via API neste momento.</p>';
+        renderComingSoonState(
+            DOM.popularContainer,
+            'Top Rated de Livros',
+            'Esta secção ficará disponível assim que a integração estiver concluída.'
+        );
         DOM.popularLoadMoreContainer.style.display = 'none';
         return;
     }
@@ -2534,7 +2565,11 @@ let isLoadingPremieres = false;
 const loadedPremieresSeriesIds = new Set<number>();
 async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget) {
     if (mediaType === 'book') {
-        DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Estreias de livros indisponíveis via API neste momento.</p>';
+        renderComingSoonState(
+            DOM.premieresContainer,
+            'Estreias de Livros',
+            'Estamos a finalizar os dados de lançamento para livros.'
+        );
         DOM.premieresLoadMoreContainer.style.display = 'none';
         return;
     }
