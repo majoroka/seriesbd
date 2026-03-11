@@ -44,8 +44,8 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
-    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(88, 146, 200, 0.30) 150px, rgba(110, 176, 228, 0.14) 100%);
-    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(88, 146, 200, 0.38) 20%, rgba(110, 176, 228, 0.20) 100%);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(88, 146, 200, 0.22) 150px, rgba(110, 176, 228, 0.09) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(88, 146, 200, 0.28) 20%, rgba(110, 176, 228, 0.14) 100%);
 }
 
 body.light-theme .genre-filter select {
