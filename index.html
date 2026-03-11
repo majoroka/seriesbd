@@ -450,7 +450,7 @@
     <!-- ========== MODAL FOR EPISODE DETAILS ========== -->
     <div id="episode-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-episode-title" aria-describedby="modal-episode-synopsis" aria-hidden="true">
         <div class="modal-content" tabindex="-1">
-            <button class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <img id="modal-episode-image" src="" alt="Imagem do episódio" loading="lazy">
             <div class="modal-episode-info">
                 <h3 id="modal-episode-title"></h3>
@@ -471,7 +471,7 @@
     <div id="trailer-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="trailer-modal-title" aria-hidden="true">
         <div class="modal-content trailer-modal-content" tabindex="-1">
             <h2 id="trailer-modal-title" class="visually-hidden">Trailer</h2>
-            <button class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <div class="video-container">
                 <iframe id="trailer-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
             </div>
@@ -481,7 +481,7 @@
     <!-- ========== LIBRARY SEARCH MODAL ========== -->
     <div id="library-search-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="library-search-modal-title" aria-hidden="true">
         <div class="modal-content library-search-modal-content" tabindex="-1">
-            <button class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="library-search-modal-title">Pesquisar na Biblioteca</h2>
             <div class="search-bar" style="width: 100%; margin-bottom: 1.5rem;">
                 <i class="fas fa-search"></i>
@@ -496,7 +496,7 @@
     <!-- ========== ALL RATINGS MODAL ========== -->
     <div id="all-ratings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="all-ratings-modal-title" aria-hidden="true">
         <div class="modal-content all-ratings-modal-content" tabindex="-1">
-            <button class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="all-ratings-modal-title">As Minhas Avaliações</h2>
             <div id="ratings-summary-list">
                 <!-- List of ratings (10 stars, 9 stars, etc.) will be injected here -->
@@ -507,7 +507,7 @@
     <!-- ========== SERIES BY RATING MODAL ========== -->
     <div id="series-by-rating-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="series-by-rating-modal-title" aria-hidden="true">
         <div class="modal-content series-by-rating-modal-content" tabindex="-1">
-            <button class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="series-by-rating-modal-title">Conteúdos Avaliados</h2>
             <div id="series-by-rating-modal-results">
                 <!-- Scrollable list of series for a specific rating -->
@@ -529,7 +529,7 @@
     <!-- ========== AUTH MODAL ========== -->
     <div id="auth-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" aria-hidden="true">
         <div class="modal-content auth-modal-content" tabindex="-1">
-            <button class="modal-close-btn" id="auth-modal-close-btn">&times;</button>
+            <button class="modal-close-btn" id="auth-modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="auth-modal-title">Entrar</h2>
             <p id="auth-modal-description" class="auth-modal-description">Use email e password para autenticação.</p>
             <p id="auth-inline-feedback" class="auth-inline-feedback" role="status" aria-live="polite" hidden></p>

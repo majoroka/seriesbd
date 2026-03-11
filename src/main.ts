@@ -1198,6 +1198,16 @@ function updateAuthActionButtons(user: User | null) {
     DOM.authLoginBtn.hidden = hasSession;
     DOM.authSignupBtn.hidden = hasSession;
     DOM.authLogoutBtn.hidden = !hasSession;
+    DOM.exportDataBtn.disabled = !hasSession;
+    DOM.importDataBtn.disabled = !hasSession;
+    DOM.exportDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.importDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.exportDataBtn.title = hasSession
+        ? 'Exportar media'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.importDataBtn.title = hasSession
+        ? 'Importar media'
+        : 'Disponível apenas com sessão ativa.';
 }
 
 function setAuthFormLoadingState(isBusy: boolean) {
@@ -2192,6 +2202,10 @@ function setupViewToggle(toggleElement: HTMLElement, container: HTMLElement, sto
 
 async function exportData(): Promise<void> {
     DOM.settingsMenu.classList.remove('visible');
+    if (!currentAuthenticatedUserId) {
+        UI.showNotification('Inicie sessão para exportar a biblioteca.');
+        return;
+    }
     try {
         const watchedStateRecords = await db.watchedState.toArray();
         const userDataRecords = await db.userData.toArray();
@@ -2249,6 +2263,10 @@ async function exportData(): Promise<void> {
 
 async function importData(): Promise<void> {
     DOM.settingsMenu.classList.remove('visible');
+    if (!currentAuthenticatedUserId) {
+        UI.showNotification('Inicie sessão para importar a biblioteca.');
+        return;
+    }
     if (!await UI.showConfirmationModal('Tem a certeza que quer importar os dados? Isto irá substituir todos os dados atuais.')) {
         return;
     }

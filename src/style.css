@@ -2747,6 +2747,18 @@ body.light-theme .network-logo {
     color: var(--text-on-accent);
 }
 
+.settings-menu li button:disabled,
+.settings-menu li button[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.settings-menu li button:disabled:hover,
+.settings-menu li button[aria-disabled="true"]:hover {
+    background-color: transparent;
+    color: var(--text-primary);
+}
+
 .settings-menu li.separator {
     height: 1px;
     background-color: var(--border-color);
