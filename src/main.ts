@@ -461,8 +461,15 @@ function renderNotificationsMenu(): void {
 
     const unreadCount = notificationsCenterEntries.filter((item) => !item.isRead).length;
     DOM.notificationsBtn.classList.toggle('has-unread', unreadCount > 0);
-    DOM.notificationsBadge.hidden = unreadCount <= 0;
-    DOM.notificationsBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    if (unreadCount > 0) {
+        DOM.notificationsBadge.hidden = false;
+        DOM.notificationsBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+        DOM.notificationsBtn.setAttribute('aria-label', `Notificações (${unreadCount} por ler)`);
+    } else {
+        DOM.notificationsBadge.hidden = true;
+        DOM.notificationsBadge.textContent = '';
+        DOM.notificationsBtn.setAttribute('aria-label', 'Notificações');
+    }
     DOM.notificationsMarkAllReadBtn.hidden = unreadCount <= 0;
 
     DOM.notificationsMenuList.innerHTML = '';
