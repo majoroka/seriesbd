@@ -10,6 +10,13 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - livros
 - biblioteca
 
+## Estado de execução (11 Mar 2026)
+
+- Sprint 7 concluído.
+- Sprint 8 concluído.
+- PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
+- PR-5 em curso para hardening UX, acessibilidade e regressão final.
+
 ## Decisões já fechadas
 
 - `Dashboard` passa a ser o ecrã de entrada.
@@ -122,11 +129,11 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 
 ## Plano de PRs recomendado
 
-- PR-1: Shell da dashboard, sidebar, top bar, tema e navegação base.
-- PR-2: Cards KPI + gráficos + recentes + lançamentos aguardados.
-- PR-3: Sub-menus por domínio e integração biblioteca geral.
-- PR-4: Recomendações personalizadas + notificações reais.
-- PR-5: Hardening UX, acessibilidade e regressão final.
+- [x] PR-1: Shell da dashboard, sidebar, top bar, tema e navegação base.
+- [x] PR-2: Cards KPI + gráficos + recentes + lançamentos aguardados.
+- [x] PR-3: Sub-menus por domínio e integração biblioteca geral.
+- [x] PR-4: Recomendações personalizadas + notificações reais.
+- [ ] PR-5: Hardening UX, acessibilidade e regressão final.
 
 ## Critérios de aceitação globais
 

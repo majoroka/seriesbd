@@ -1,6 +1,7 @@
 # Plano de Execução por Sprints
 
-Estado atual: concluído até **S6-T05** (pendente apenas **S6-T06**).
+Estado atual: **Sprint 1 a Sprint 8 concluídos**.  
+Pendente apenas: **S6-T06 (Cutover DNS para Cloudflare Pages)**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -93,65 +94,65 @@ Estado atual: concluído até **S6-T05** (pendente apenas **S6-T06**).
 
 ## Sprint 7: Dashboard SaaS V2 (Entrada principal + Navegação)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S7-T01 Criar shell novo de layout com 3 áreas: sidebar fixa, conteúdo principal e coluna direita.
-- [ ] S7-T02 Implementar menu principal na sidebar: `Dashboard`, `Filmes`, `Séries`, `Livros`, `Biblioteca`.
-- [ ] S7-T03 Criar bloco intermédio da sidebar `ÁREA SUB-MENU` (dinâmico por secção ativa).
-- [ ] S7-T04 Mover ações de conta para top bar: avatar, nome, dropdown de conta.
-- [ ] S7-T05 Mover `Importar/Exportar` para dropdown de conta e limitar a utilizadores com sessão ativa.
-- [ ] S7-T06 Implementar cartões KPI em tempo real: `Séries`, `Filmes`, `Livros`, `Estatísticas`.
-- [ ] S7-T07 Implementar secção `GRÁFICOS DE EVOLUÇÃO E GÉNEROS` (linha + donut interativos).
-- [ ] S7-T08 Implementar secção `RECENTEMENTE VISTOS / LIDOS` com carrossel horizontal.
-- [ ] S7-T09 Implementar secção `PARA TI` com recomendações:
-  - [ ] cold-start por géneros mais consumidos globalmente;
-  - [ ] personalização por histórico do utilizador quando disponível.
-- [ ] S7-T10 Implementar coluna direita `PRÓXIMOS LANÇAMENTOS AGUARDADOS`.
-- [ ] S7-T11 Tornar `Dashboard` o ecrã de entrada padrão.
+- [x] S7-T01 Criar shell novo de layout com 3 áreas: sidebar fixa, conteúdo principal e coluna direita.
+- [x] S7-T02 Implementar menu principal na sidebar: `Dashboard`, `Filmes`, `Séries`, `Livros`, `Biblioteca`.
+- [x] S7-T03 Criar bloco intermédio da sidebar `ÁREA SUB-MENU` (dinâmico por secção ativa).
+- [x] S7-T04 Mover ações de conta para top bar: avatar, nome, dropdown de conta.
+- [x] S7-T05 Mover `Importar/Exportar` para dropdown de conta e limitar a utilizadores com sessão ativa.
+- [x] S7-T06 Implementar cartões KPI em tempo real: `Séries`, `Filmes`, `Livros`, `Estatísticas`.
+- [x] S7-T07 Implementar secção `GRÁFICOS DE EVOLUÇÃO E GÉNEROS` (linha + distribuição por géneros interativos).
+- [x] S7-T08 Implementar secção `RECENTEMENTE VISTOS / LIDOS` com carrossel horizontal.
+- [x] S7-T09 Implementar secção `PARA TI` com recomendações:
+  - [x] cold-start por géneros mais consumidos globalmente;
+  - [x] personalização por histórico do utilizador quando disponível.
+- [x] S7-T10 Implementar coluna direita `PRÓXIMOS LANÇAMENTOS AGUARDADOS`.
+- [x] S7-T11 Tornar `Dashboard` o ecrã de entrada padrão.
 
 ### Critérios de aceitação
-- [ ] Layout responsivo (desktop/tablet/mobile) sem regressões críticas nas secções atuais.
-- [ ] Visual consistente com tema atual da app (cores, gradientes, tipografia, cartões, sombras).
-- [ ] `Biblioteca` mantém funcionalidade atual e filtros existentes, sem duplicação de biblioteca por domínio.
-- [ ] Navegação por teclado e foco visível nos principais componentes (sidebar/top bar/cards/dropdowns).
+- [x] Layout responsivo (desktop/tablet/mobile) sem regressões críticas nas secções atuais.
+- [x] Visual consistente com tema atual da app (cores, gradientes, tipografia, cartões, sombras).
+- [x] `Biblioteca` mantém funcionalidade atual e filtros existentes, sem duplicação de biblioteca por domínio.
+- [x] Navegação por teclado e foco visível nos principais componentes (sidebar/top bar/cards/dropdowns).
 
 ## Sprint 8: Sub-menus por domínio + Notificações reais
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S8-T01 Sub-menu de `Séries` com fluxos existentes:
-  - [ ] quero ver
-  - [ ] a ver
-  - [ ] próximo episódio
-  - [ ] tendências
-  - [ ] top rated
-  - [ ] estreias
-  - [ ] estatísticas
-- [ ] S8-T02 Sub-menu de `Filmes` com fluxos equivalentes:
-  - [ ] quero ver
-  - [ ] a ver
-  - [ ] tendências
-  - [ ] top rated
-  - [ ] estreias
-  - [ ] estatísticas
-- [ ] S8-T03 Sub-menu de `Livros` com fluxos equivalentes:
-  - [ ] quero ler
-  - [ ] a ler
-  - [ ] tendências (se houver fonte robusta)
-  - [ ] top rated (se houver fonte robusta)
-  - [ ] estreias (se houver fonte robusta)
-  - [ ] estatísticas
-- [ ] S8-T04 Quando não houver fonte robusta para livros em determinada secção, mostrar estado `Brevemente` sem quebrar UX.
-- [ ] S8-T05 Implementar centro de notificações real (ícone de sino na top bar):
-  - [ ] próximo episódio a estrear;
-  - [ ] episódio lançado;
-  - [ ] filme acompanhado lançado.
-- [ ] S8-T06 Persistir estado de notificações (lidas/não lidas) no perfil do utilizador.
+- [x] S8-T01 Sub-menu de `Séries` com fluxos existentes:
+  - [x] quero ver
+  - [x] a ver
+  - [x] próximo episódio
+  - [x] tendências
+  - [x] top rated
+  - [x] estreias
+  - [x] estatísticas
+- [x] S8-T02 Sub-menu de `Filmes` com fluxos equivalentes:
+  - [x] quero ver
+  - [x] a ver
+  - [x] tendências
+  - [x] top rated
+  - [x] estreias
+  - [x] estatísticas
+- [x] S8-T03 Sub-menu de `Livros` com fluxos equivalentes:
+  - [x] quero ler
+  - [x] a ler
+  - [x] tendências (com fallback `Brevemente` quando aplicável)
+  - [x] top rated (com fallback `Brevemente` quando aplicável)
+  - [x] estreias (com fallback `Brevemente` quando aplicável)
+  - [x] estatísticas
+- [x] S8-T04 Quando não houver fonte robusta para livros em determinada secção, mostrar estado `Brevemente` sem quebrar UX.
+- [x] S8-T05 Implementar centro de notificações real (ícone de sino na top bar):
+  - [x] próximo episódio a estrear;
+  - [x] episódio lançado;
+  - [x] filme/livro acompanhado lançado.
+- [x] S8-T06 Persistir estado de notificações (lidas/não lidas) por utilizador e sessão local.
 
 ### Critérios de aceitação
-- [ ] Cada menu principal atualiza corretamente o `ÁREA SUB-MENU`.
-- [ ] Fluxos de séries continuam funcionais sem regressões.
-- [ ] Filmes e livros apresentam comportamento consistente com fallback seguro quando dados externos não existem.
-- [ ] Notificações não bloqueiam UX e respeitam sessão ativa do utilizador.
+- [x] Cada menu principal atualiza corretamente o `ÁREA SUB-MENU`.
+- [x] Fluxos de séries continuam funcionais sem regressões.
+- [x] Filmes e livros apresentam comportamento consistente com fallback seguro quando dados externos não existem.
+- [x] Notificações não bloqueiam UX e respeitam sessão ativa do utilizador.
