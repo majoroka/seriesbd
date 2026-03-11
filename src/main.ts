@@ -88,12 +88,14 @@ let profileIdentityRequestId = 0;
 let activeSubmenuMediaTarget: SubmenuMediaTarget = 'series';
 let notificationReadState: NotificationReadState = {};
 let notificationReadStateLoaded = false;
+let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
 const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
 const NOTIFICATIONS_READ_STATE_KEY = 'seriesdb.notifications.readState.v1';
+const NOTIFICATIONS_DISMISSED_STATE_KEY = 'seriesdb.notifications.dismissedState.v1';
 const NOTIFICATION_MAX_ITEMS = 24;
 const NOTIFICATION_EPISODE_LOOKAHEAD_DAYS = 30;
 const NOTIFICATION_MOVIE_LOOKAHEAD_DAYS = 60;
@@ -187,22 +189,26 @@ function getNotificationUserKey(): string {
     return currentAuthenticatedUserId ? `user:${currentAuthenticatedUserId}` : 'local';
 }
 
+function parseNotificationState(rawState: unknown): NotificationReadState {
+    if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) return {};
+    const parsed: NotificationReadState = {};
+    Object.entries(rawState as Record<string, unknown>).forEach(([key, value]) => {
+        if (!Array.isArray(value)) return;
+        parsed[key] = value
+            .map((entry) => String(entry || '').trim())
+            .filter((entry) => entry.length > 0);
+    });
+    return parsed;
+}
+
 async function ensureNotificationReadStateLoaded(): Promise<void> {
     if (notificationReadStateLoaded) return;
-    const stored = await db.kvStore.get(NOTIFICATIONS_READ_STATE_KEY);
-    const rawState = stored?.value;
-    if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
-        const parsed: NotificationReadState = {};
-        Object.entries(rawState as Record<string, unknown>).forEach(([key, value]) => {
-            if (!Array.isArray(value)) return;
-            parsed[key] = value
-                .map((entry) => String(entry || '').trim())
-                .filter((entry) => entry.length > 0);
-        });
-        notificationReadState = parsed;
-    } else {
-        notificationReadState = {};
-    }
+    const [storedReadState, storedDismissedState] = await Promise.all([
+        db.kvStore.get(NOTIFICATIONS_READ_STATE_KEY),
+        db.kvStore.get(NOTIFICATIONS_DISMISSED_STATE_KEY),
+    ]);
+    notificationReadState = parseNotificationState(storedReadState?.value);
+    notificationDismissedState = parseNotificationState(storedDismissedState?.value);
     notificationReadStateLoaded = true;
 }
 
@@ -216,6 +222,19 @@ async function persistNotificationReadState(): Promise<void> {
 function getReadIdsForCurrentUser(): Set<string> {
     const userKey = getNotificationUserKey();
     const values = notificationReadState[userKey] || [];
+    return new Set(values);
+}
+
+async function persistNotificationDismissedState(): Promise<void> {
+    await db.kvStore.put({
+        key: NOTIFICATIONS_DISMISSED_STATE_KEY,
+        value: notificationDismissedState,
+    });
+}
+
+function getDismissedIdsForCurrentUser(): Set<string> {
+    const userKey = getNotificationUserKey();
+    const values = notificationDismissedState[userKey] || [];
     return new Set(values);
 }
 
@@ -240,6 +259,23 @@ async function markAllNotificationsAsRead(): Promise<void> {
     await markNotificationsAsRead(unreadIds);
 }
 
+async function dismissNotifications(notificationIds: string[]): Promise<void> {
+    if (notificationIds.length === 0) return;
+    await ensureNotificationReadStateLoaded();
+    const userKey = getNotificationUserKey();
+    const dismissedSet = new Set(notificationDismissedState[userKey] || []);
+    notificationIds.forEach((id) => dismissedSet.add(id));
+    notificationDismissedState[userKey] = Array.from(dismissedSet).slice(-800);
+    await persistNotificationDismissedState();
+}
+
+async function clearNotificationsCenter(): Promise<void> {
+    const currentIds = notificationsCenterEntries.map((item) => item.id);
+    await dismissNotifications(currentIds);
+    notificationsCenterEntries = [];
+    renderNotificationsMenu();
+}
+
 function getMediaProgressForNotifications(media: Series): number {
     const mediaType = media.media_type || 'series';
     if (mediaType === 'series') {
@@ -254,12 +290,16 @@ function getMediaProgressForNotifications(media: Series): number {
     return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
-function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] {
+function buildNotificationsFromLibrary(readSet: Set<string>, dismissedSet: Set<string>): AppNotification[] {
     const allMedia = [...S.myWatchlist, ...S.myArchive];
     const today = startOfDay(new Date());
     const todayMs = today.getTime();
     const dayMs = 24 * 60 * 60 * 1000;
     const deduped = new Map<string, AppNotification>();
+    const addNotification = (notification: AppNotification) => {
+        if (dismissedSet.has(notification.id)) return;
+        deduped.set(notification.id, notification);
+    };
 
     allMedia.forEach((media) => {
         const mediaType = media.media_type || 'series';
@@ -277,7 +317,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                         ? 'Novo episódio disponível amanhã.'
                         : `Novo episódio previsto em ${diffDays} dias.`;
                 const id = `series:episode:upcoming:${media.id}:${dateKey}`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'episode-upcoming',
                     mediaType: 'series',
@@ -300,7 +340,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                     : daysAgo === 1
                         ? 'Episódio lançado ontem.'
                         : `Episódio lançado há ${daysAgo} dias.`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'episode-released',
                     mediaType: 'series',
@@ -332,7 +372,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                     : diffDays === 1
                         ? 'Estreia amanhã.'
                         : `Estreia em ${diffDays} dias.`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'movie-upcoming',
                     mediaType: 'movie',
@@ -352,7 +392,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                     : daysAgo === 0
                         ? 'Filme lançado hoje.'
                         : `Filme lançado há ${daysAgo} dias.`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'movie-released',
                     mediaType: 'movie',
@@ -376,7 +416,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                     : diffDays === 1
                         ? 'Lançamento previsto para amanhã.'
                         : `Lançamento previsto em ${diffDays} dias.`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'book-upcoming',
                     mediaType: 'book',
@@ -396,7 +436,7 @@ function buildNotificationsFromLibrary(readSet: Set<string>): AppNotification[] 
                     : daysAgo === 0
                         ? 'Livro lançado hoje.'
                         : `Livro lançado há ${daysAgo} dias.`;
-                deduped.set(id, {
+                addNotification({
                     id,
                     kind: 'book-released',
                     mediaType: 'book',
@@ -457,7 +497,7 @@ function toggleNotificationsMenu(): void {
 }
 
 function renderNotificationsMenu(): void {
-    if (!DOM.notificationsMenuList || !DOM.notificationsBtn || !DOM.notificationsBadge || !DOM.notificationsMarkAllReadBtn) return;
+    if (!DOM.notificationsMenuList || !DOM.notificationsBtn || !DOM.notificationsBadge || !DOM.notificationsMarkAllReadBtn || !DOM.notificationsClearBtn) return;
 
     const unreadCount = notificationsCenterEntries.filter((item) => !item.isRead).length;
     DOM.notificationsBtn.classList.toggle('has-unread', unreadCount > 0);
@@ -471,12 +511,13 @@ function renderNotificationsMenu(): void {
         DOM.notificationsBtn.setAttribute('aria-label', 'Notificações');
     }
     DOM.notificationsMarkAllReadBtn.hidden = unreadCount <= 0;
+    DOM.notificationsClearBtn.hidden = notificationsCenterEntries.length <= 0;
 
     DOM.notificationsMenuList.innerHTML = '';
     if (notificationsCenterEntries.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'notifications-empty';
-        empty.textContent = 'Sem notificações novas de momento.';
+        empty.textContent = 'Sem notificações de momento.';
         DOM.notificationsMenuList.appendChild(empty);
         return;
     }
@@ -526,7 +567,8 @@ function renderNotificationsMenu(): void {
 async function refreshNotificationsCenter(): Promise<void> {
     await ensureNotificationReadStateLoaded();
     const readSet = getReadIdsForCurrentUser();
-    notificationsCenterEntries = buildNotificationsFromLibrary(readSet);
+    const dismissedSet = getDismissedIdsForCurrentUser();
+    notificationsCenterEntries = buildNotificationsFromLibrary(readSet, dismissedSet);
     renderNotificationsMenu();
 }
 
@@ -3638,6 +3680,10 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.notificationsMarkAllReadBtn?.addEventListener('click', async (event) => {
         event.stopPropagation();
         await markAllNotificationsAsRead();
+    });
+    DOM.notificationsClearBtn?.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        await clearNotificationsCenter();
     });
     DOM.notificationsMenuList?.addEventListener('click', async (event) => {
         const target = event.target as Element;

@@ -416,6 +416,10 @@ textarea:focus-visible,
     border: 1px solid rgba(18, 18, 18, 0.35);
 }
 
+.notifications-badge[hidden] {
+    display: none !important;
+}
+
 .notifications-menu {
     display: none;
     position: absolute;
@@ -454,7 +458,13 @@ textarea:focus-visible,
     color: var(--text-secondary);
 }
 
-.notifications-mark-all-btn {
+.notifications-menu-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.notifications-menu-action-btn {
     border: 1px solid var(--border-color);
     background-color: transparent;
     color: var(--text-secondary);
@@ -467,10 +477,16 @@ textarea:focus-visible,
     transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
 }
 
-.notifications-mark-all-btn:hover {
+.notifications-menu-action-btn:hover {
     border-color: var(--primary-accent);
     color: var(--primary-accent);
     background-color: rgba(71, 171, 210, 0.1);
+}
+
+.notifications-clear-btn:hover {
+    border-color: var(--secondary-accent);
+    color: var(--secondary-accent);
+    background-color: rgba(210, 70, 101, 0.12);
 }
 
 .notifications-menu-list {

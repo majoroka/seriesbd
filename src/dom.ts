@@ -20,6 +20,7 @@ export const notificationsMenu = document.getElementById('notifications-menu') a
 export const notificationsMenuList = document.getElementById('notifications-menu-list') as HTMLDivElement;
 export const notificationsBadge = document.getElementById('notifications-badge') as HTMLSpanElement;
 export const notificationsMarkAllReadBtn = document.getElementById('notifications-mark-all-read-btn') as HTMLButtonElement;
+export const notificationsClearBtn = document.getElementById('notifications-clear-btn') as HTMLButtonElement;
 export const statWatchedEpisodes = document.getElementById('stat-watched-episodes') as HTMLParagraphElement;
 export const statUnwatchedEpisodes = document.getElementById('stat-unwatched-episodes') as HTMLParagraphElement;
 export const statWatchTime = document.getElementById('stat-watch-time') as HTMLParagraphElement;
