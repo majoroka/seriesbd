@@ -6,7 +6,8 @@
 - Biblioteca local com gestão completa (watchlist, arquivo, notas, ratings).
 - Integração com TMDb/Trakt/TVMaze via Cloudflare Pages Functions e cache de temporadas.
 - Estatísticas com gráficos e exportações, import/export completo da base local.
-- Plano de execução da nova dashboard SaaS definido em [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
+- Dashboard SaaS V2 entregue (shell, cards KPI, gráficos, sugestões, lançamentos, sub-menus por domínio e notificações reais).
+- Plano de execução da dashboard mantido em [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
 
 ## ✅ Recém-adicionado
 
@@ -21,21 +22,41 @@
 - **Ratings com 3 anéis (P3-03)**: bloco de avaliações na vista de detalhes passa a mostrar TMDb, Trakt e TVMaze, com anéis mais finos e cor TVMaze `#386e67`.
 - **Matching hardening (P3-04)**: resolução entre fontes agora prioriza IMDb, usa fallback nome+ano com score mínimo e descarta matches fracos para reduzir falsos positivos.
 - **Testes de regressão da agregação (P3-05)**: cobertura adicionada para PT vs EN, EN mais completo, ratings de 3 fontes e falha parcial de providers.
-- **Planeamento Dashboard V2 (S7/S8)**: definido plano de UI/UX, navegação modular, recomendações e notificações reais com rollout por feature flags.
+- **Sprint 7 concluído**: dashboard como ecrã de entrada, shell SaaS, top bar/conta, KPI, gráficos, recentes, sugestões e lançamentos.
+- **Sprint 8 concluído**: sub-menu dinâmico por domínio (séries/filmes/livros), fallback `Brevemente` para livros e centro de notificações real com estado persistido.
 
-## Em preparação imediata (S7/S8)
+## Em preparação imediata
 
-1. **Dashboard SaaS V2 como ecrã de entrada**
-   - Sidebar fixa com navegação principal e `ÁREA SUB-MENU`.
-   - Top bar com saudação, pesquisa, notificações e conta.
-   - Cards KPI, gráficos interativos, recentes e lançamentos aguardados.
-2. **Navegação por domínio**
-   - Sub-menu dinâmico para Séries, Filmes e Livros.
-   - Biblioteca geral única (com filtros atuais) como secção própria.
-3. **Recomendações + notificações reais**
-   - Cold-start por consumo global.
-   - Personalização por histórico quando disponível.
-   - Eventos reais de próximos lançamentos/episódios.
+1. **Cutover DNS (S6-T06)**
+   - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
+   - Janela controlada de monitorização pós-cutover.
+2. **UI/UX polishing**
+   - Ajustes finos visuais e de responsividade sem regressões funcionais.
+   - Harmonização final de detalhes na dashboard e secções de detalhe.
+3. **Hardening final (PR-5)**
+   - Acessibilidade e micro-interações finais.
+   - Regressão manual curta antes de promover para `main`.
+
+## Roadmap futuro: Reviews da Comunidade
+
+1. **R1 | Reviews por título (MVP)**
+   - Séries/Filmes: reviews textuais por título (não por episódio).
+   - Livros: rating agregado + contagem de avaliações quando não houver review textual.
+2. **R2 | Bloco de reviews no detalhe**
+   - Secção `Avaliações da Comunidade` com fonte, autor, data, rating e excerto.
+   - Paginação incremental (`Ver mais`) para não degradar o tempo de render.
+3. **R3 | Filtros e ordenação**
+   - Filtro por fonte e idioma (prioridade `pt-PT` -> `pt` -> `en`).
+   - Ordenação por relevância, data e avaliação.
+4. **R4 | Fallbacks e estados UX**
+   - Estados claros para `sem reviews`, `offline`, `rate limit` e `fonte indisponível`.
+   - Mensagem explícita quando a fonte não disponibiliza review textual.
+5. **R5 | Observabilidade e performance**
+   - Cache por título/fonte + lazy load no detalhe.
+   - Métricas básicas de erro/latência por provider.
+6. **R6 | Fase 2 opcional (reviews por episódio)**
+   - Avaliar extensão para comentários por episódio em séries (provider a confirmar).
+   - Implementar apenas após estabilidade do MVP por título.
 
 ## Backlog técnico (pronto para issues)
 
