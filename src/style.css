@@ -44,8 +44,8 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
-    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(88, 146, 200, 0.38) 150px, rgba(110, 176, 228, 0.22) 100%);
-    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(88, 146, 200, 0.46) 20%, rgba(110, 176, 228, 0.28) 100%);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(88, 146, 200, 0.30) 150px, rgba(110, 176, 228, 0.14) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(88, 146, 200, 0.38) 20%, rgba(110, 176, 228, 0.20) 100%);
 }
 
 body.light-theme .genre-filter select {
@@ -80,6 +80,18 @@ body.light-theme .dashboard-status-badge.is-suggestion-movie {
 body.light-theme .dashboard-status-badge.is-suggestion-book {
     color: #2f6f2b;
     background-color: rgba(125, 200, 110, 0.16);
+}
+
+body.light-theme .v2-title h1,
+body.light-theme .v2-title .release-year,
+body.light-theme .v2-facts,
+body.light-theme .v2-action-label,
+body.light-theme .v2-overview h3,
+body.light-theme .v2-overview p,
+body.light-theme .v2-metadata-item span,
+body.light-theme .v2-metadata-item p,
+body.light-theme .v2-public-ratings .rating-item span {
+    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.42);
 }
 
 * {
