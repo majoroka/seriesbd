@@ -44,8 +44,8 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
-    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(22, 34, 48, 0.46) 150px, rgba(22, 34, 48, 0.24) 100%);
-    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(22, 34, 48, 0.58) 20%, rgba(22, 34, 48, 0.32) 100%);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(70, 92, 114, 0.34) 150px, rgba(70, 92, 114, 0.16) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(70, 92, 114, 0.42) 20%, rgba(70, 92, 114, 0.22) 100%);
 }
 
 body.light-theme .genre-filter select {
@@ -91,7 +91,7 @@ body.light-theme .v2-overview p,
 body.light-theme .v2-metadata-item span,
 body.light-theme .v2-metadata-item p,
 body.light-theme .v2-public-ratings .rating-item span {
-    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.42);
+    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.56);
 }
 
 body.light-theme .v2-detail-header::before {
@@ -100,9 +100,9 @@ body.light-theme .v2-detail-header::before {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: rgba(34, 49, 68, 0.12);
-    -webkit-backdrop-filter: saturate(72%) brightness(88%);
-    backdrop-filter: saturate(72%) brightness(88%);
+    background: rgba(214, 225, 236, 0.18);
+    -webkit-backdrop-filter: saturate(64%) brightness(104%) contrast(96%);
+    backdrop-filter: saturate(64%) brightness(104%) contrast(96%);
 }
 
 body.light-theme .v2-header-custom-bg {
@@ -234,22 +234,91 @@ textarea:focus-visible,
     transform: translateX(1px);
 }
 
-.primary-nav .main-menu-link.active,
+.primary-nav .main-menu-link.active {
+    --menu-accent-rgb: 71, 171, 210;
+    --menu-active-tint-a: 0.46;
+    --menu-active-tint-b: 0.26;
+    --menu-active-tint-c: 0.14;
+    background:
+        linear-gradient(145deg, rgba(var(--menu-accent-rgb), var(--menu-active-tint-a)) 0%, rgba(var(--menu-accent-rgb), var(--menu-active-tint-b)) 58%, rgba(var(--menu-accent-rgb), var(--menu-active-tint-c)) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    border: 1px solid rgba(var(--menu-accent-rgb), 0.55);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+    color: var(--text-primary);
+}
+
+body.light-theme .primary-nav .main-menu-link.active {
+    --menu-active-tint-a: 0.30;
+    --menu-active-tint-b: 0.18;
+    --menu-active-tint-c: 0.09;
+    box-shadow: 0 6px 14px rgba(18, 30, 44, 0.08);
+}
+
+.primary-nav .main-menu-link[data-main-target="series"].active {
+    --menu-accent-rgb: 71, 171, 210;
+}
+
+.primary-nav .main-menu-link[data-main-target="movie"].active {
+    --menu-accent: #F08F44;
+    --menu-accent-rgb: 240, 143, 68;
+}
+
+.primary-nav .main-menu-link[data-main-target="book"].active {
+    --menu-accent: #7DC86E;
+    --menu-accent-rgb: 125, 200, 110;
+}
+
+.primary-nav .main-menu-link[data-main-target="library"].active {
+    --menu-accent: #6DB0FF;
+    --menu-accent-rgb: 109, 176, 255;
+}
+
 .main-nav .nav-link.active {
     background-color: var(--primary-accent);
     color: var(--text-on-accent);
 }
 
 .sidebar-submenu-shell {
+    --submenu-accent-rgb: 71, 171, 210;
+    --submenu-tint-a: 0.18;
+    --submenu-tint-b: 0.07;
+    --submenu-tint-c: 0.02;
+    --submenu-active-tint-a: 0.42;
+    --submenu-active-tint-b: 0.2;
+    --submenu-active-tint-c: 0.11;
     margin-top: 0.5rem;
     padding: 0.75rem;
     border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
+    border: 1px solid rgba(var(--submenu-accent-rgb), 0.32);
+    background:
+        linear-gradient(165deg, rgba(var(--submenu-accent-rgb), var(--submenu-tint-a)) 0%, rgba(var(--submenu-accent-rgb), var(--submenu-tint-b)) 34%, rgba(var(--submenu-accent-rgb), var(--submenu-tint-c)) 68%, transparent 100%),
+        var(--bg-card);
     min-height: 220px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+body.light-theme .sidebar-submenu-shell {
+    --submenu-tint-a: 0.12;
+    --submenu-tint-b: 0.045;
+    --submenu-tint-c: 0.012;
+    --submenu-active-tint-a: 0.28;
+    --submenu-active-tint-b: 0.14;
+    --submenu-active-tint-c: 0.07;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="series"] {
+    --submenu-accent-rgb: 71, 171, 210;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="movie"] {
+    --submenu-accent-rgb: 240, 143, 68;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="book"] {
+    --submenu-accent-rgb: 125, 200, 110;
 }
 
 .sidebar-submenu-shell.is-hidden {
@@ -261,6 +330,16 @@ textarea:focus-visible,
     padding-right: 0.15rem;
 }
 
+.sidebar-submenu-shell .main-nav .nav-link.active {
+    background:
+        linear-gradient(145deg, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-a)) 0%, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-b)) 58%, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-c)) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 70%),
+        var(--bg-card);
+    border: 1px solid rgba(var(--submenu-accent-rgb), 0.52);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+    color: var(--text-primary);
+}
+
 .main-nav li.separator {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
@@ -269,27 +348,6 @@ textarea:focus-visible,
 
 .main-nav li.is-hidden {
     display: none;
-}
-
-.sidebar-footer {
-    margin-top: auto;
-    padding-top: 0.9rem;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-}
-
-.sidebar-attribution {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    text-align: center;
-    margin-bottom: 0.4rem;
-    line-height: 1.4;
-}
-
-.sidebar-attribution p {
-    margin: 0;
 }
 
 .auth-status-label {
@@ -315,22 +373,6 @@ textarea:focus-visible,
     border-color: rgba(255, 77, 77, 0.45);
 }
 
-.sidebar-attribution a {
-    color: var(--text-secondary);
-    text-decoration: underline;
-    transition: color 0.2s ease;
-}
-
-.sidebar-attribution a:hover {
-    color: var(--primary-accent);
-}
-
-.copyright {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    text-align: center;
-}
-
 /* ========== MAIN CONTENT ========== */
 .main-content {
     flex: 1;
@@ -344,6 +386,39 @@ textarea:focus-visible,
     align-items: center;
     gap: 1rem;
     margin-bottom: 2rem;
+}
+
+.app-footer {
+    margin-top: 0.75rem;
+    padding: 0.95rem 1.1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(71, 171, 210, 0.08) 0%, transparent 46%),
+        var(--bg-light);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.app-footer-attribution,
+.app-footer-copyright {
+    margin: 0;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.35;
+    font-size: 0.86rem;
+}
+
+.app-footer a {
+    color: var(--text-secondary);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    transition: color 0.2s ease;
+}
+
+.app-footer a:hover {
+    color: var(--primary-accent);
 }
 
 .main-header-left {
@@ -1871,6 +1946,64 @@ details[open] > .season-summary::before {
     gap: 0.75rem;
 }
 
+.app-init-error-card {
+    display: grid;
+    gap: 0.9rem;
+    max-width: 920px;
+    margin: 0 auto;
+}
+
+.app-init-error-title {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.2;
+}
+
+.app-init-error-description {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.app-init-error-details {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background-color: var(--bg-card);
+    overflow: hidden;
+}
+
+.app-init-error-details summary {
+    cursor: pointer;
+    padding: 0.65rem 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    list-style: none;
+}
+
+.app-init-error-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.app-init-error-log {
+    margin: 0;
+    padding: 0.75rem 0.85rem 0.9rem;
+    border-top: 1px solid var(--border-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    background: linear-gradient(150deg, rgba(71, 171, 210, 0.08), rgba(210, 70, 101, 0.04));
+}
+
+.app-init-error-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
 .coming-soon-state {
     display: flex;
     flex-direction: column;
@@ -2271,6 +2404,33 @@ details[open] > .season-summary::before {
     background-color: var(--bg-hover);
     border-color: var(--text-primary);
     color: var(--text-primary);
+}
+
+#back-to-dashboard-from-library-btn {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.46) 0%, rgba(71, 171, 210, 0.26) 58%, rgba(71, 171, 210, 0.14) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    border: 1px solid rgba(71, 171, 210, 0.55);
+    color: var(--text-primary);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+#back-to-dashboard-from-library-btn:hover {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.54) 0%, rgba(71, 171, 210, 0.32) 58%, rgba(71, 171, 210, 0.18) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    border-color: rgba(71, 171, 210, 0.68);
+    color: var(--text-primary);
+}
+
+body.light-theme #back-to-dashboard-from-library-btn {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.30) 0%, rgba(71, 171, 210, 0.18) 58%, rgba(71, 171, 210, 0.09) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    box-shadow: 0 6px 14px rgba(18, 30, 44, 0.08);
 }
 
 /* ========== STATISTICS STYLES ========== */
@@ -4052,6 +4212,39 @@ body.light-theme .network-logo {
     }
 }
 
+/* Tablet touch devices: force app arrow and hide iOS native disclosure marker */
+@media (min-width: 768px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+    details > summary.season-summary {
+        list-style: none !important;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    details > summary.season-summary::-webkit-details-marker {
+        display: none !important;
+    }
+
+    details > summary.season-summary::marker {
+        content: '' !important;
+        font-size: 0 !important;
+    }
+
+    details > summary.season-summary::before {
+        content: '▸';
+        font-family: var(--font-main);
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: var(--primary-accent);
+        margin-right: 0.55rem;
+        transition: transform 0.2s ease-in-out;
+        flex-shrink: 0;
+    }
+
+    details[open] > summary.season-summary::before {
+        transform: rotate(90deg);
+    }
+}
+
 /* Mobile Phones */
 @media (max-width: 768px) {
     /* Global layout changes (sidebar collapse) are now handled at the 992px breakpoint
@@ -4442,6 +4635,78 @@ body.light-theme .network-logo {
         gap: 1rem; /* Reduz o espaçamento */
     }
 
+}
+
+/* Mobile phones only: prevent dashboard overflow without affecting tablet/desktop */
+@media (max-width: 640px) {
+    .media-dashboard {
+        padding: 0.95rem;
+    }
+
+    .media-dashboard-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "kpis"
+            "analytics"
+            "side"
+            "recent"
+            "suggestions";
+        gap: 0.75rem;
+    }
+
+    .media-dashboard-layout > * {
+        min-width: 0;
+    }
+
+    .media-dashboard-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+
+    .dashboard-media-card,
+    .dashboard-panel,
+    .dashboard-chart-card {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .dashboard-media-card {
+        min-height: 0;
+    }
+
+    .dashboard-media-card-metrics dd {
+        font-size: 1.2rem;
+    }
+
+    .dashboard-analytics-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+
+    .dashboard-chart-card {
+        min-height: 0;
+        height: auto;
+        max-height: none;
+        padding: 0.75rem;
+    }
+
+    #dashboard-evolution-chart {
+        display: block;
+        width: 100% !important;
+        height: 210px !important;
+        min-height: 210px;
+        max-height: 210px;
+    }
+
+    .dashboard-chart-card--genres .dashboard-genres-legend {
+        max-height: 200px;
+    }
+
+    .dashboard-recent-item {
+        min-width: 142px;
+        max-width: 142px;
+    }
 }
 
 /* Estilo para o número do ranking antes do título */

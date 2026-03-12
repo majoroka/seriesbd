@@ -1,5 +1,6 @@
 // This file centralizes all DOM element selections.
 export const nextAiredListContainer = document.querySelector('.next-aired .episode-list') as HTMLDivElement;
+export const sidebar = document.querySelector('.sidebar') as HTMLElement;
 export const mainMenuLinks = document.querySelectorAll('.primary-nav .main-menu-link') as NodeListOf<HTMLAnchorElement>;
 export const mainNavLinks = document.querySelectorAll('.main-nav .nav-link') as NodeListOf<HTMLAnchorElement>;
 export const sidebarSubmenuList = document.getElementById('sidebar-submenu-list') as HTMLUListElement;
