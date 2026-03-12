@@ -592,6 +592,7 @@ function openMobileTopbarPanel(): void {
         DOM.mobileTopbarPanel.hidden = false;
         DOM.mobileTopbarPanel.classList.add('visible');
     }
+    DOM.settingsMenu?.classList.add('visible');
     if (DOM.mobileTopbarToggle) {
         DOM.mobileTopbarToggle.setAttribute('aria-expanded', 'true');
     }
