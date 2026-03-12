@@ -4440,6 +4440,78 @@ body.light-theme .network-logo {
 
 }
 
+/* Mobile phones only: prevent dashboard overflow without affecting tablet/desktop */
+@media (max-width: 640px) {
+    .media-dashboard {
+        padding: 0.95rem;
+    }
+
+    .media-dashboard-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "kpis"
+            "analytics"
+            "side"
+            "recent"
+            "suggestions";
+        gap: 0.75rem;
+    }
+
+    .media-dashboard-layout > * {
+        min-width: 0;
+    }
+
+    .media-dashboard-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+
+    .dashboard-media-card,
+    .dashboard-panel,
+    .dashboard-chart-card {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .dashboard-media-card {
+        min-height: 0;
+    }
+
+    .dashboard-media-card-metrics dd {
+        font-size: 1.2rem;
+    }
+
+    .dashboard-analytics-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+
+    .dashboard-chart-card {
+        min-height: 0;
+        height: auto;
+        max-height: none;
+        padding: 0.75rem;
+    }
+
+    #dashboard-evolution-chart {
+        display: block;
+        width: 100% !important;
+        height: 210px !important;
+        min-height: 210px;
+        max-height: 210px;
+    }
+
+    .dashboard-chart-card--genres .dashboard-genres-legend {
+        max-height: 200px;
+    }
+
+    .dashboard-recent-item {
+        min-width: 142px;
+        max-width: 142px;
+    }
+}
+
 /* Estilo para o número do ranking antes do título */
 .discovery-rank-text {
     color: var(--primary-accent);
