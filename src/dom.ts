@@ -1,10 +1,16 @@
 // This file centralizes all DOM element selections.
 export const nextAiredListContainer = document.querySelector('.next-aired .episode-list') as HTMLDivElement;
 export const sidebar = document.querySelector('.sidebar') as HTMLElement;
+export const mobileTopbarControls = document.getElementById('mobile-topbar-controls') as HTMLElement;
+export const mobileTopbarToggle = document.getElementById('mobile-topbar-toggle') as HTMLButtonElement;
+export const mobileTopbarPanel = document.getElementById('mobile-topbar-panel') as HTMLDivElement;
 export const mainMenuLinks = document.querySelectorAll('.primary-nav .main-menu-link') as NodeListOf<HTMLAnchorElement>;
 export const mainNavLinks = document.querySelectorAll('.main-nav .nav-link') as NodeListOf<HTMLAnchorElement>;
 export const sidebarSubmenuList = document.getElementById('sidebar-submenu-list') as HTMLUListElement;
 export const sidebarSubmenuShell = document.querySelector('.sidebar-submenu-shell') as HTMLElement;
+export const mainHeaderRight = document.querySelector('.main-header-right') as HTMLElement;
+export const notificationsMenuWrapper = document.querySelector('.notifications-menu-wrapper') as HTMLElement;
+export const accountMenuWrapper = document.querySelector('.account-menu-wrapper') as HTMLElement;
 export const mainContentSections = document.querySelectorAll('.dashboard .card') as NodeListOf<HTMLElement>;
 export const openLibrarySearchBtn = document.getElementById('open-library-search-btn') as HTMLButtonElement;
 export const searchMediaTypeSelect = document.getElementById('search-media-type') as HTMLSelectElement;
