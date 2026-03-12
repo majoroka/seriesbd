@@ -651,6 +651,7 @@ function updateMainMenuActiveState(target: MainMenuTarget): void {
     DOM.mainMenuLinks.forEach((link) => {
         link.classList.toggle('active', parseMainMenuTarget(link.dataset.mainTarget) === target);
     });
+    DOM.sidebar?.setAttribute('data-main-theme', target);
 
     applySubmenuForMainTarget(target);
 
@@ -658,6 +659,11 @@ function updateMainMenuActiveState(target: MainMenuTarget): void {
         const showSubmenu = target === 'series' || target === 'movie' || target === 'book';
         DOM.sidebarSubmenuShell.classList.toggle('is-hidden', !showSubmenu);
         DOM.sidebarSubmenuShell.setAttribute('aria-hidden', showSubmenu ? 'false' : 'true');
+        if (showSubmenu) {
+            DOM.sidebarSubmenuShell.setAttribute('data-submenu-theme', target);
+        } else {
+            DOM.sidebarSubmenuShell.removeAttribute('data-submenu-theme');
+        }
     }
 }
 

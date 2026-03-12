@@ -234,22 +234,76 @@ textarea:focus-visible,
     transform: translateX(1px);
 }
 
-.primary-nav .main-menu-link.active,
+.primary-nav .main-menu-link.active {
+    --menu-accent: var(--primary-accent);
+    --menu-accent-rgb: 71, 171, 210;
+    background:
+        linear-gradient(145deg, rgba(var(--menu-accent-rgb), 0.34) 0%, rgba(var(--menu-accent-rgb), 0.18) 58%, rgba(var(--menu-accent-rgb), 0.12) 100%),
+        var(--menu-accent);
+    border: 1px solid rgba(var(--menu-accent-rgb), 0.55);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+    color: var(--text-on-accent);
+}
+
+.primary-nav .main-menu-link[data-main-target="series"].active {
+    --menu-accent: #47ABD2;
+    --menu-accent-rgb: 71, 171, 210;
+}
+
+.primary-nav .main-menu-link[data-main-target="movie"].active {
+    --menu-accent: #F08F44;
+    --menu-accent-rgb: 240, 143, 68;
+}
+
+.primary-nav .main-menu-link[data-main-target="book"].active {
+    --menu-accent: #7DC86E;
+    --menu-accent-rgb: 125, 200, 110;
+}
+
+.primary-nav .main-menu-link[data-main-target="library"].active {
+    --menu-accent: #6DB0FF;
+    --menu-accent-rgb: 109, 176, 255;
+}
+
 .main-nav .nav-link.active {
     background-color: var(--primary-accent);
     color: var(--text-on-accent);
 }
 
 .sidebar-submenu-shell {
+    --submenu-accent-rgb: 71, 171, 210;
+    --submenu-tint-a: 0.18;
+    --submenu-tint-b: 0.07;
+    --submenu-tint-c: 0.02;
     margin-top: 0.5rem;
     padding: 0.75rem;
     border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
+    border: 1px solid rgba(var(--submenu-accent-rgb), 0.32);
+    background:
+        linear-gradient(165deg, rgba(var(--submenu-accent-rgb), var(--submenu-tint-a)) 0%, rgba(var(--submenu-accent-rgb), var(--submenu-tint-b)) 34%, rgba(var(--submenu-accent-rgb), var(--submenu-tint-c)) 68%, transparent 100%),
+        var(--bg-card);
     min-height: 220px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+body.light-theme .sidebar-submenu-shell {
+    --submenu-tint-a: 0.12;
+    --submenu-tint-b: 0.045;
+    --submenu-tint-c: 0.012;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="series"] {
+    --submenu-accent-rgb: 71, 171, 210;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="movie"] {
+    --submenu-accent-rgb: 240, 143, 68;
+}
+
+.sidebar-submenu-shell[data-submenu-theme="book"] {
+    --submenu-accent-rgb: 125, 200, 110;
 }
 
 .sidebar-submenu-shell.is-hidden {
