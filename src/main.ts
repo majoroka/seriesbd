@@ -123,6 +123,73 @@ function getErrorStatus(error: unknown): number | null {
     return Number.isNaN(parsed) ? null : parsed;
 }
 
+function renderInitializationErrorState(error: unknown): void {
+    if (!DOM.dashboard) return;
+
+    const errorMessage = getErrorMessage(error);
+    const errorStatus = getErrorStatus(error);
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    const errorStack = error instanceof Error ? (error.stack || '') : '';
+    const stackPreview = errorStack
+        ? errorStack.split('\n').slice(0, 5).join('\n')
+        : 'Sem stack trace disponível.';
+    const timestamp = new Date().toISOString();
+    const diagnosticsId = `init-${Date.now().toString(36)}`;
+
+    DOM.dashboard.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'card app-init-error-card';
+
+    const title = document.createElement('h3');
+    title.className = 'app-init-error-title';
+    title.textContent = 'Ocorreu um erro crítico ao iniciar a aplicação.';
+
+    const description = document.createElement('p');
+    description.className = 'app-init-error-description';
+    description.textContent = 'A app não conseguiu concluir a inicialização. Pode recarregar agora e, se voltar a acontecer, partilha este diagnóstico.';
+
+    const details = document.createElement('details');
+    details.className = 'app-init-error-details';
+    details.open = true;
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'Ver diagnóstico técnico';
+
+    const pre = document.createElement('pre');
+    pre.className = 'app-init-error-log';
+    pre.textContent = [
+        `id: ${diagnosticsId}`,
+        `timestamp: ${timestamp}`,
+        `name: ${errorName}`,
+        `status: ${errorStatus ?? 'unknown'}`,
+        `message: ${errorMessage}`,
+        '',
+        stackPreview,
+    ].join('\n');
+
+    details.appendChild(summary);
+    details.appendChild(pre);
+
+    const actions = document.createElement('div');
+    actions.className = 'app-init-error-actions';
+
+    const reloadBtn = document.createElement('button');
+    reloadBtn.type = 'button';
+    reloadBtn.className = 'search-bar-button';
+    reloadBtn.textContent = 'Recarregar aplicação';
+    reloadBtn.addEventListener('click', () => {
+        window.location.reload();
+    });
+
+    actions.appendChild(reloadBtn);
+    card.appendChild(title);
+    card.appendChild(description);
+    card.appendChild(details);
+    card.appendChild(actions);
+    DOM.dashboard.appendChild(card);
+}
+
 function parseMediaType(value: string | null | undefined): MediaType {
     if (value === 'movie' || value === 'book' || value === 'series') return value;
     return 'series';
@@ -2659,9 +2726,7 @@ async function initializeApp(): Promise<void> {
         recordSectionFailure('initialize', '/initialize/app', error, { phase: 'initialize' });
         persistObservabilitySnapshot();
         console.error("Erro crítico durante a inicialização da aplicação:", error);
-        if (DOM.dashboard) {
-            DOM.dashboard.innerHTML = `<div class="card"><p>Ocorreu um erro crítico ao iniciar a aplicação. Por favor, tente recarregar a página. Detalhes do erro foram registados na consola.</p></div>`;
-        }
+        renderInitializationErrorState(error);
     }
 }
 
