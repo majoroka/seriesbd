@@ -110,6 +110,18 @@ body.light-theme .v2-header-custom-bg {
     z-index: 1;
 }
 
+body.light-theme .v2-details-wrapper {
+    position: relative;
+    z-index: 1;
+    padding: 1rem 1.25rem 1.1rem;
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(18, 34, 52, 0.42) 0%, rgba(18, 34, 52, 0.3) 65%, rgba(18, 34, 52, 0.22) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 24px rgba(12, 24, 39, 0.2);
+    -webkit-backdrop-filter: blur(1.5px) saturate(90%);
+    backdrop-filter: blur(1.5px) saturate(90%);
+}
+
 * {
     margin: 0;
     padding: 0;
