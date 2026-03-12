@@ -2144,6 +2144,10 @@ const TOTAL_EPISODES_RETRY_COOLDOWN_MS = 60 * 1000;
 const totalEpisodesRetryAt = new Map<number, number>();
 
 async function updateGlobalProgress() {
+    if (!DOM.globalProgressPercentage) {
+        return;
+    }
+
     const seriesInProgress = S.myWatchlist.filter(series => S.watchedState[series.id] && S.watchedState[series.id].length > 0);
     if (seriesInProgress.length === 0) {
         DOM.globalProgressPercentage.textContent = '0%';
