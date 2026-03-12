@@ -1355,7 +1355,9 @@ function renderLibraryStateFromMemory() {
     UI.renderMediaDashboard();
     UI.renderSearchResults([]);
     UI.renderNextAired([]);
-    DOM.globalProgressPercentage.textContent = '0%';
+    if (DOM.globalProgressPercentage) {
+        DOM.globalProgressPercentage.textContent = '0%';
+    }
     UI.updateKeyStats();
     void refreshNotificationsCenter();
 }
