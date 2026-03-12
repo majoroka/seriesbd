@@ -4347,19 +4347,23 @@ body.light-theme .network-logo {
 
     .mobile-topbar-controls {
         display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
     }
 
     .mobile-topbar-panel {
         right: 0;
     }
 
-    .mobile-topbar-panel .notifications-menu-wrapper,
-    .mobile-topbar-panel .account-menu-wrapper {
-        position: static;
+    .mobile-topbar-controls > .notifications-menu-wrapper {
         display: inline-flex;
     }
 
-    .mobile-topbar-panel .topbar-icon-button,
+    .mobile-topbar-panel .account-menu-wrapper {
+        display: inline-flex;
+    }
+
+    .mobile-topbar-controls > .notifications-menu-wrapper .topbar-icon-button,
     .mobile-topbar-panel .account-menu-trigger {
         width: 40px;
         height: 40px;
@@ -4383,7 +4387,7 @@ body.light-theme .network-logo {
         font-size: 0.85rem;
     }
 
-    .mobile-topbar-panel .notifications-menu,
+    .mobile-topbar-controls > .notifications-menu-wrapper .notifications-menu,
     .mobile-topbar-panel .settings-menu {
         position: absolute;
         top: calc(100% + 0.5rem);

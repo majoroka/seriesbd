@@ -615,8 +615,8 @@ function syncMobileTopbarLayout(): void {
 
     if (isMobile) {
         closeMobileTopbarPanel();
-        if (!DOM.mobileTopbarPanel.contains(DOM.notificationsMenuWrapper)) {
-            DOM.mobileTopbarPanel.appendChild(DOM.notificationsMenuWrapper);
+        if (!DOM.mobileTopbarControls.contains(DOM.notificationsMenuWrapper)) {
+            DOM.mobileTopbarControls.insertBefore(DOM.notificationsMenuWrapper, DOM.mobileTopbarToggle);
         }
         if (!DOM.mobileTopbarPanel.contains(DOM.accountMenuWrapper)) {
             DOM.mobileTopbarPanel.appendChild(DOM.accountMenuWrapper);
