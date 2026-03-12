@@ -2406,6 +2406,33 @@ details[open] > .season-summary::before {
     color: var(--text-primary);
 }
 
+#back-to-dashboard-from-library-btn {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.46) 0%, rgba(71, 171, 210, 0.26) 58%, rgba(71, 171, 210, 0.14) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    border: 1px solid rgba(71, 171, 210, 0.55);
+    color: var(--text-primary);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+#back-to-dashboard-from-library-btn:hover {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.54) 0%, rgba(71, 171, 210, 0.32) 58%, rgba(71, 171, 210, 0.18) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    border-color: rgba(71, 171, 210, 0.68);
+    color: var(--text-primary);
+}
+
+body.light-theme #back-to-dashboard-from-library-btn {
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.30) 0%, rgba(71, 171, 210, 0.18) 58%, rgba(71, 171, 210, 0.09) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
+    box-shadow: 0 6px 14px rgba(18, 30, 44, 0.08);
+}
+
 /* ========== STATISTICS STYLES ========== */
 .key-stats-grid {
     display: grid;
