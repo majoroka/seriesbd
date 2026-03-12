@@ -4212,6 +4212,36 @@ body.light-theme .network-logo {
     }
 }
 
+/* Tablet only: enforce app-styled season arrow instead of iOS native marker */
+@media (min-width: 769px) and (max-width: 992px) {
+    .season-summary {
+        list-style: none !important;
+    }
+
+    .season-summary::-webkit-details-marker {
+        display: none !important;
+    }
+
+    .season-summary::marker {
+        content: '' !important;
+    }
+
+    .season-summary::before {
+        content: '\f054';
+        font-family: 'Font Awesome 6 Free';
+        font-weight: 900;
+        font-size: 0.78rem;
+        color: var(--primary-accent);
+        margin-right: 0.55rem;
+        transition: transform 0.2s ease-in-out;
+        flex-shrink: 0;
+    }
+
+    details[open] > .season-summary::before {
+        transform: rotate(90deg);
+    }
+}
+
 /* Mobile Phones */
 @media (max-width: 768px) {
     /* Global layout changes (sidebar collapse) are now handled at the 992px breakpoint
