@@ -44,8 +44,8 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
-    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(22, 34, 48, 0.46) 150px, rgba(22, 34, 48, 0.24) 100%);
-    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(22, 34, 48, 0.58) 20%, rgba(22, 34, 48, 0.32) 100%);
+    --detail-header-overlay-horizontal: linear-gradient(to right, rgba(70, 92, 114, 0.34) 150px, rgba(70, 92, 114, 0.16) 100%);
+    --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(70, 92, 114, 0.42) 20%, rgba(70, 92, 114, 0.22) 100%);
 }
 
 body.light-theme .genre-filter select {
@@ -91,7 +91,7 @@ body.light-theme .v2-overview p,
 body.light-theme .v2-metadata-item span,
 body.light-theme .v2-metadata-item p,
 body.light-theme .v2-public-ratings .rating-item span {
-    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.42);
+    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.56);
 }
 
 body.light-theme .v2-detail-header::before {
@@ -100,9 +100,9 @@ body.light-theme .v2-detail-header::before {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: rgba(34, 49, 68, 0.12);
-    -webkit-backdrop-filter: saturate(72%) brightness(88%);
-    backdrop-filter: saturate(72%) brightness(88%);
+    background: rgba(214, 225, 236, 0.18);
+    -webkit-backdrop-filter: saturate(64%) brightness(104%) contrast(96%);
+    backdrop-filter: saturate(64%) brightness(104%) contrast(96%);
 }
 
 body.light-theme .v2-header-custom-bg {
