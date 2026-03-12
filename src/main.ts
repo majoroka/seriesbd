@@ -91,6 +91,7 @@ let notificationReadStateLoaded = false;
 let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
+let mobileTopbarPanelOpen = false;
 const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -105,6 +106,7 @@ const NOTIFICATION_RECENT_RELEASE_DAYS = 7;
 const NEXT_AIRED_BATCH_SIZE = 2;
 const NEXT_AIRED_BATCH_DELAY_MS = 1500;
 const NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS = 90_000;
+const MOBILE_TOPBAR_BREAKPOINT_PX = 768;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -565,6 +567,96 @@ function toggleNotificationsMenu(): void {
         return;
     }
     openNotificationsMenu();
+}
+
+function isMobileViewport(): boolean {
+    return window.matchMedia(`(max-width: ${MOBILE_TOPBAR_BREAKPOINT_PX}px)`).matches;
+}
+
+function closeMobileTopbarPanel(): void {
+    mobileTopbarPanelOpen = false;
+    closeNotificationsMenu();
+    DOM.settingsMenu?.classList.remove('visible');
+    if (DOM.mobileTopbarPanel) {
+        DOM.mobileTopbarPanel.classList.remove('visible');
+        DOM.mobileTopbarPanel.hidden = true;
+    }
+    if (DOM.mobileTopbarToggle) {
+        DOM.mobileTopbarToggle.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function openMobileTopbarPanel(): void {
+    mobileTopbarPanelOpen = true;
+    if (DOM.mobileTopbarPanel) {
+        DOM.mobileTopbarPanel.hidden = false;
+        DOM.mobileTopbarPanel.classList.add('visible');
+    }
+    DOM.settingsMenu?.classList.add('visible');
+    if (DOM.mobileTopbarToggle) {
+        DOM.mobileTopbarToggle.setAttribute('aria-expanded', 'true');
+    }
+}
+
+function toggleMobileTopbarPanel(): void {
+    if (mobileTopbarPanelOpen) {
+        closeMobileTopbarPanel();
+        return;
+    }
+    openMobileTopbarPanel();
+}
+
+function syncMobileTopbarLayout(): void {
+    if (!DOM.mobileTopbarControls || !DOM.mobileTopbarPanel || !DOM.mainHeaderRight || !DOM.notificationsMenuWrapper || !DOM.accountMenuWrapper) {
+        return;
+    }
+
+    const isMobile = isMobileViewport();
+    DOM.mobileTopbarControls.hidden = !isMobile;
+
+    if (isMobile) {
+        closeMobileTopbarPanel();
+        if (!DOM.mobileTopbarControls.contains(DOM.notificationsMenuWrapper)) {
+            DOM.mobileTopbarControls.insertBefore(DOM.notificationsMenuWrapper, DOM.mobileTopbarToggle);
+        }
+        if (!DOM.mobileTopbarPanel.contains(DOM.accountMenuWrapper)) {
+            DOM.mobileTopbarPanel.appendChild(DOM.accountMenuWrapper);
+        }
+        return;
+    }
+
+    closeMobileTopbarPanel();
+
+    const searchBar = DOM.mainHeaderRight.querySelector('.search-bar');
+    if (!DOM.mainHeaderRight.contains(DOM.notificationsMenuWrapper)) {
+        if (searchBar && searchBar.nextSibling) {
+            DOM.mainHeaderRight.insertBefore(DOM.notificationsMenuWrapper, searchBar.nextSibling);
+        } else {
+            DOM.mainHeaderRight.appendChild(DOM.notificationsMenuWrapper);
+        }
+    }
+    if (!DOM.mainHeaderRight.contains(DOM.accountMenuWrapper)) {
+        DOM.mainHeaderRight.appendChild(DOM.accountMenuWrapper);
+    }
+}
+
+function setupMobileTopbarControls(): void {
+    if (!DOM.mobileTopbarToggle || !DOM.mobileTopbarPanel || !DOM.mobileTopbarControls) return;
+
+    syncMobileTopbarLayout();
+
+    DOM.mobileTopbarToggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleMobileTopbarPanel();
+    });
+
+    DOM.mobileTopbarPanel.addEventListener('click', (event) => {
+        event.stopPropagation();
+    });
+
+    window.addEventListener('resize', () => {
+        syncMobileTopbarLayout();
+    });
 }
 
 function renderNotificationsMenu(): void {
@@ -3230,6 +3322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.renderMediaDashboard();
         void refreshNotificationsCenter();
     });
+    setupMobileTopbarControls();
 
     // Navigation
     DOM.mainMenuLinks.forEach(link => {
@@ -3815,6 +3908,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaId = Number(item.dataset.mediaId);
         const mediaType = parseMediaType(item.dataset.mediaType);
         closeNotificationsMenu();
+        if (isMobileViewport()) {
+            closeMobileTopbarPanel();
+        }
 
         if (Number.isFinite(mediaId)) {
             document.dispatchEvent(new CustomEvent('display-media-details', {
@@ -3894,6 +3990,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (DOM.notificationsMenu && DOM.notificationsBtn && !DOM.notificationsMenu.contains(target) && !DOM.notificationsBtn.contains(target)) {
             closeNotificationsMenu();
         }
+        if (
+            mobileTopbarPanelOpen &&
+            DOM.mobileTopbarControls &&
+            !DOM.mobileTopbarControls.contains(target)
+        ) {
+            closeMobileTopbarPanel();
+        }
     });
     document.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event.key !== 'Escape') return;
@@ -3903,19 +4006,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notificationsMenuOpen) {
             closeNotificationsMenu();
         }
+        if (mobileTopbarPanelOpen) {
+            closeMobileTopbarPanel();
+        }
     });
     DOM.exportDataBtn?.addEventListener('click', exportData);
     DOM.importDataBtn?.addEventListener('click', importData);
     DOM.authLoginBtn?.addEventListener('click', () => {
         DOM.settingsMenu.classList.remove('visible');
+        if (isMobileViewport()) {
+            closeMobileTopbarPanel();
+        }
         openAuthModal('login');
     });
     DOM.authSignupBtn?.addEventListener('click', () => {
         DOM.settingsMenu.classList.remove('visible');
+        if (isMobileViewport()) {
+            closeMobileTopbarPanel();
+        }
         openAuthModal('signup');
     });
     DOM.authLogoutBtn?.addEventListener('click', async () => {
         DOM.settingsMenu.classList.remove('visible');
+        if (isMobileViewport()) {
+            closeMobileTopbarPanel();
+        }
         if (!isSupabaseConfigured()) return;
         if (!currentAuthenticatedUserId) {
             UI.showNotification('Utilizador sem sessão ativa.');

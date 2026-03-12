@@ -110,6 +110,18 @@ body.light-theme .v2-header-custom-bg {
     z-index: 1;
 }
 
+body.light-theme .v2-details-wrapper {
+    position: relative;
+    z-index: 1;
+    padding: 1rem 1.25rem 1.1rem;
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(18, 34, 52, 0.42) 0%, rgba(18, 34, 52, 0.3) 65%, rgba(18, 34, 52, 0.22) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 24px rgba(12, 24, 39, 0.2);
+    -webkit-backdrop-filter: blur(1.5px) saturate(90%);
+    backdrop-filter: blur(1.5px) saturate(90%);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -178,8 +190,74 @@ textarea:focus-visible,
 }
 
 .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-header .brand-logo {
+    margin: 0;
+}
+
+.mobile-topbar-controls[hidden] {
+    display: none !important;
+}
+
+.mobile-topbar-controls {
+    position: relative;
+    display: none;
+    align-items: center;
+}
+
+.mobile-topbar-toggle {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-light);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.mobile-topbar-toggle:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    background-color: var(--bg-hover);
+}
+
+.mobile-topbar-toggle[aria-expanded="true"] {
+    border-color: rgba(71, 171, 210, 0.65);
+    box-shadow: 0 0 0 1px rgba(71, 171, 210, 0.2);
+}
+
+.mobile-topbar-panel[hidden] {
+    display: none !important;
+}
+
+.mobile-topbar-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 70;
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-hover);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32);
+}
+
+.mobile-topbar-panel.visible {
+    display: inline-flex;
 }
 
 .brand-logo {
@@ -4054,10 +4132,18 @@ body.light-theme .network-logo {
     }
 
     .primary-nav .main-menu-link {
+        display: flex;
+        grid-template-columns: none;
+        align-items: center;
         justify-content: center;
         font-size: 0.82rem;
         padding: 0.55rem 0.4rem;
         gap: 0.4rem;
+    }
+
+    .primary-nav .main-menu-link i {
+        width: auto;
+        margin: 0;
     }
 
     .sidebar-submenu-shell {
@@ -4212,35 +4298,44 @@ body.light-theme .network-logo {
     }
 }
 
-/* Tablet touch devices: force app arrow and hide iOS native disclosure marker */
+/* Tablet touch devices: force app arrows and hide iOS native disclosure markers */
 @media (min-width: 768px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
-    details > summary.season-summary {
+    details > summary {
         list-style: none !important;
         -webkit-appearance: none;
         appearance: none;
     }
 
-    details > summary.season-summary::-webkit-details-marker {
+    details > summary::-webkit-details-marker {
         display: none !important;
     }
 
-    details > summary.season-summary::marker {
+    details > summary::marker {
         content: '' !important;
         font-size: 0 !important;
     }
 
+    #trending-section summary h2::before,
+    .notes-container summary::before,
+    .v2-info-card.collapsible summary::before,
     details > summary.season-summary::before {
-        content: '▸';
-        font-family: var(--font-main);
-        font-weight: 700;
-        font-size: 0.92rem;
-        color: var(--primary-accent);
-        margin-right: 0.55rem;
+        content: '' !important;
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 6px 0 6px 9px;
+        border-color: transparent transparent transparent rgba(255, 255, 255, 0.94);
+        margin-right: 0.65rem;
         transition: transform 0.2s ease-in-out;
-        flex-shrink: 0;
+        transform-origin: 2px 50%;
+        vertical-align: middle;
     }
 
-    details[open] > summary.season-summary::before {
+    details[open] > summary.season-summary::before,
+    .notes-container details[open] > summary::before,
+    .v2-info-card.collapsible details[open] > summary::before,
+    #trending-section details[open] > summary h2::before {
         transform: rotate(90deg);
     }
 }
@@ -4253,12 +4348,74 @@ body.light-theme .network-logo {
         padding: 1rem;
     }
 
+    .sidebar-header {
+        position: relative;
+        align-items: center;
+    }
+
+    .mobile-topbar-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .mobile-topbar-panel {
+        right: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .mobile-topbar-controls > .notifications-menu-wrapper {
+        display: inline-flex;
+    }
+
+    .mobile-topbar-controls > .notifications-menu-wrapper .topbar-icon-button,
+    .mobile-topbar-panel .account-menu-trigger {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 10px;
+        justify-content: center;
+    }
+
+    .mobile-topbar-panel .account-menu-wrapper {
+        display: inline-flex;
+        position: relative;
+    }
+
+    .mobile-topbar-panel .account-menu-trigger {
+        display: none;
+    }
+
+    .mobile-topbar-controls > .notifications-menu-wrapper .notifications-menu,
+    .mobile-topbar-panel .settings-menu {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        right: 0;
+        left: auto;
+    }
+
+    .mobile-topbar-panel .settings-menu {
+        width: min(290px, calc(100vw - 2rem));
+        max-height: min(62vh, 440px);
+        overflow-y: auto;
+    }
+
     .primary-nav .main-menu-link {
         font-size: 0;
+        display: flex;
+        grid-template-columns: none;
+        justify-content: center;
+        align-items: center;
+        padding: 0.55rem 0.2rem;
     }
 
     .primary-nav .main-menu-link i {
         font-size: 0.95rem;
+        width: auto;
+        margin: 0;
     }
 
     #all-series-section .section-header {
@@ -4385,6 +4542,17 @@ body.light-theme .network-logo {
     /* Ajusta a barra de pesquisa para mobile */
     .search-bar {
         width: 100%; /* Ocupa a largura toda */
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.55rem;
+        overflow: hidden;
+    }
+
+    .search-bar input {
+        min-width: 0;
+        width: 100%;
     }
 
     .account-name {
@@ -4401,8 +4569,9 @@ body.light-theme .network-logo {
     }
 
     #search-media-type {
-        min-width: 94px;
+        min-width: 82px;
         font-size: 0.82rem;
+        padding: 0.28rem 0.4rem;
     }
 
     /* Transforma o botão de pesquisa num ícone de lupa */
