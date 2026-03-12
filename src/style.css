@@ -235,18 +235,27 @@ textarea:focus-visible,
 }
 
 .primary-nav .main-menu-link.active {
-    --menu-accent: var(--primary-accent);
     --menu-accent-rgb: 71, 171, 210;
+    --menu-active-tint-a: 0.46;
+    --menu-active-tint-b: 0.26;
+    --menu-active-tint-c: 0.14;
     background:
-        linear-gradient(145deg, rgba(var(--menu-accent-rgb), 0.34) 0%, rgba(var(--menu-accent-rgb), 0.18) 58%, rgba(var(--menu-accent-rgb), 0.12) 100%),
-        var(--menu-accent);
+        linear-gradient(145deg, rgba(var(--menu-accent-rgb), var(--menu-active-tint-a)) 0%, rgba(var(--menu-accent-rgb), var(--menu-active-tint-b)) 58%, rgba(var(--menu-accent-rgb), var(--menu-active-tint-c)) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 65%),
+        var(--bg-card);
     border: 1px solid rgba(var(--menu-accent-rgb), 0.55);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
-    color: var(--text-on-accent);
+    color: var(--text-primary);
+}
+
+body.light-theme .primary-nav .main-menu-link.active {
+    --menu-active-tint-a: 0.30;
+    --menu-active-tint-b: 0.18;
+    --menu-active-tint-c: 0.09;
+    box-shadow: 0 6px 14px rgba(18, 30, 44, 0.08);
 }
 
 .primary-nav .main-menu-link[data-main-target="series"].active {
-    --menu-accent: #47ABD2;
     --menu-accent-rgb: 71, 171, 210;
 }
 
@@ -275,6 +284,9 @@ textarea:focus-visible,
     --submenu-tint-a: 0.18;
     --submenu-tint-b: 0.07;
     --submenu-tint-c: 0.02;
+    --submenu-active-tint-a: 0.42;
+    --submenu-active-tint-b: 0.2;
+    --submenu-active-tint-c: 0.11;
     margin-top: 0.5rem;
     padding: 0.75rem;
     border-radius: 12px;
@@ -292,6 +304,9 @@ body.light-theme .sidebar-submenu-shell {
     --submenu-tint-a: 0.12;
     --submenu-tint-b: 0.045;
     --submenu-tint-c: 0.012;
+    --submenu-active-tint-a: 0.28;
+    --submenu-active-tint-b: 0.14;
+    --submenu-active-tint-c: 0.07;
 }
 
 .sidebar-submenu-shell[data-submenu-theme="series"] {
@@ -313,6 +328,16 @@ body.light-theme .sidebar-submenu-shell {
 .sidebar-submenu-nav {
     overflow-y: auto;
     padding-right: 0.15rem;
+}
+
+.sidebar-submenu-shell .main-nav .nav-link.active {
+    background:
+        linear-gradient(145deg, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-a)) 0%, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-b)) 58%, rgba(var(--submenu-accent-rgb), var(--submenu-active-tint-c)) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 70%),
+        var(--bg-card);
+    border: 1px solid rgba(var(--submenu-accent-rgb), 0.52);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+    color: var(--text-primary);
 }
 
 .main-nav li.separator {
