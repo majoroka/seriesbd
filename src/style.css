@@ -4212,38 +4212,44 @@ body.light-theme .network-logo {
     }
 }
 
-/* Tablet touch devices: force app arrow and hide iOS native disclosure marker */
+/* Tablet touch devices: force app arrows and hide iOS native disclosure markers */
 @media (min-width: 768px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
-    details > summary.season-summary {
+    details > summary {
         list-style: none !important;
         -webkit-appearance: none;
         appearance: none;
     }
 
-    details > summary.season-summary::-webkit-details-marker {
+    details > summary::-webkit-details-marker {
         display: none !important;
     }
 
-    details > summary.season-summary::marker {
+    details > summary::marker {
         content: '' !important;
         font-size: 0 !important;
     }
 
+    #trending-section summary h2::before,
+    .notes-container summary::before,
+    .v2-info-card.collapsible summary::before,
     details > summary.season-summary::before {
-        content: '';
+        content: '' !important;
         display: inline-block;
         width: 0;
         height: 0;
         border-style: solid;
-        border-width: 5px 0 5px 7px;
-        border-color: transparent transparent transparent var(--primary-accent);
-        margin-right: 0.55rem;
+        border-width: 6px 0 6px 9px;
+        border-color: transparent transparent transparent rgba(255, 255, 255, 0.94);
+        margin-right: 0.65rem;
         transition: transform 0.2s ease-in-out;
-        flex-shrink: 0;
         transform-origin: 2px 50%;
+        vertical-align: middle;
     }
 
-    details[open] > summary.season-summary::before {
+    details[open] > summary.season-summary::before,
+    .notes-container details[open] > summary::before,
+    .v2-info-card.collapsible details[open] > summary::before,
+    #trending-section details[open] > summary h2::before {
         transform: rotate(90deg);
     }
 }
