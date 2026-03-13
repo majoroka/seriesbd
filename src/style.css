@@ -21,6 +21,9 @@
     --segment-label-color: rgba(255, 255, 255, 0.7);
     --segment-label-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
     --chart-grid-color: rgba(255, 255, 255, 0.1);
+    --status-chip-border: #6f7782;
+    --status-chip-text: #d4d9de;
+    --status-chip-bg: rgba(26, 29, 34, 0.55);
     --detail-header-overlay-horizontal: linear-gradient(to right, rgba(25, 25, 25, 0.90) 150px, rgba(25, 25, 25, 0.8) 100%);
     --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(25, 25, 25, 0.98) 20%, rgba(25, 25, 25, 0.85) 100%);
     --font-main: 'Rajdhani', sans-serif;
@@ -44,6 +47,9 @@ body.light-theme {
     --segment-label-color: rgba(0, 0, 0, 0.7);
     --segment-label-shadow: none;
     --chart-grid-color: rgba(0, 0, 0, 0.1);
+    --status-chip-border: #5f6772;
+    --status-chip-text: #4d5560;
+    --status-chip-bg: rgba(95, 103, 114, 0.08);
     --detail-header-overlay-horizontal: linear-gradient(to right, rgba(70, 92, 114, 0.34) 150px, rgba(70, 92, 114, 0.16) 100%);
     --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(70, 92, 114, 0.42) 20%, rgba(70, 92, 114, 0.22) 100%);
 }
@@ -1877,7 +1883,7 @@ details[open] > .season-summary::before {
     color: var(--primary-accent);
     border-radius: 10px;
     font-size: 0.64rem;
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     padding: 0.08rem 0.42rem;
@@ -2216,17 +2222,17 @@ details[open] > .season-summary::before {
 }
 
 .series-status-label {
-    border: 1px solid var(--primary-accent);
-    color: var(--primary-accent);
+    border: 1px solid var(--status-chip-border);
+    color: var(--status-chip-text);
     padding: 0.08rem 0.5rem;
     border-radius: 10px;
     font-size: 0.64rem;
-    font-weight: 600;
+    font-weight: 400;
     text-transform: uppercase;
     white-space: nowrap;
     flex-shrink: 0;
     line-height: 1.1;
-    background: linear-gradient(135deg, rgba(71, 171, 210, 0.22), rgba(71, 171, 210, 0.08));
+    background: var(--status-chip-bg);
 }
 
 .list-item-progress {
