@@ -1884,6 +1884,21 @@ details[open] > .season-summary::before {
     vertical-align: middle;
 }
 
+.media-type-chip--series {
+    border-color: #47ABD2;
+    color: #47ABD2;
+}
+
+.media-type-chip--movie {
+    border-color: #f08f44;
+    color: #f08f44;
+}
+
+.media-type-chip--book {
+    border-color: #7dc86e;
+    color: #7dc86e;
+}
+
 .search-result-info p {
     font-size: 0.9rem;
     color: var(--text-secondary);

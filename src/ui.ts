@@ -44,6 +44,11 @@ function getMediaTypeLabel(mediaType: MediaType): string {
     return 'Série';
 }
 
+function getMediaTypeChipClass(mediaType: MediaType, extraClass = ''): string {
+    const base = `media-type-chip media-type-chip--${mediaType}`;
+    return extraClass ? `${base} ${extraClass}` : base;
+}
+
 function buildPosterUrl(
     posterPath: string | null | undefined,
     tmdbSize: string,
@@ -540,7 +545,7 @@ export function renderSearchResults(resultsList: Series[]) {
                 el('h3', {}, [
                     `${series.name} ${releaseYear}`,
                     mediaType !== 'series' ? ' ' : null,
-                    mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null
+                    mediaType !== 'series' ? el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }) : null
                 ]),
                 el('p', { text: getSafeOverviewText(series.overview) })
             ]),
@@ -2017,13 +2022,14 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
     }
     titleChildren.push(`${series.name} ${releaseYear}`);
-    if (mediaType !== 'series' && viewMode === 'list') {
+    const showMediaTypeChip = showStatus || mediaType !== 'series';
+    if (showMediaTypeChip && viewMode === 'list') {
         titleChildren.push(' ');
-        titleChildren.push(el('span', { class: 'media-type-chip', text: mediaTypeLabel }));
+        titleChildren.push(el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }));
     }
     const titleElement = el('h3', {}, titleChildren);
-    const mediaTypeChipInGrid = viewMode === 'grid' && mediaType !== 'series'
-        ? el('span', { class: 'media-type-chip media-type-chip-grid', text: mediaTypeLabel })
+    const mediaTypeChipInGrid = viewMode === 'grid' && showMediaTypeChip
+        ? el('span', { class: getMediaTypeChipClass(mediaType, 'media-type-chip-grid'), text: mediaTypeLabel })
         : null;
 
     const titleInList = viewMode === 'list' ? titleElement : null;
@@ -3402,7 +3408,7 @@ export function performModalLibrarySearch() {
             el('p', {}, [
                 series.name,
                 mediaType !== 'series' ? ' ' : null,
-                mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null,
+                mediaType !== 'series' ? el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }) : null,
             ])
         ]);
         item.addEventListener('click', () => {
