@@ -118,34 +118,15 @@ body.light-theme .v2-details-wrapper {
 body.light-theme .v2-details-wrapper::before {
     content: '';
     position: absolute;
-    inset: -2.4rem -3.2rem -2.2rem -3.2rem;
+    inset: -0.65rem -1rem -0.6rem -0.55rem;
     z-index: -1;
     pointer-events: none;
-    border-radius: 72px;
-    background: radial-gradient(
-        150% 210% at 22% 18%,
-        rgba(14, 28, 42, 0.42) 0%,
-        rgba(14, 28, 42, 0.3) 42%,
-        rgba(14, 28, 42, 0.2) 64%,
-        rgba(14, 28, 42, 0.11) 80%,
-        rgba(14, 28, 42, 0) 100%
-    );
-    -webkit-mask-image: radial-gradient(
-        158% 225% at 24% 20%,
-        rgba(0, 0, 0, 1) 40%,
-        rgba(0, 0, 0, 0.82) 60%,
-        rgba(0, 0, 0, 0.48) 78%,
-        rgba(0, 0, 0, 0) 100%
-    );
-    mask-image: radial-gradient(
-        158% 225% at 24% 20%,
-        rgba(0, 0, 0, 1) 40%,
-        rgba(0, 0, 0, 0.82) 60%,
-        rgba(0, 0, 0, 0.48) 78%,
-        rgba(0, 0, 0, 0) 100%
-    );
-    filter: blur(36px);
-    opacity: 0.92;
+    border-radius: 24px;
+    background:
+        radial-gradient(140% 180% at 22% 18%, rgba(14, 28, 42, 0.34) 0%, rgba(14, 28, 42, 0.27) 40%, rgba(14, 28, 42, 0.2) 64%, rgba(14, 28, 42, 0.09) 82%, rgba(14, 28, 42, 0) 100%),
+        linear-gradient(180deg, rgba(14, 28, 42, 0.19) 0%, rgba(14, 28, 42, 0.14) 58%, rgba(14, 28, 42, 0.07) 78%, rgba(14, 28, 42, 0) 100%);
+    filter: blur(12px);
+    opacity: 0.95;
 }
 
 * {
