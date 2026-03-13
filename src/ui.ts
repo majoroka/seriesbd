@@ -2036,13 +2036,16 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const statusInList = viewMode === 'list' ? statusElement : null;
     const titleInGrid = viewMode === 'grid' ? titleElement : null;
     const statusInGrid = viewMode === 'grid' ? statusElement : null;
+    const gridMetaChips = [statusInGrid, mediaTypeChipInGrid].filter(Boolean) as HTMLElement[];
+    const metaChipsInGrid = viewMode === 'grid' && gridMetaChips.length > 0
+        ? el('div', { class: 'watchlist-meta-chips' }, gridMetaChips)
+        : null;
     const watchlistInfo = el('div', { class: 'watchlist-info' }, [
         el('div', { class: 'watchlist-title-wrapper' }, [titleInList, statusInList]),
         progressElement,
         overviewElement,
         titleInGrid,
-        mediaTypeChipInGrid,
-        statusInGrid
+        metaChipsInGrid
     ]);
     return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
         posterElement,

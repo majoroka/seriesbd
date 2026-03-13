@@ -1872,31 +1872,37 @@ details[open] > .season-summary::before {
 .media-type-chip {
     display: inline-flex;
     align-items: center;
-    border: 1px solid var(--primary-accent);
+    justify-content: center;
+    border: 1px solid transparent;
     color: var(--primary-accent);
     border-radius: 10px;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    padding: 0.1rem 0.45rem;
+    padding: 0.08rem 0.42rem;
     white-space: nowrap;
     vertical-align: middle;
+    line-height: 1.1;
+    background: linear-gradient(135deg, rgba(71, 171, 210, 0.17), rgba(71, 171, 210, 0.08));
 }
 
 .media-type-chip--series {
     border-color: #47ABD2;
     color: #47ABD2;
+    background: linear-gradient(135deg, rgba(71, 171, 210, 0.22), rgba(71, 171, 210, 0.08));
 }
 
 .media-type-chip--movie {
     border-color: #f08f44;
     color: #f08f44;
+    background: linear-gradient(135deg, rgba(240, 143, 68, 0.2), rgba(240, 143, 68, 0.08));
 }
 
 .media-type-chip--book {
     border-color: #7dc86e;
     color: #7dc86e;
+    background: linear-gradient(135deg, rgba(125, 200, 110, 0.2), rgba(125, 200, 110, 0.08));
 }
 
 .search-result-info p {
@@ -2212,13 +2218,15 @@ details[open] > .season-summary::before {
 .series-status-label {
     border: 1px solid var(--primary-accent);
     color: var(--primary-accent);
-    padding: 0.1rem 0.5rem;
+    padding: 0.08rem 0.5rem;
     border-radius: 10px;
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     font-weight: 600;
     text-transform: uppercase;
     white-space: nowrap;
     flex-shrink: 0;
+    line-height: 1.1;
+    background: linear-gradient(135deg, rgba(71, 171, 210, 0.22), rgba(71, 171, 210, 0.08));
 }
 
 .list-item-progress {
@@ -4000,9 +4008,7 @@ body.light-theme .network-logo {
 }
 
 .grid-view .media-type-chip-grid {
-    font-size: 0.64rem;
-    padding: 0.08rem 0.4rem;
-    margin-top: 0.05rem;
+    margin-top: 0;
 }
 /* Em ecrãs pequenos, na vista de grelha, o título fica em minúsculas */
 @media (max-width: 768px) {
@@ -4029,7 +4035,22 @@ body.light-theme .network-logo {
 }
 
 .grid-view .series-status-label {
-    margin-top: 0.15rem; /* Add some space above the label */
+    margin-top: 0;
+}
+
+.grid-view .watchlist-meta-chips {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    min-height: 1.35rem;
+}
+
+.grid-view .watchlist-meta-chips .series-status-label,
+.grid-view .watchlist-meta-chips .media-type-chip {
+    font-size: 0.62rem;
+    padding: 0.08rem 0.44rem;
 }
 
 .grid-view .remove-btn {
