@@ -57,6 +57,46 @@ function buildPosterUrl(
     return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
 }
 
+function decodeHtmlEntities(rawValue: string): string {
+    return rawValue.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityRaw) => {
+        const entity = String(entityRaw || '').toLowerCase();
+        if (!entity) return match;
+        if (entity.startsWith('#x')) {
+            const code = Number.parseInt(entity.slice(2), 16);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        if (entity.startsWith('#')) {
+            const code = Number.parseInt(entity.slice(1), 10);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        const map: Record<string, string> = {
+            amp: '&',
+            lt: '<',
+            gt: '>',
+            quot: '"',
+            apos: "'",
+            nbsp: ' ',
+        };
+        return map[entity] ?? match;
+    });
+}
+
+function sanitizePlainText(value: unknown): string {
+    const raw = String(value || '');
+    if (!raw) return '';
+    const withoutTags = raw
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/p>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ');
+    const decoded = decodeHtmlEntities(withoutTags);
+    return decoded.replace(/\s+/g, ' ').trim();
+}
+
+function getSafeOverviewText(value: unknown): string {
+    const sanitized = sanitizePlainText(value);
+    return sanitized || 'Sinopse não disponível.';
+}
+
 function createPosterImage(
     src: string,
     alt: string,
@@ -318,7 +358,7 @@ export function initModalAccessibility() {
 // Modal Functions
 export function openEpisodeModal(title: string, overview: string, imageUrl: string) {
     DOM.modalTitle.textContent = title;
-    DOM.modalSynopsis.textContent = overview;
+    DOM.modalSynopsis.textContent = getSafeOverviewText(overview);
     DOM.modalImage.src = imageUrl;
     showModal(DOM.episodeModal, DOM.modalCloseBtn);
 }
@@ -502,7 +542,7 @@ export function renderSearchResults(resultsList: Series[]) {
                     mediaType !== 'series' ? ' ' : null,
                     mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null
                 ]),
-                el('p', { text: series.overview || 'Sinopse não disponível.' })
+                el('p', { text: getSafeOverviewText(series.overview) })
             ]),
             actionButtons
         ]);
@@ -1968,7 +2008,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         }
         if (statusText) statusElement = el('span', { class: 'series-status-label', text: statusText });
     }
-    const overview = series.overview || 'Sinopse não disponível.';
+    const overview = getSafeOverviewText(series.overview);
     const overviewElement = viewMode === 'grid' ? null : el('p', { text: overview });
 
     // Cria o elemento do título, adicionando o ranking se aplicável
@@ -2248,7 +2288,7 @@ export function renderMediaDetails(
                     ]),
                     el('div', { class: 'v2-overview' }, [
                         el('h3', { text: 'Sinopse' }),
-                        el('p', { text: media.overview || 'Sinopse não disponível.' })
+                        el('p', { text: getSafeOverviewText(media.overview) })
                     ]),
                     el('div', { class: 'v2-additional-facts' }, [
                         el('div', { class: 'v2-metadata-grid' }, [
@@ -2401,7 +2441,7 @@ export function renderSeriesDetails(
     if (!finalTrailerKey) finalTrailerKey = findTMDbTrailer(seriesData.videos);
     const tmdbOverview = seriesData.overview || '';
     const traktOverview = traktSeriesData?.overview || '';
-    const finalOverview = aggregatedSeriesData?.overview || tmdbOverview || traktOverview;
+    const finalOverview = getSafeOverviewText(aggregatedSeriesData?.overview || tmdbOverview || traktOverview);
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
@@ -2451,7 +2491,7 @@ export function renderSeriesDetails(
                         ,
                         finalTrailerKey ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': finalTrailerKey }, [el('i', { class: 'fas fa-play' }), ' Ver Trailer']) : null
                     ]),
-                    el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview || 'Sinopse não disponível.' })]),
+                    el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview })]),
                     el('div', { class: 'v2-additional-facts' }, [el('div', { class: 'v2-metadata-grid' },
                         additionalFacts.map(fact => {
                             const valueElement = fact.label === 'Transmissão'
@@ -2607,7 +2647,7 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
         const traktEpisode = traktEpisodes.find(te => te.number === episode.episode_number);
         const tmdbOverview = episode.overview || '';
         const traktOverview = traktEpisode?.overview || '';
-        const finalOverview = tmdbOverview || traktOverview;
+        const finalOverview = getSafeOverviewText(tmdbOverview || traktOverview);
         let stillPathSmall, stillPathLarge;
         if (episode.still_path) {
             stillPathSmall = `https://image.tmdb.org/t/p/w185${episode.still_path}`;
@@ -2623,7 +2663,7 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
             stillPathLarge = '/placeholders/still.svg';
         }
         const runtimeText = episode.runtime ? `${episode.runtime} min` : 'N/A';
-        const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview || 'Sinopse não disponível.', 'data-still-path-large': stillPathLarge }, [
+        const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview, 'data-still-path-large': stillPathLarge }, [
             createPosterImage(
                 stillPathSmall,
                 `Imagem do episódio ${episode.episode_number}`,

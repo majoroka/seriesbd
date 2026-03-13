@@ -91,7 +91,7 @@ body.light-theme .v2-overview p,
 body.light-theme .v2-metadata-item span,
 body.light-theme .v2-metadata-item p,
 body.light-theme .v2-public-ratings .rating-item span {
-    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.56);
+    text-shadow: 0 1px 2px rgba(6, 18, 34, 0.72), 0 0 8px rgba(6, 18, 34, 0.18);
 }
 
 body.light-theme .v2-detail-header::before {
@@ -108,6 +108,23 @@ body.light-theme .v2-detail-header::before {
 body.light-theme .v2-header-custom-bg {
     position: relative;
     z-index: 1;
+}
+
+body.light-theme .v2-details-wrapper {
+    position: relative;
+    z-index: 1;
+}
+
+body.light-theme .v2-details-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: -0.65rem -0.9rem -0.6rem -0.9rem;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: 20px;
+    background:
+        radial-gradient(120% 150% at 0% 0%, rgba(17, 33, 49, 0.38) 0%, rgba(17, 33, 49, 0.28) 45%, rgba(17, 33, 49, 0.16) 78%, rgba(17, 33, 49, 0.05) 100%),
+        linear-gradient(180deg, rgba(17, 33, 49, 0.26) 0%, rgba(17, 33, 49, 0.12) 100%);
 }
 
 * {
