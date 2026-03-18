@@ -1110,10 +1110,17 @@ function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
     return 'is-pending';
 }
 
+function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
+    const raw = String(item.imageUrl || '').trim();
+    if (!raw) return null;
+    return `/api/news-image?url=${encodeURIComponent(raw)}`;
+}
+
 function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
-    if (item.imageUrl) {
+    const imageSrc = getDashboardNewsImageSrc(item);
+    if (imageSrc) {
         return createPosterImage(
-            item.imageUrl,
+            imageSrc,
             `Imagem da notícia ${item.title}`,
             'dashboard-news-image',
             '/placeholders/poster.svg'
