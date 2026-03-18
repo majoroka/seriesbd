@@ -33,6 +33,38 @@ export interface TMDbSeason extends Season {
 }
 
 export type MediaType = 'series' | 'movie' | 'book';
+export type NewsMediaTypeHint = MediaType | 'general';
+
+export interface DashboardNewsItem {
+    id: string;
+    title: string;
+    url: string;
+    source: string;
+    sourceKey: string;
+    publishedAt: string | null;
+    mediaTypeHint: NewsMediaTypeHint;
+    imageUrl: string | null;
+    summary: string;
+}
+
+export interface DashboardNewsResponse {
+    ok: boolean;
+    items: DashboardNewsItem[];
+    meta?: {
+        total?: number;
+        requestedType?: string;
+        limit?: number;
+        generatedAt?: string;
+        partialFailure?: boolean;
+        sources?: Array<{
+            key: string;
+            source: string;
+            ok: boolean;
+            itemCount?: number;
+            error?: string;
+        }>;
+    };
+}
 
 export interface Series {
     id: number;

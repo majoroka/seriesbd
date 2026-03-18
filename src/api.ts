@@ -3,6 +3,8 @@ import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
 import {
     Series,
+    DashboardNewsItem,
+    DashboardNewsResponse,
     TMDbSeriesDetails,
     TMDbCredits,
     TraktData,
@@ -18,6 +20,7 @@ import { fromScopedMovieId, normalizeSeries, normalizeSeriesCollection, toScoped
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
 const API_BASE_TVMAZE = '/api/tvmaze';
+const API_BASE_NEWS = '/api/news';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
 type DiscoverPremieresOptions = {
@@ -205,6 +208,20 @@ export async function searchByMediaType(
     if (mediaType === 'movie') return searchMovies(query, signal);
     if (mediaType === 'book') return searchBooks(query, signal);
     return searchSeries(query, signal);
+}
+
+export async function fetchDashboardNews(
+    limit = 8,
+    type: 'all' | 'series' | 'movie' | 'book' = 'all',
+    signal?: AbortSignal | null
+): Promise<DashboardNewsItem[]> {
+    const params = new URLSearchParams();
+    params.set('limit', String(Math.max(1, Math.min(24, Math.trunc(limit) || 8))));
+    params.set('type', type);
+    const response = await fetchWithRetry(`${API_BASE_NEWS}?${params.toString()}`, { signal: signal || undefined }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as DashboardNewsResponse;
+    return Array.isArray(payload.items) ? payload.items : [];
 }
 
 /**

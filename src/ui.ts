@@ -3,7 +3,7 @@ import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
 
 declare module 'chart.js' {
@@ -707,6 +707,7 @@ type DashboardSuggestionEntry = {
     item: Series;
     reason: string;
 };
+type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
 
 type DashboardTopGenre = {
     label: string;
@@ -725,6 +726,8 @@ const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
 const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
+const DASHBOARD_NEWS_LIMIT = 8;
+const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
 let dashboardUpcomingCacheExpiresAt = 0;
@@ -735,6 +738,11 @@ let dashboardSuggestedCacheSignature = '';
 let dashboardSuggestedCacheExpiresAt = 0;
 let dashboardSuggestedInFlight: Promise<void> | null = null;
 let dashboardSuggestedRequestVersion = 0;
+let dashboardNewsEntries: DashboardNewsItem[] = [];
+let dashboardNewsState: DashboardNewsState = 'idle';
+let dashboardNewsCacheExpiresAt = 0;
+let dashboardNewsInFlight: Promise<void> | null = null;
+let dashboardNewsRequestVersion = 0;
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -1072,6 +1080,152 @@ function renderDashboardGenresChart(): void {
         ]);
         DOM.dashboardGenresLegend.appendChild(item);
     });
+}
+
+function formatDashboardNewsDate(value: string | null): string {
+    if (!value) return 'Sem data';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Sem data';
+    return parsed.toLocaleDateString('pt-PT', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    }).replace('.', '');
+}
+
+function getDashboardNewsBadgeLabel(mediaTypeHint: NewsMediaTypeHint): string {
+    if (mediaTypeHint === 'series') return 'SÉRIE';
+    if (mediaTypeHint === 'movie') return 'FILME';
+    if (mediaTypeHint === 'book') return 'LIVRO';
+    return 'MEDIA';
+}
+
+function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
+    if (mediaTypeHint === 'series') return 'is-suggestion-series';
+    if (mediaTypeHint === 'movie') return 'is-suggestion-movie';
+    if (mediaTypeHint === 'book') return 'is-suggestion-book';
+    return 'is-pending';
+}
+
+function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
+    if (item.imageUrl) {
+        return createPosterImage(
+            item.imageUrl,
+            `Imagem da notícia ${item.title}`,
+            'dashboard-news-image',
+            '/placeholders/poster.svg'
+        );
+    }
+
+    const sourceInitials = item.source
+        .split(/\s+/)
+        .map((chunk) => chunk.charAt(0))
+        .join('')
+        .slice(0, 3)
+        .toUpperCase();
+
+    return el('div', { class: 'dashboard-news-image dashboard-news-image--placeholder', 'aria-hidden': 'true' }, [
+        el('span', { class: 'dashboard-news-placeholder-type', text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
+        el('strong', { class: 'dashboard-news-placeholder-source', text: sourceInitials || 'RSS' }),
+    ]);
+}
+
+function renderDashboardNewsPanel(): void {
+    if (!DOM.dashboardNewsList) return;
+
+    if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state dashboard-news-state--loading">
+                <p>A carregar notícias recentes...</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (dashboardNewsState === 'error' && dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state dashboard-news-state--error">
+                <p>Não foi possível carregar notícias neste momento.</p>
+                <button type="button" class="btn btn-secondary dashboard-news-retry-btn" id="dashboard-news-retry-btn">Tentar novamente</button>
+            </div>
+        `;
+        const retryBtn = document.getElementById('dashboard-news-retry-btn') as HTMLButtonElement | null;
+        retryBtn?.addEventListener('click', () => {
+            dashboardNewsCacheExpiresAt = 0;
+            dashboardNewsState = 'idle';
+            renderDashboardNewsPanel();
+            void ensureDashboardNews();
+        }, { once: true });
+        return;
+    }
+
+    if (dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state">
+                <p>Ainda não existem notícias disponíveis.</p>
+            </div>
+        `;
+        return;
+    }
+
+    DOM.dashboardNewsList.innerHTML = '';
+    dashboardNewsEntries.forEach((item) => {
+        const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
+        const article = el('a', {
+            class: 'dashboard-news-item',
+            href: item.url,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            role: 'listitem',
+            title: `${item.title} • ${item.source}`,
+            'aria-label': `Abrir notícia: ${item.title}`,
+        }, [
+            createDashboardNewsMedia(item),
+            el('div', { class: 'dashboard-news-content' }, [
+                el('div', { class: 'dashboard-news-meta' }, [
+                    el('span', { class: 'dashboard-news-source', text: item.source }),
+                    el('span', { class: 'dashboard-news-date', text: formatDashboardNewsDate(item.publishedAt) }),
+                    el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
+                ]),
+                el('h4', { text: item.title }),
+                el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
+            ]),
+        ]);
+        DOM.dashboardNewsList.appendChild(article);
+    });
+}
+
+async function ensureDashboardNews(force = false): Promise<void> {
+    const now = Date.now();
+    if (!force && dashboardNewsEntries.length > 0 && now < dashboardNewsCacheExpiresAt) {
+        dashboardNewsState = 'ready';
+        return;
+    }
+    if (dashboardNewsInFlight) return;
+
+    const requestVersion = ++dashboardNewsRequestVersion;
+    dashboardNewsState = dashboardNewsEntries.length > 0 && !force ? 'ready' : 'loading';
+    renderDashboardNewsPanel();
+
+    dashboardNewsInFlight = (async () => {
+        const items = await API.fetchDashboardNews(DASHBOARD_NEWS_LIMIT, 'all');
+        if (requestVersion !== dashboardNewsRequestVersion) return;
+        dashboardNewsEntries = items;
+        dashboardNewsState = 'ready';
+        dashboardNewsCacheExpiresAt = Date.now() + DASHBOARD_NEWS_CACHE_TTL_MS;
+        renderDashboardNewsPanel();
+    })()
+        .catch((error) => {
+            console.warn('[dashboard] Falha ao carregar notícias RSS.', error);
+            if (requestVersion !== dashboardNewsRequestVersion) return;
+            dashboardNewsState = dashboardNewsEntries.length > 0 ? 'ready' : 'error';
+            renderDashboardNewsPanel();
+        })
+        .finally(() => {
+            if (requestVersion === dashboardNewsRequestVersion) {
+                dashboardNewsInFlight = null;
+            }
+        });
 }
 
 function renderDashboardRecentCarousel(): void {
@@ -1809,8 +1963,8 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
-    renderDashboardEvolutionChart();
-    renderDashboardGenresChart();
+    renderDashboardNewsPanel();
+    void ensureDashboardNews();
     renderDashboardRecentCarousel();
     renderDashboardSuggestionsCarousel();
     renderDashboardUpcomingReleases();

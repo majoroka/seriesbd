@@ -1038,6 +1038,13 @@ body.light-theme .sidebar-submenu-shell {
     min-height: var(--dashboard-analytics-row-height);
 }
 
+.dashboard-panel-news {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: var(--dashboard-analytics-row-height);
+}
+
 .dashboard-panel-recent {
     grid-area: recent;
 }
@@ -1231,6 +1238,138 @@ body.light-theme .dashboard-media-card-metrics div::after {
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     font-family: var(--font-main);
+}
+
+.dashboard-news-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    grid-auto-rows: minmax(160px, 1fr);
+}
+
+.dashboard-news-item {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 0.85rem;
+    min-height: 160px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.08) 0%, rgba(210, 70, 101, 0.03) 100%),
+        var(--bg-light);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-news-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(71, 171, 210, 0.55);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.dashboard-news-item:focus-visible {
+    outline: 2px solid var(--primary-accent);
+    outline-offset: 2px;
+}
+
+.dashboard-news-image {
+    width: 100%;
+    height: 100%;
+    min-height: 160px;
+    object-fit: cover;
+    background-color: var(--bg-hover);
+}
+
+.dashboard-news-image--placeholder {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.9rem;
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.22), rgba(31, 39, 54, 0.85)),
+        var(--bg-hover);
+}
+
+.dashboard-news-placeholder-type {
+    align-self: flex-start;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.86);
+}
+
+.dashboard-news-placeholder-source {
+    font-family: var(--font-main);
+    font-size: 1.8rem;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.dashboard-news-content {
+    display: grid;
+    align-content: start;
+    gap: 0.65rem;
+    padding: 0.85rem 0.95rem 0.9rem 0;
+    min-width: 0;
+}
+
+.dashboard-news-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-news-source,
+.dashboard-news-date {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.dashboard-news-badge {
+    font-size: 0.68rem;
+}
+
+.dashboard-news-content h4 {
+    font-size: 1rem;
+    line-height: 1.25;
+    color: var(--text-primary);
+}
+
+.dashboard-news-summary {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dashboard-news-state {
+    display: grid;
+    place-items: center;
+    min-height: 220px;
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.dashboard-news-state p {
+    color: var(--text-secondary);
+}
+
+.dashboard-news-state--error {
+    gap: 0.85rem;
+}
+
+.dashboard-news-retry-btn {
+    min-width: 140px;
 }
 
 .dashboard-analytics-grid {
@@ -4114,6 +4253,10 @@ body.light-theme .network-logo {
         max-height: none;
     }
 
+    .dashboard-panel-news {
+        max-height: none;
+    }
+
     .dashboard-upcoming-list {
         max-height: 360px;
     }
@@ -4220,6 +4363,10 @@ body.light-theme .network-logo {
     }
 
     .dashboard-analytics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-news-grid {
         grid-template-columns: 1fr;
     }
 
@@ -4530,6 +4677,34 @@ body.light-theme .network-logo {
 
     .dashboard-panel {
         padding: 0.85rem;
+    }
+
+    .dashboard-news-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .dashboard-news-item {
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 0.75rem;
+        min-height: 132px;
+    }
+
+    .dashboard-news-image {
+        min-height: 132px;
+    }
+
+    .dashboard-news-content {
+        padding: 0.75rem 0.8rem 0.75rem 0;
+    }
+
+    .dashboard-news-content h4 {
+        font-size: 0.95rem;
+    }
+
+    .dashboard-news-summary {
+        font-size: 0.84rem;
+        -webkit-line-clamp: 3;
     }
 
     .dashboard-chart-card {
