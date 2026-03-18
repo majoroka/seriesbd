@@ -49,6 +49,7 @@ export const dashboardMediaCards = document.querySelectorAll('.dashboard-media-c
 export const dashboardEvolutionChart = document.getElementById('dashboard-evolution-chart') as HTMLCanvasElement;
 export const dashboardGenresChart = document.getElementById('dashboard-genres-chart') as HTMLCanvasElement;
 export const dashboardGenresLegend = document.getElementById('dashboard-genres-legend') as HTMLUListElement;
+export const dashboardNewsFilters = document.getElementById('dashboard-news-filters') as HTMLDivElement;
 export const dashboardNewsList = document.getElementById('dashboard-news-list') as HTMLDivElement;
 export const dashboardRecentCarousel = document.getElementById('dashboard-recent-carousel') as HTMLDivElement;
 export const dashboardSuggestionsCarousel = document.getElementById('dashboard-suggestions-carousel') as HTMLDivElement;

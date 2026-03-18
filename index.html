@@ -218,6 +218,12 @@
                         <section class="dashboard-panel dashboard-panel-analytics dashboard-panel-news" aria-label="Notícias de séries, filmes e livros">
                             <div class="dashboard-panel-header">
                                 <h3>NOTÍCIAS</h3>
+                                <div id="dashboard-news-filters" class="dashboard-news-filters" aria-label="Filtrar notícias por tipo">
+                                    <button type="button" class="dashboard-news-filter is-active" data-news-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-news-filter" data-news-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-news-filter" data-news-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-news-filter" data-news-filter="book">Livros</button>
+                                </div>
                             </div>
                             <div id="dashboard-news-list" class="dashboard-news-grid" role="list" aria-label="Últimas notícias agregadas"></div>
                         </section>

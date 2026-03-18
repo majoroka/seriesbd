@@ -1045,6 +1045,10 @@ body.light-theme .sidebar-submenu-shell {
     max-height: var(--dashboard-analytics-row-height);
 }
 
+.dashboard-panel-news .dashboard-panel-header {
+    gap: 0.75rem;
+}
+
 .dashboard-panel-recent {
     grid-area: recent;
 }
@@ -1238,6 +1242,42 @@ body.light-theme .dashboard-media-card-metrics div::after {
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     font-family: var(--font-main);
+}
+
+.dashboard-news-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-news-filters.is-hidden {
+    display: none;
+}
+
+.dashboard-news-filter {
+    appearance: none;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 0.32rem 0.72rem;
+    font-family: var(--font-main);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.dashboard-news-filter:hover {
+    border-color: rgba(71, 171, 210, 0.45);
+    color: var(--text-primary);
+}
+
+.dashboard-news-filter.is-active {
+    color: #aee9ff;
+    border-color: rgba(71, 171, 210, 0.58);
+    background: rgba(71, 171, 210, 0.14);
 }
 
 .dashboard-news-grid {
@@ -4370,6 +4410,12 @@ body.light-theme .network-logo {
         grid-template-columns: 1fr;
     }
 
+    .dashboard-panel-news .dashboard-panel-header {
+        align-items: flex-start;
+        gap: 0.75rem;
+        flex-direction: column;
+    }
+
     .dashboard-chart-card {
         min-height: 250px;
         height: auto;
@@ -4682,6 +4728,17 @@ body.light-theme .network-logo {
     .dashboard-news-grid {
         grid-template-columns: 1fr;
         gap: 0.75rem;
+    }
+
+    .dashboard-news-filters {
+        width: 100%;
+        gap: 0.4rem;
+    }
+
+    .dashboard-news-filter {
+        flex: 1 1 calc(50% - 0.25rem);
+        justify-content: center;
+        text-align: center;
     }
 
     .dashboard-news-item {

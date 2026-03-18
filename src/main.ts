@@ -3564,6 +3564,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const dashboardNewsFilterBtn = target.closest('.dashboard-news-filter') as HTMLButtonElement | null;
+        if (dashboardNewsFilterBtn) {
+            const filter = dashboardNewsFilterBtn.dataset.newsFilter;
+            if (filter === 'all' || filter === 'series' || filter === 'movie' || filter === 'book') {
+                UI.setDashboardNewsFilter(filter);
+            }
+            return;
+        }
+
         const seriesItem = target.closest('.watchlist-item, .top-rated-item, .trending-card, .search-result-item, .dashboard-recent-item, .dashboard-upcoming-item');
         if (seriesItem) {
             const typedSeriesItem = seriesItem as HTMLElement;

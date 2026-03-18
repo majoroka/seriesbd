@@ -2,6 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
+import { DASHBOARD_NEWS_ENHANCED_ENABLED } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
@@ -711,6 +712,7 @@ type DashboardSuggestionEntry = {
     reason: string;
 };
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
+type DashboardNewsFilter = 'all' | 'series' | 'movie' | 'book';
 
 type DashboardTopGenre = {
     label: string;
@@ -729,7 +731,7 @@ const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
 const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
-const DASHBOARD_NEWS_LIMIT = 8;
+const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
@@ -746,6 +748,13 @@ let dashboardNewsState: DashboardNewsState = 'idle';
 let dashboardNewsCacheExpiresAt = 0;
 let dashboardNewsInFlight: Promise<void> | null = null;
 let dashboardNewsRequestVersion = 0;
+let dashboardNewsFilter: DashboardNewsFilter = 'all';
+
+const DASHBOARD_NEWS_STOPWORDS = new Set([
+    'para', 'com', 'from', 'that', 'this', 'sobre', 'will', 'into', 'through', 'after', 'before', 'sobre',
+    'uma', 'umas', 'uns', 'the', 'and', 'mais', 'como', 'quando', 'where', 'what', 'have', 'novo', 'nova',
+    'series', 'série', 'filme', 'livro', 'media', 'show', 'shows', 'book', 'books', 'movie', 'movies',
+]);
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -1110,6 +1119,116 @@ function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
     return 'is-pending';
 }
 
+export function setDashboardNewsFilter(filter: DashboardNewsFilter): void {
+    dashboardNewsFilter = filter;
+    renderDashboardNewsFilters();
+    renderDashboardNewsPanel();
+}
+
+function renderDashboardNewsFilters(): void {
+    if (!DOM.dashboardNewsFilters) return;
+    DOM.dashboardNewsFilters.classList.toggle('is-hidden', !DASHBOARD_NEWS_ENHANCED_ENABLED);
+    DOM.dashboardNewsFilters.querySelectorAll<HTMLButtonElement>('.dashboard-news-filter').forEach((button) => {
+        const filter = (button.dataset.newsFilter || 'all') as DashboardNewsFilter;
+        const isActive = filter === dashboardNewsFilter;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function buildDashboardNewsKeywordWeights(): Map<string, number> {
+    const weights = new Map<string, number>();
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const source = `${item.name || ''} ${item.original_name || ''}`;
+        const tokens = normalizeGenreToken(source)
+            .split(' ')
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 4 && !DASHBOARD_NEWS_STOPWORDS.has(token));
+        tokens.forEach((token) => {
+            weights.set(token, (weights.get(token) || 0) + 1);
+        });
+    });
+
+    return new Map(
+        Array.from(weights.entries())
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 12)
+    );
+}
+
+function buildDashboardMediaTypeWeights(): Record<DashboardNewsFilter, number> {
+    const weights: Record<DashboardNewsFilter, number> = {
+        all: 0,
+        series: 0,
+        movie: 0,
+        book: 0,
+    };
+
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book') {
+            weights[mediaType] += 1;
+        }
+    });
+
+    return weights;
+}
+
+function computeDashboardNewsRelevance(
+    item: DashboardNewsItem,
+    topGenres: DashboardTopGenre[],
+    keywordWeights: Map<string, number>,
+    mediaTypeWeights: Record<DashboardNewsFilter, number>
+): number {
+    const haystack = normalizeGenreToken(`${item.title} ${item.summary} ${item.source}`);
+    let score = 0;
+
+    topGenres.forEach((genre, index) => {
+        if (!genre.normalized || !haystack.includes(genre.normalized)) return;
+        score += ((topGenres.length - index) * 6) + Math.min(genre.count, 5);
+    });
+
+    keywordWeights.forEach((weight, token) => {
+        if (!haystack.includes(token)) return;
+        score += Math.min(weight, 4) + 1;
+    });
+
+    if (item.mediaTypeHint === 'series' || item.mediaTypeHint === 'movie' || item.mediaTypeHint === 'book') {
+        score += mediaTypeWeights[item.mediaTypeHint] || 0;
+    }
+
+    if (item.imageUrl) score += 2;
+    return score;
+}
+
+function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
+    const filtered = dashboardNewsEntries.filter((item) => {
+        if (dashboardNewsFilter === 'all') return true;
+        return item.mediaTypeHint === dashboardNewsFilter;
+    });
+
+    const hasHistory = (S.myWatchlist.length + S.myArchive.length) > 0;
+    const topGenres = buildTopDashboardGenres();
+    const keywordWeights = buildDashboardNewsKeywordWeights();
+    const mediaTypeWeights = buildDashboardMediaTypeWeights();
+    const scoreById = new Map<string, number>();
+    return [...filtered].sort((a, b) => {
+        const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+        if (!DASHBOARD_NEWS_ENHANCED_ENABLED || !hasHistory) {
+            return bTs - aTs;
+        }
+
+        const scoreA = scoreById.get(a.id) ?? computeDashboardNewsRelevance(a, topGenres, keywordWeights, mediaTypeWeights);
+        const scoreB = scoreById.get(b.id) ?? computeDashboardNewsRelevance(b, topGenres, keywordWeights, mediaTypeWeights);
+        scoreById.set(a.id, scoreA);
+        scoreById.set(b.id, scoreB);
+        const scoreDelta = scoreB - scoreA;
+        if (scoreDelta !== 0) return scoreDelta;
+        return bTs - aTs;
+    }).slice(0, 8);
+}
+
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
     const raw = String(item.imageUrl || '').trim();
     if (!raw) return null;
@@ -1142,6 +1261,7 @@ function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
 
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
+    renderDashboardNewsFilters();
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
         DOM.dashboardNewsList.innerHTML = `
@@ -1169,17 +1289,18 @@ function renderDashboardNewsPanel(): void {
         return;
     }
 
-    if (dashboardNewsEntries.length === 0) {
+    const visibleItems = getVisibleDashboardNewsEntries();
+    if (visibleItems.length === 0) {
         DOM.dashboardNewsList.innerHTML = `
             <div class="dashboard-news-state">
-                <p>Ainda não existem notícias disponíveis.</p>
+                <p>${dashboardNewsEntries.length === 0 ? 'Ainda não existem notícias disponíveis.' : 'Sem notícias para este filtro.'}</p>
             </div>
         `;
         return;
     }
 
     DOM.dashboardNewsList.innerHTML = '';
-    dashboardNewsEntries.forEach((item) => {
+    visibleItems.forEach((item) => {
         const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
         const article = el('a', {
             class: 'dashboard-news-item',
