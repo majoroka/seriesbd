@@ -14,9 +14,13 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 
 - Sprint 7 concluído.
 - Sprint 8 concluído.
+- Sprint 9 concluído.
+- Sprint 10 concluído.
+- Sprint 11 concluído.
 - PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
 - PR-5 em curso para hardening UX, acessibilidade e regressão final.
-- Próxima frente aprovada: **Notícias RSS na Dashboard** (substituição do bloco de gráficos).
+- PR-6, PR-7 e PR-8 concluídos e validados em staging.
+- Frente em aberto: **hardening final/QA das Notícias RSS**.
 
 ## Decisões já fechadas
 
@@ -146,9 +150,9 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - [x] PR-3: Sub-menus por domínio e integração biblioteca geral.
 - [x] PR-4: Recomendações personalizadas + notificações reais.
 - [ ] PR-5: Hardening UX, acessibilidade e regressão final.
-- [ ] PR-6: Fundação do agregador RSS + contrato `/api/news`.
-- [ ] PR-7: UI do card de notícias e substituição do bloco de gráficos.
-- [ ] PR-8: Relevância/filtros + hardening + rollout controlado.
+- [x] PR-6: Fundação do agregador RSS + contrato `/api/news`.
+- [x] PR-7: UI do card de notícias e substituição do bloco de gráficos.
+- [x] PR-8: Relevância/filtros + hardening + rollout controlado.
 
 ## Critérios de aceitação globais
 

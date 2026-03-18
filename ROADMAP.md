@@ -5,8 +5,8 @@
 - MVP funcional disponível como PWA offline-first.
 - Biblioteca local com gestão completa (watchlist, arquivo, notas, ratings).
 - Integração com TMDb/Trakt/TVMaze via Cloudflare Pages Functions e cache de temporadas.
-- Estatísticas com gráficos e exportações, import/export completo da base local.
-- Dashboard SaaS V2 entregue (shell, cards KPI, gráficos, sugestões, lançamentos, sub-menus por domínio e notificações reais).
+- Estatísticas com exportações e import/export completo da base local.
+- Dashboard SaaS V2 entregue (shell, cards KPI, notícias RSS, sugestões, lançamentos, sub-menus por domínio e notificações reais).
 - Plano de execução da dashboard mantido em [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
 
 ## ✅ Recém-adicionado
@@ -22,15 +22,17 @@
 - **Ratings com 3 anéis (P3-03)**: bloco de avaliações na vista de detalhes passa a mostrar TMDb, Trakt e TVMaze, com anéis mais finos e cor TVMaze `#386e67`.
 - **Matching hardening (P3-04)**: resolução entre fontes agora prioriza IMDb, usa fallback nome+ano com score mínimo e descarta matches fracos para reduzir falsos positivos.
 - **Testes de regressão da agregação (P3-05)**: cobertura adicionada para PT vs EN, EN mais completo, ratings de 3 fontes e falha parcial de providers.
-- **Sprint 7 concluído**: dashboard como ecrã de entrada, shell SaaS, top bar/conta, KPI, gráficos, recentes, sugestões e lançamentos.
+- **Sprint 7 concluído**: dashboard como ecrã de entrada, shell SaaS, top bar/conta, KPI, recentes, sugestões e lançamentos.
 - **Sprint 8 concluído**: sub-menu dinâmico por domínio (séries/filmes/livros), fallback `Brevemente` para livros e centro de notificações real com estado persistido.
+- **Sprint 9 concluído**: agregador RSS multi-fonte com `/api/news`, normalização, deduplicação, extração de imagem e cache.
+- **Sprint 10 concluído**: substituição do bloco de gráficos da dashboard por um card `NOTÍCIAS`.
+- **Sprint 11 concluído**: filtros rápidos por domínio e relevância personalizada por biblioteca/histórico.
 
 ## Em preparação imediata
 
-1. **Notícias RSS na Dashboard (Sprint 9-13)**
-   - Substituir o card atual de gráficos por um card de notícias (séries/filmes/livros).
-   - Priorizar notícias com imagem e fallback visual quando a fonte não fornecer media.
-   - Agregação por Cloudflare Function com cache, deduplicação e observabilidade.
+1. **Hardening final das Notícias RSS (Sprint 12-13)**
+   - Rever sanitização, observabilidade, custos e licenciamento das fontes.
+   - Fechar QA/UAT e rollout final controlado.
 2. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
@@ -41,21 +43,26 @@
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
 
-## Próximos sprints: Notícias RSS na Dashboard
+## Notícias RSS na Dashboard
 
 1. **Sprint 9 | Fundação do agregador**
+   - Estado: concluído.
    - Endpoint `/api/news` com normalização, deduplicação e ordenação por data.
    - Extração de imagem (`media:*`, `enclosure`, fallback controlado).
 2. **Sprint 10 | Substituição do card de gráficos**
+   - Estado: concluído.
    - Remover bloco `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
    - Renderizar notícias com imagem, fonte, data e tipo.
 3. **Sprint 11 | Relevância por utilizador**
+   - Estado: concluído.
    - Priorizar notícias por preferências da biblioteca.
    - Fallback para feed equilibrado quando não houver histórico suficiente.
 4. **Sprint 12 | Hardening**
+   - Estado: em aberto.
    - Sanitização de conteúdo RSS, limites e métricas por fonte.
    - Revisão de atribuição/licenciamento das fontes usadas.
 5. **Sprint 13 | QA e rollout**
+   - Estado: em aberto.
    - Feature flag em `staging`, UAT, regressão e plano de rollback.
 
 ## Roadmap futuro: Reviews da Comunidade

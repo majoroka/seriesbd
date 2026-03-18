@@ -1,8 +1,8 @@
 # Plano de Execução por Sprints
 
-Estado atual: **Sprint 1 a Sprint 8 concluídos**.  
+Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Em planeamento: **Sprint 9 a Sprint 13 (Notícias RSS na Dashboard)**.
+Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -160,57 +160,57 @@ Estado: **concluído**.
 
 ## Sprint 9: Notícias RSS (Fundação Backend + Contrato)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S9-T01 Definir catálogo inicial de fontes RSS (séries/filmes/livros) e respetiva prioridade.
-- [ ] S9-T02 Criar endpoint agregador `GET /api/news` em Cloudflare Pages Functions.
-- [ ] S9-T03 Normalizar payload de notícia (`id`, `title`, `url`, `source`, `publishedAt`, `mediaTypeHint`, `imageUrl`, `summary`).
-- [ ] S9-T04 Implementar deduplicação por `guid/link` e ordenação por data de publicação.
-- [ ] S9-T05 Implementar extração de imagem com fallback (`media:content`, `media:thumbnail`, `enclosure`, parsing de conteúdo).
-- [ ] S9-T06 Introduzir cache e timeouts por fonte para evitar bloqueio da app.
+- [x] S9-T01 Definir catálogo inicial de fontes RSS (séries/filmes/livros) e respetiva prioridade.
+- [x] S9-T02 Criar endpoint agregador `GET /api/news` em Cloudflare Pages Functions.
+- [x] S9-T03 Normalizar payload de notícia (`id`, `title`, `url`, `source`, `publishedAt`, `mediaTypeHint`, `imageUrl`, `summary`).
+- [x] S9-T04 Implementar deduplicação por `guid/link` e ordenação por data de publicação.
+- [x] S9-T05 Implementar extração de imagem com fallback (`media:content`, `media:thumbnail`, `enclosure`, parsing de conteúdo).
+- [x] S9-T06 Introduzir cache e timeouts por fonte para evitar bloqueio da app.
 
 ### Critérios de aceitação
-- [ ] `GET /api/news` responde de forma estável mesmo com falha parcial de fontes.
-- [ ] A resposta vem já normalizada para consumo direto no frontend.
-- [ ] A maioria das notícias chega com `imageUrl` válido quando a fonte disponibiliza imagem.
-- [ ] Falhas de feed não quebram a dashboard.
+- [x] `GET /api/news` responde de forma estável mesmo com falha parcial de fontes.
+- [x] A resposta vem já normalizada para consumo direto no frontend.
+- [x] A maioria das notícias chega com `imageUrl` válido quando a fonte disponibiliza imagem.
+- [x] Falhas de feed não quebram a dashboard.
 
 ## Sprint 10: Dashboard Notícias (Substituir Gráficos)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S10-T01 Remover da dashboard o card atual de `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
-- [ ] S10-T02 Criar no mesmo espaço o card `NOTÍCIAS` com layout coerente ao tema atual.
-- [ ] S10-T03 Mostrar cada notícia com imagem (quando existir), título, fonte, data e tipo (série/filme/livro).
-- [ ] S10-T04 Implementar estados de UX (`loading`, `vazio`, `erro`, `retry`).
-- [ ] S10-T05 Garantir comportamento responsivo sem overflow (desktop/tablet/mobile).
+- [x] S10-T01 Remover da dashboard o card atual de `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
+- [x] S10-T02 Criar no mesmo espaço o card `NOTÍCIAS` com layout coerente ao tema atual.
+- [x] S10-T03 Mostrar cada notícia com imagem (quando existir), título, fonte, data e tipo (série/filme/livro).
+- [x] S10-T04 Implementar estados de UX (`loading`, `vazio`, `erro`, `retry`).
+- [x] S10-T05 Garantir comportamento responsivo sem overflow (desktop/tablet/mobile).
 
 ### Critérios de aceitação
-- [ ] A zona dos gráficos é totalmente substituída por notícias.
-- [ ] O card de notícias mantém consistência visual com o dashboard.
-- [ ] Notícias sem imagem usam fallback visual sem quebrar layout.
-- [ ] Não há regressões funcionais em `Recentemente vistos/lidos`, `Sugestões` e `Lançamentos`.
+- [x] A zona dos gráficos é totalmente substituída por notícias.
+- [x] O card de notícias mantém consistência visual com o dashboard.
+- [x] Notícias sem imagem usam fallback visual sem quebrar layout.
+- [x] Não há regressões funcionais em `Recentemente vistos/lidos`, `Sugestões` e `Lançamentos`.
 
 ## Sprint 11: Relevância e Personalização de Notícias
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S11-T01 Classificar notícias por `mediaType` (série/filme/livro) com heurística por fonte/título/tags.
-- [ ] S11-T02 Priorizar notícias alinhadas com o histórico da biblioteca do utilizador autenticado.
-- [ ] S11-T03 Definir fallback para utilizador sem histórico (mistura equilibrada por domínio).
-- [ ] S11-T04 Adicionar filtros rápidos de notícias por domínio (Todos, Séries, Filmes, Livros).
+- [x] S11-T01 Classificar notícias por `mediaType` (série/filme/livro) com heurística por fonte/título/tags.
+- [x] S11-T02 Priorizar notícias alinhadas com o histórico da biblioteca do utilizador autenticado.
+- [x] S11-T03 Definir fallback para utilizador sem histórico (mistura equilibrada por domínio).
+- [x] S11-T04 Adicionar filtros rápidos de notícias por domínio (Todos, Séries, Filmes, Livros).
 
 ### Critérios de aceitação
-- [ ] Utilizadores com histórico recebem notícias mais alinhadas ao seu consumo.
-- [ ] Utilizadores sem histórico recebem feed útil e equilibrado.
-- [ ] Filtros por domínio funcionam sem recarregar a página.
+- [x] Utilizadores com histórico recebem notícias mais alinhadas ao seu consumo.
+- [x] Utilizadores sem histórico recebem feed útil e equilibrado.
+- [x] Filtros por domínio funcionam sem recarregar a página.
 
 ## Sprint 12: Hardening de Feed (Qualidade, Segurança, Custos)
 
-Estado: **planeado**.
+Estado: **parcialmente concluído / em aberto**.
 
 ### Tarefas
 - [ ] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
