@@ -10,12 +10,13 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - livros
 - biblioteca
 
-## Estado de execução (11 Mar 2026)
+## Estado de execução (18 Mar 2026)
 
 - Sprint 7 concluído.
 - Sprint 8 concluído.
 - PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
 - PR-5 em curso para hardening UX, acessibilidade e regressão final.
+- Próxima frente aprovada: **Notícias RSS na Dashboard** (substituição do bloco de gráficos).
 
 ## Decisões já fechadas
 
@@ -127,6 +128,17 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
   - custo dos gráficos
   - carrosséis
 
+## Fase 7 - Notícias RSS (substituição dos gráficos)
+
+- DV2-T25 Criar agregador `/api/news` para múltiplas fontes RSS (séries/filmes/livros).
+- DV2-T26 Normalizar campos: título, data, fonte, URL, tipo e imagem.
+- DV2-T27 Substituir no dashboard o card de `GRÁFICO DE DESEMPENHO` por card `NOTÍCIAS`.
+- DV2-T28 Priorizar notícias com imagem; aplicar fallback visual quando não houver media.
+- DV2-T29 Introduzir deduplicação + cache por fonte para evitar lentidão e duplicados.
+- DV2-T30 Adicionar filtros por domínio (`Todos`, `Séries`, `Filmes`, `Livros`) no card.
+- DV2-T31 Personalizar relevância por histórico do utilizador (com fallback para feed geral).
+- DV2-T32 Validar responsividade do card em desktop/tablet/mobile sem overflow.
+
 ## Plano de PRs recomendado
 
 - [x] PR-1: Shell da dashboard, sidebar, top bar, tema e navegação base.
@@ -134,6 +146,9 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - [x] PR-3: Sub-menus por domínio e integração biblioteca geral.
 - [x] PR-4: Recomendações personalizadas + notificações reais.
 - [ ] PR-5: Hardening UX, acessibilidade e regressão final.
+- [ ] PR-6: Fundação do agregador RSS + contrato `/api/news`.
+- [ ] PR-7: UI do card de notícias e substituição do bloco de gráficos.
+- [ ] PR-8: Relevância/filtros + hardening + rollout controlado.
 
 ## Critérios de aceitação globais
 

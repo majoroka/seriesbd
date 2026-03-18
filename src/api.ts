@@ -3,6 +3,8 @@ import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
 import {
     Series,
+    DashboardNewsItem,
+    DashboardNewsResponse,
     TMDbSeriesDetails,
     TMDbCredits,
     TraktData,
@@ -18,6 +20,7 @@ import { fromScopedMovieId, normalizeSeries, normalizeSeriesCollection, toScoped
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
 const API_BASE_TVMAZE = '/api/tvmaze';
+const API_BASE_NEWS = '/api/news';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
 type DiscoverPremieresOptions = {
@@ -146,9 +149,18 @@ export async function searchBooks(query: string, signal: AbortSignal): Promise<{
     const normalizedResults = normalizeSeriesCollection(payload.results);
     const results = normalizedResults.map((item) => {
         if (item.media_type !== 'book') {
-            return normalizeSeries({ ...item, media_type: 'book', id: toScopedBookId(String(item.id)) });
+            return normalizeSeries({
+                ...item,
+                media_type: 'book',
+                id: toScopedBookId(String(item.id)),
+                overview: sanitizeOverview(item.overview),
+            });
         }
-        return normalizeSeries({ ...item, id: toScopedBookId(String(item.source_id || item.id)) });
+        return normalizeSeries({
+            ...item,
+            id: toScopedBookId(String(item.source_id || item.id)),
+            overview: sanitizeOverview(item.overview),
+        });
     });
     return { results };
 }
@@ -172,6 +184,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
                 media_type: 'book',
                 source_id: normalizedSourceId,
                 id: book.id,
+                overview: sanitizeOverview(normalizedDetails.overview || book.overview),
             });
         }
     } catch (error) {
@@ -183,6 +196,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
         media_type: 'book',
         source_id: sourceId || String(book.id),
         id: book.id,
+        overview: sanitizeOverview(book.overview),
     });
 }
 
@@ -194,6 +208,20 @@ export async function searchByMediaType(
     if (mediaType === 'movie') return searchMovies(query, signal);
     if (mediaType === 'book') return searchBooks(query, signal);
     return searchSeries(query, signal);
+}
+
+export async function fetchDashboardNews(
+    limit = 8,
+    type: 'all' | 'series' | 'movie' | 'book' = 'all',
+    signal?: AbortSignal | null
+): Promise<DashboardNewsItem[]> {
+    const params = new URLSearchParams();
+    params.set('limit', String(Math.max(1, Math.min(24, Math.trunc(limit) || 8))));
+    params.set('type', type);
+    const response = await fetchWithRetry(`${API_BASE_NEWS}?${params.toString()}`, { signal: signal || undefined }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as DashboardNewsResponse;
+    return Array.isArray(payload.items) ? payload.items : [];
 }
 
 /**
@@ -638,7 +666,34 @@ function normalizeLanguageTag(language: string | null | undefined): string {
 }
 
 function sanitizeOverview(value: unknown): string {
-    return String(value || '').replace(/\s+/g, ' ').trim();
+    const raw = String(value || '');
+    if (!raw) return '';
+    const withoutTags = raw
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/p>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ');
+    const decoded = withoutTags.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityRaw) => {
+        const entity = String(entityRaw || '').toLowerCase();
+        if (!entity) return match;
+        if (entity.startsWith('#x')) {
+            const code = Number.parseInt(entity.slice(2), 16);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        if (entity.startsWith('#')) {
+            const code = Number.parseInt(entity.slice(1), 10);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        const map: Record<string, string> = {
+            amp: '&',
+            lt: '<',
+            gt: '>',
+            quot: '"',
+            apos: "'",
+            nbsp: ' ',
+        };
+        return map[entity] ?? match;
+    });
+    return decoded.replace(/\s+/g, ' ').trim();
 }
 
 function isMeaningfulOverview(value: unknown): boolean {

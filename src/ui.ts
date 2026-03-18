@@ -3,7 +3,7 @@ import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
 
 declare module 'chart.js' {
@@ -44,6 +44,11 @@ function getMediaTypeLabel(mediaType: MediaType): string {
     return 'Série';
 }
 
+function getMediaTypeChipClass(mediaType: MediaType, extraClass = ''): string {
+    const base = `media-type-chip media-type-chip--${mediaType}`;
+    return extraClass ? `${base} ${extraClass}` : base;
+}
+
 function buildPosterUrl(
     posterPath: string | null | undefined,
     tmdbSize: string,
@@ -57,6 +62,46 @@ function buildPosterUrl(
     return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
 }
 
+function decodeHtmlEntities(rawValue: string): string {
+    return rawValue.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityRaw) => {
+        const entity = String(entityRaw || '').toLowerCase();
+        if (!entity) return match;
+        if (entity.startsWith('#x')) {
+            const code = Number.parseInt(entity.slice(2), 16);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        if (entity.startsWith('#')) {
+            const code = Number.parseInt(entity.slice(1), 10);
+            return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+        }
+        const map: Record<string, string> = {
+            amp: '&',
+            lt: '<',
+            gt: '>',
+            quot: '"',
+            apos: "'",
+            nbsp: ' ',
+        };
+        return map[entity] ?? match;
+    });
+}
+
+function sanitizePlainText(value: unknown): string {
+    const raw = String(value || '');
+    if (!raw) return '';
+    const withoutTags = raw
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/p>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ');
+    const decoded = decodeHtmlEntities(withoutTags);
+    return decoded.replace(/\s+/g, ' ').trim();
+}
+
+function getSafeOverviewText(value: unknown): string {
+    const sanitized = sanitizePlainText(value);
+    return sanitized || 'Sinopse não disponível.';
+}
+
 function createPosterImage(
     src: string,
     alt: string,
@@ -64,6 +109,9 @@ function createPosterImage(
     fallbackSrc: string
 ): HTMLImageElement {
     const img = el('img', { src, alt, class: className, loading: 'lazy' }) as HTMLImageElement;
+    if (/^https?:\/\//i.test(src)) {
+        img.referrerPolicy = 'no-referrer';
+    }
     img.addEventListener('error', () => {
         if (img.dataset.fallbackApplied === '1') return;
         img.dataset.fallbackApplied = '1';
@@ -318,7 +366,7 @@ export function initModalAccessibility() {
 // Modal Functions
 export function openEpisodeModal(title: string, overview: string, imageUrl: string) {
     DOM.modalTitle.textContent = title;
-    DOM.modalSynopsis.textContent = overview;
+    DOM.modalSynopsis.textContent = getSafeOverviewText(overview);
     DOM.modalImage.src = imageUrl;
     showModal(DOM.episodeModal, DOM.modalCloseBtn);
 }
@@ -500,9 +548,9 @@ export function renderSearchResults(resultsList: Series[]) {
                 el('h3', {}, [
                     `${series.name} ${releaseYear}`,
                     mediaType !== 'series' ? ' ' : null,
-                    mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null
+                    mediaType !== 'series' ? el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }) : null
                 ]),
-                el('p', { text: series.overview || 'Sinopse não disponível.' })
+                el('p', { text: getSafeOverviewText(series.overview) })
             ]),
             actionButtons
         ]);
@@ -662,6 +710,7 @@ type DashboardSuggestionEntry = {
     item: Series;
     reason: string;
 };
+type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
 
 type DashboardTopGenre = {
     label: string;
@@ -680,6 +729,8 @@ const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
 const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
+const DASHBOARD_NEWS_LIMIT = 8;
+const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
 let dashboardUpcomingCacheExpiresAt = 0;
@@ -690,6 +741,11 @@ let dashboardSuggestedCacheSignature = '';
 let dashboardSuggestedCacheExpiresAt = 0;
 let dashboardSuggestedInFlight: Promise<void> | null = null;
 let dashboardSuggestedRequestVersion = 0;
+let dashboardNewsEntries: DashboardNewsItem[] = [];
+let dashboardNewsState: DashboardNewsState = 'idle';
+let dashboardNewsCacheExpiresAt = 0;
+let dashboardNewsInFlight: Promise<void> | null = null;
+let dashboardNewsRequestVersion = 0;
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -1027,6 +1083,159 @@ function renderDashboardGenresChart(): void {
         ]);
         DOM.dashboardGenresLegend.appendChild(item);
     });
+}
+
+function formatDashboardNewsDate(value: string | null): string {
+    if (!value) return 'Sem data';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Sem data';
+    return parsed.toLocaleDateString('pt-PT', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    }).replace('.', '');
+}
+
+function getDashboardNewsBadgeLabel(mediaTypeHint: NewsMediaTypeHint): string {
+    if (mediaTypeHint === 'series') return 'SÉRIE';
+    if (mediaTypeHint === 'movie') return 'FILME';
+    if (mediaTypeHint === 'book') return 'LIVRO';
+    return 'MEDIA';
+}
+
+function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
+    if (mediaTypeHint === 'series') return 'is-suggestion-series';
+    if (mediaTypeHint === 'movie') return 'is-suggestion-movie';
+    if (mediaTypeHint === 'book') return 'is-suggestion-book';
+    return 'is-pending';
+}
+
+function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
+    const raw = String(item.imageUrl || '').trim();
+    if (!raw) return null;
+    return `/api/news-image?url=${encodeURIComponent(raw)}`;
+}
+
+function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
+    const imageSrc = getDashboardNewsImageSrc(item);
+    if (imageSrc) {
+        return createPosterImage(
+            imageSrc,
+            `Imagem da notícia ${item.title}`,
+            'dashboard-news-image',
+            '/placeholders/poster.svg'
+        );
+    }
+
+    const sourceInitials = item.source
+        .split(/\s+/)
+        .map((chunk) => chunk.charAt(0))
+        .join('')
+        .slice(0, 3)
+        .toUpperCase();
+
+    return el('div', { class: 'dashboard-news-image dashboard-news-image--placeholder', 'aria-hidden': 'true' }, [
+        el('span', { class: 'dashboard-news-placeholder-type', text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
+        el('strong', { class: 'dashboard-news-placeholder-source', text: sourceInitials || 'RSS' }),
+    ]);
+}
+
+function renderDashboardNewsPanel(): void {
+    if (!DOM.dashboardNewsList) return;
+
+    if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state dashboard-news-state--loading">
+                <p>A carregar notícias recentes...</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (dashboardNewsState === 'error' && dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state dashboard-news-state--error">
+                <p>Não foi possível carregar notícias neste momento.</p>
+                <button type="button" class="btn btn-secondary dashboard-news-retry-btn" id="dashboard-news-retry-btn">Tentar novamente</button>
+            </div>
+        `;
+        const retryBtn = document.getElementById('dashboard-news-retry-btn') as HTMLButtonElement | null;
+        retryBtn?.addEventListener('click', () => {
+            dashboardNewsCacheExpiresAt = 0;
+            dashboardNewsState = 'idle';
+            renderDashboardNewsPanel();
+            void ensureDashboardNews();
+        }, { once: true });
+        return;
+    }
+
+    if (dashboardNewsEntries.length === 0) {
+        DOM.dashboardNewsList.innerHTML = `
+            <div class="dashboard-news-state">
+                <p>Ainda não existem notícias disponíveis.</p>
+            </div>
+        `;
+        return;
+    }
+
+    DOM.dashboardNewsList.innerHTML = '';
+    dashboardNewsEntries.forEach((item) => {
+        const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
+        const article = el('a', {
+            class: 'dashboard-news-item',
+            href: item.url,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            role: 'listitem',
+            title: `${item.title} • ${item.source}`,
+            'aria-label': `Abrir notícia: ${item.title}`,
+        }, [
+            createDashboardNewsMedia(item),
+            el('div', { class: 'dashboard-news-content' }, [
+                el('div', { class: 'dashboard-news-meta' }, [
+                    el('span', { class: 'dashboard-news-source', text: item.source }),
+                    el('span', { class: 'dashboard-news-date', text: formatDashboardNewsDate(item.publishedAt) }),
+                    el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
+                ]),
+                el('h4', { text: item.title }),
+                el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
+            ]),
+        ]);
+        DOM.dashboardNewsList.appendChild(article);
+    });
+}
+
+async function ensureDashboardNews(force = false): Promise<void> {
+    const now = Date.now();
+    if (!force && dashboardNewsEntries.length > 0 && now < dashboardNewsCacheExpiresAt) {
+        dashboardNewsState = 'ready';
+        return;
+    }
+    if (dashboardNewsInFlight) return;
+
+    const requestVersion = ++dashboardNewsRequestVersion;
+    dashboardNewsState = dashboardNewsEntries.length > 0 && !force ? 'ready' : 'loading';
+    renderDashboardNewsPanel();
+
+    dashboardNewsInFlight = (async () => {
+        const items = await API.fetchDashboardNews(DASHBOARD_NEWS_LIMIT, 'all');
+        if (requestVersion !== dashboardNewsRequestVersion) return;
+        dashboardNewsEntries = items;
+        dashboardNewsState = 'ready';
+        dashboardNewsCacheExpiresAt = Date.now() + DASHBOARD_NEWS_CACHE_TTL_MS;
+        renderDashboardNewsPanel();
+    })()
+        .catch((error) => {
+            console.warn('[dashboard] Falha ao carregar notícias RSS.', error);
+            if (requestVersion !== dashboardNewsRequestVersion) return;
+            dashboardNewsState = dashboardNewsEntries.length > 0 ? 'ready' : 'error';
+            renderDashboardNewsPanel();
+        })
+        .finally(() => {
+            if (requestVersion === dashboardNewsRequestVersion) {
+                dashboardNewsInFlight = null;
+            }
+        });
 }
 
 function renderDashboardRecentCarousel(): void {
@@ -1764,8 +1973,8 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
-    renderDashboardEvolutionChart();
-    renderDashboardGenresChart();
+    renderDashboardNewsPanel();
+    void ensureDashboardNews();
     renderDashboardRecentCarousel();
     renderDashboardSuggestionsCarousel();
     renderDashboardUpcomingReleases();
@@ -1968,7 +2177,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         }
         if (statusText) statusElement = el('span', { class: 'series-status-label', text: statusText });
     }
-    const overview = series.overview || 'Sinopse não disponível.';
+    const overview = getSafeOverviewText(series.overview);
     const overviewElement = viewMode === 'grid' ? null : el('p', { text: overview });
 
     // Cria o elemento do título, adicionando o ranking se aplicável
@@ -1977,26 +2186,30 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
         titleChildren.push(el('span', { class: 'discovery-rank-text', text: `${rank}.` }));
     }
     titleChildren.push(`${series.name} ${releaseYear}`);
-    if (mediaType !== 'series' && viewMode === 'list') {
+    const showMediaTypeChip = showStatus || mediaType !== 'series';
+    if (showMediaTypeChip && viewMode === 'list') {
         titleChildren.push(' ');
-        titleChildren.push(el('span', { class: 'media-type-chip', text: mediaTypeLabel }));
+        titleChildren.push(el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }));
     }
     const titleElement = el('h3', {}, titleChildren);
-    const mediaTypeChipInGrid = viewMode === 'grid' && mediaType !== 'series'
-        ? el('span', { class: 'media-type-chip media-type-chip-grid', text: mediaTypeLabel })
+    const mediaTypeChipInGrid = viewMode === 'grid' && showMediaTypeChip
+        ? el('span', { class: getMediaTypeChipClass(mediaType, 'media-type-chip-grid'), text: mediaTypeLabel })
         : null;
 
     const titleInList = viewMode === 'list' ? titleElement : null;
     const statusInList = viewMode === 'list' ? statusElement : null;
     const titleInGrid = viewMode === 'grid' ? titleElement : null;
     const statusInGrid = viewMode === 'grid' ? statusElement : null;
+    const gridMetaChips = [statusInGrid, mediaTypeChipInGrid].filter(Boolean) as HTMLElement[];
+    const metaChipsInGrid = viewMode === 'grid' && gridMetaChips.length > 0
+        ? el('div', { class: 'watchlist-meta-chips' }, gridMetaChips)
+        : null;
     const watchlistInfo = el('div', { class: 'watchlist-info' }, [
         el('div', { class: 'watchlist-title-wrapper' }, [titleInList, statusInList]),
         progressElement,
         overviewElement,
         titleInGrid,
-        mediaTypeChipInGrid,
-        statusInGrid
+        metaChipsInGrid
     ]);
     return el('div', { class: 'watchlist-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
         posterElement,
@@ -2248,7 +2461,7 @@ export function renderMediaDetails(
                     ]),
                     el('div', { class: 'v2-overview' }, [
                         el('h3', { text: 'Sinopse' }),
-                        el('p', { text: media.overview || 'Sinopse não disponível.' })
+                        el('p', { text: getSafeOverviewText(media.overview) })
                     ]),
                     el('div', { class: 'v2-additional-facts' }, [
                         el('div', { class: 'v2-metadata-grid' }, [
@@ -2401,7 +2614,7 @@ export function renderSeriesDetails(
     if (!finalTrailerKey) finalTrailerKey = findTMDbTrailer(seriesData.videos);
     const tmdbOverview = seriesData.overview || '';
     const traktOverview = traktSeriesData?.overview || '';
-    const finalOverview = aggregatedSeriesData?.overview || tmdbOverview || traktOverview;
+    const finalOverview = getSafeOverviewText(aggregatedSeriesData?.overview || tmdbOverview || traktOverview);
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
@@ -2451,7 +2664,7 @@ export function renderSeriesDetails(
                         ,
                         finalTrailerKey ? el('a', { class: 'v2-action-btn trailer-btn', 'data-video-key': finalTrailerKey }, [el('i', { class: 'fas fa-play' }), ' Ver Trailer']) : null
                     ]),
-                    el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview || 'Sinopse não disponível.' })]),
+                    el('div', { class: 'v2-overview' }, [el('h3', { text: 'Sinopse' }), el('p', { text: finalOverview })]),
                     el('div', { class: 'v2-additional-facts' }, [el('div', { class: 'v2-metadata-grid' },
                         additionalFacts.map(fact => {
                             const valueElement = fact.label === 'Transmissão'
@@ -2607,7 +2820,7 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
         const traktEpisode = traktEpisodes.find(te => te.number === episode.episode_number);
         const tmdbOverview = episode.overview || '';
         const traktOverview = traktEpisode?.overview || '';
-        const finalOverview = tmdbOverview || traktOverview;
+        const finalOverview = getSafeOverviewText(tmdbOverview || traktOverview);
         let stillPathSmall, stillPathLarge;
         if (episode.still_path) {
             stillPathSmall = `https://image.tmdb.org/t/p/w185${episode.still_path}`;
@@ -2623,7 +2836,7 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
             stillPathLarge = '/placeholders/still.svg';
         }
         const runtimeText = episode.runtime ? `${episode.runtime} min` : 'N/A';
-        const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview || 'Sinopse não disponível.', 'data-still-path-large': stillPathLarge }, [
+        const episodeElement = el('div', { class: 'episode-item', 'data-series-id': String(seriesId), 'data-episode-id': String(episode.id), 'data-season-number': String(episode.season_number), 'data-title': episode.name, 'data-overview': finalOverview, 'data-still-path-large': stillPathLarge }, [
             createPosterImage(
                 stillPathSmall,
                 `Imagem do episódio ${episode.episode_number}`,
@@ -3362,7 +3575,7 @@ export function performModalLibrarySearch() {
             el('p', {}, [
                 series.name,
                 mediaType !== 'series' ? ' ' : null,
-                mediaType !== 'series' ? el('span', { class: 'media-type-chip', text: mediaTypeLabel }) : null,
+                mediaType !== 'series' ? el('span', { class: getMediaTypeChipClass(mediaType), text: mediaTypeLabel }) : null,
             ])
         ]);
         item.addEventListener('click', () => {

@@ -27,15 +27,36 @@
 
 ## Em preparação imediata
 
-1. **Cutover DNS (S6-T06)**
+1. **Notícias RSS na Dashboard (Sprint 9-13)**
+   - Substituir o card atual de gráficos por um card de notícias (séries/filmes/livros).
+   - Priorizar notícias com imagem e fallback visual quando a fonte não fornecer media.
+   - Agregação por Cloudflare Function com cache, deduplicação e observabilidade.
+2. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
-2. **UI/UX polishing**
+3. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-3. **Hardening final (PR-5)**
+4. **Hardening final (PR-5)**
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
+
+## Próximos sprints: Notícias RSS na Dashboard
+
+1. **Sprint 9 | Fundação do agregador**
+   - Endpoint `/api/news` com normalização, deduplicação e ordenação por data.
+   - Extração de imagem (`media:*`, `enclosure`, fallback controlado).
+2. **Sprint 10 | Substituição do card de gráficos**
+   - Remover bloco `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
+   - Renderizar notícias com imagem, fonte, data e tipo.
+3. **Sprint 11 | Relevância por utilizador**
+   - Priorizar notícias por preferências da biblioteca.
+   - Fallback para feed equilibrado quando não houver histórico suficiente.
+4. **Sprint 12 | Hardening**
+   - Sanitização de conteúdo RSS, limites e métricas por fonte.
+   - Revisão de atribuição/licenciamento das fontes usadas.
+5. **Sprint 13 | QA e rollout**
+   - Feature flag em `staging`, UAT, regressão e plano de rollback.
 
 ## Roadmap futuro: Reviews da Comunidade
 

@@ -1,7 +1,8 @@
 # Plano de Execução por Sprints
 
 Estado atual: **Sprint 1 a Sprint 8 concluídos**.  
-Pendente apenas: **S6-T06 (Cutover DNS para Cloudflare Pages)**.
+Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
+Em planeamento: **Sprint 9 a Sprint 13 (Notícias RSS na Dashboard)**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -156,3 +157,85 @@ Estado: **concluído**.
 - [x] Fluxos de séries continuam funcionais sem regressões.
 - [x] Filmes e livros apresentam comportamento consistente com fallback seguro quando dados externos não existem.
 - [x] Notificações não bloqueiam UX e respeitam sessão ativa do utilizador.
+
+## Sprint 9: Notícias RSS (Fundação Backend + Contrato)
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] S9-T01 Definir catálogo inicial de fontes RSS (séries/filmes/livros) e respetiva prioridade.
+- [ ] S9-T02 Criar endpoint agregador `GET /api/news` em Cloudflare Pages Functions.
+- [ ] S9-T03 Normalizar payload de notícia (`id`, `title`, `url`, `source`, `publishedAt`, `mediaTypeHint`, `imageUrl`, `summary`).
+- [ ] S9-T04 Implementar deduplicação por `guid/link` e ordenação por data de publicação.
+- [ ] S9-T05 Implementar extração de imagem com fallback (`media:content`, `media:thumbnail`, `enclosure`, parsing de conteúdo).
+- [ ] S9-T06 Introduzir cache e timeouts por fonte para evitar bloqueio da app.
+
+### Critérios de aceitação
+- [ ] `GET /api/news` responde de forma estável mesmo com falha parcial de fontes.
+- [ ] A resposta vem já normalizada para consumo direto no frontend.
+- [ ] A maioria das notícias chega com `imageUrl` válido quando a fonte disponibiliza imagem.
+- [ ] Falhas de feed não quebram a dashboard.
+
+## Sprint 10: Dashboard Notícias (Substituir Gráficos)
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] S10-T01 Remover da dashboard o card atual de `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
+- [ ] S10-T02 Criar no mesmo espaço o card `NOTÍCIAS` com layout coerente ao tema atual.
+- [ ] S10-T03 Mostrar cada notícia com imagem (quando existir), título, fonte, data e tipo (série/filme/livro).
+- [ ] S10-T04 Implementar estados de UX (`loading`, `vazio`, `erro`, `retry`).
+- [ ] S10-T05 Garantir comportamento responsivo sem overflow (desktop/tablet/mobile).
+
+### Critérios de aceitação
+- [ ] A zona dos gráficos é totalmente substituída por notícias.
+- [ ] O card de notícias mantém consistência visual com o dashboard.
+- [ ] Notícias sem imagem usam fallback visual sem quebrar layout.
+- [ ] Não há regressões funcionais em `Recentemente vistos/lidos`, `Sugestões` e `Lançamentos`.
+
+## Sprint 11: Relevância e Personalização de Notícias
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] S11-T01 Classificar notícias por `mediaType` (série/filme/livro) com heurística por fonte/título/tags.
+- [ ] S11-T02 Priorizar notícias alinhadas com o histórico da biblioteca do utilizador autenticado.
+- [ ] S11-T03 Definir fallback para utilizador sem histórico (mistura equilibrada por domínio).
+- [ ] S11-T04 Adicionar filtros rápidos de notícias por domínio (Todos, Séries, Filmes, Livros).
+
+### Critérios de aceitação
+- [ ] Utilizadores com histórico recebem notícias mais alinhadas ao seu consumo.
+- [ ] Utilizadores sem histórico recebem feed útil e equilibrado.
+- [ ] Filtros por domínio funcionam sem recarregar a página.
+
+## Sprint 12: Hardening de Feed (Qualidade, Segurança, Custos)
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
+- [ ] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
+- [ ] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
+- [ ] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
+
+### Critérios de aceitação
+- [ ] Feed não introduz conteúdo inseguro na app.
+- [ ] Custos e chamadas externas mantêm-se controlados com cache.
+- [ ] Erros por fonte ficam rastreáveis em logs.
+- [ ] Créditos de origem visíveis nas notícias.
+
+## Sprint 13: QA, Rollout e Publicação
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] S13-T01 Ativar feature flag de notícias apenas em `staging` para validação.
+- [ ] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
+- [ ] S13-T03 Executar UAT focado em notícias (conteúdo, imagem, ordenação, filtros, responsividade).
+- [ ] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
+- [ ] S13-T05 Promover para `main` após aprovação e monitorizar pós-release.
+
+### Critérios de aceitação
+- [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
+- [ ] Rollback testado e documentado.
+- [ ] Dashboard estável após janela inicial de monitorização.
