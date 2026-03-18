@@ -57,6 +57,19 @@ export default defineConfig(({ command }) => ({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
+            // Cache genérico para imagens externas usadas por notícias RSS
+            urlPattern: /^https:\/\/.+\.(?:png|gif|jpe?g|webp|avif)(?:\?.*)?$/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'remote-news-images-cache',
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 14, // 14 dias
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             // Cache de imagens do TMDb com a estratégia "stale-while-revalidate"
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,
             handler: 'StaleWhileRevalidate',

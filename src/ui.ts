@@ -109,6 +109,10 @@ function createPosterImage(
     fallbackSrc: string
 ): HTMLImageElement {
     const img = el('img', { src, alt, class: className, loading: 'lazy' }) as HTMLImageElement;
+    if (/^https?:\/\//i.test(src)) {
+        img.referrerPolicy = 'no-referrer';
+        img.crossOrigin = 'anonymous';
+    }
     img.addEventListener('error', () => {
         if (img.dataset.fallbackApplied === '1') return;
         img.dataset.fallbackApplied = '1';
