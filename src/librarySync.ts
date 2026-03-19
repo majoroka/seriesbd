@@ -52,9 +52,17 @@ function normalizeUserData(input: unknown): UserData {
     if (!isObjectLike(value)) return;
     const rawRating = value.rating;
     const rawNotes = value.notes;
+    const rawProgress = value.progress_percent;
+    const parsedProgress =
+      typeof rawProgress === 'number'
+        ? rawProgress
+        : Number(rawProgress);
     normalized[mediaKey] = {
       rating: typeof rawRating === 'number' ? rawRating : Number(rawRating || 0),
       notes: typeof rawNotes === 'string' ? rawNotes : '',
+      progress_percent: Number.isFinite(parsedProgress)
+        ? Math.max(0, Math.min(100, Math.round(parsedProgress)))
+        : undefined,
     };
   });
   return normalized;
@@ -173,6 +181,7 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
       seriesId: parsedMedia.media_id,
       rating: data?.rating || 0,
       notes: data?.notes || '',
+      progress_percent: typeof data?.progress_percent === 'number' ? data.progress_percent : undefined,
     });
   });
 
