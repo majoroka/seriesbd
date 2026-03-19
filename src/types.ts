@@ -71,6 +71,9 @@ export interface Series {
     media_type: MediaType;
     source_provider?: 'tmdb_tv' | 'tmdb_movie' | 'google_books' | 'open_library';
     source_id?: string;
+    isbn?: string;
+    isbn_13?: string | null;
+    isbn_10?: string | null;
     name: string;
     original_name?: string;
     overview: string;
