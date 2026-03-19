@@ -74,9 +74,34 @@ const dedupeBookResults = (results) => {
   });
 };
 
-const buildGoogleSearchQueries = (query) => {
+const hasBookText = (value) => String(value || '').trim().length > 0;
+
+const mergeBookMetadata = (baseResult, enrichmentResult) => {
+  if (!baseResult && !enrichmentResult) return null;
+  if (!baseResult) return enrichmentResult;
+  if (!enrichmentResult) return baseResult;
+
+  return {
+    ...baseResult,
+    overview: hasBookText(baseResult.overview) ? baseResult.overview : enrichmentResult.overview,
+    poster_path: baseResult.poster_path || enrichmentResult.poster_path || null,
+    genres: Array.isArray(baseResult.genres) && baseResult.genres.length > 0 ? baseResult.genres : enrichmentResult.genres,
+    first_air_date: hasBookText(baseResult.first_air_date) ? baseResult.first_air_date : enrichmentResult.first_air_date,
+    original_name: hasBookText(baseResult.original_name) ? baseResult.original_name : enrichmentResult.original_name,
+    isbn: baseResult.isbn || enrichmentResult.isbn || null,
+    isbn_13: baseResult.isbn_13 || enrichmentResult.isbn_13 || null,
+    isbn_10: baseResult.isbn_10 || enrichmentResult.isbn_10 || null,
+  };
+};
+
+export const buildGoogleSearchQueries = (query) => {
   const normalized = String(query || '').trim().replace(/\s+/g, ' ');
   if (!normalized) return [];
+
+  const normalizedIsbn = normalizeIsbn(normalized);
+  if (normalizedIsbn) {
+    return [`isbn:${normalizedIsbn}`];
+  }
 
   const strategies = [normalized];
   if (!/^inauthor:/i.test(normalized)) {
@@ -204,11 +229,15 @@ const searchGoogleBooks = async (query, apiKey) => {
 };
 
 const searchOpenLibraryBooks = async (query, options = {}) => {
-  const { byAuthor = false } = options;
+  const { byAuthor = false, isbn = null } = options;
   const url = new URL(`${OPEN_LIBRARY_BASE_URL}/search.json`);
-  url.searchParams.set(byAuthor ? 'author' : 'q', query);
+  if (isbn) {
+    url.searchParams.set('isbn', isbn);
+  } else {
+    url.searchParams.set(byAuthor ? 'author' : 'q', query);
+  }
   url.searchParams.set('limit', '20');
-  if (!byAuthor) {
+  if (!byAuthor && !isbn) {
     url.searchParams.set('language', 'por');
   }
 
@@ -226,6 +255,10 @@ const searchOpenLibraryBooks = async (query, options = {}) => {
   };
 };
 
+const searchGoogleBooksByIsbn = async (isbn, apiKey) => searchGoogleBooks(`isbn:${isbn}`, apiKey);
+
+const searchOpenLibraryBooksByIsbn = async (isbn) => searchOpenLibraryBooks(isbn, { isbn });
+
 const fetchGoogleBookById = async (sourceId, apiKey) => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) return { ok: false, status: 400, result: null };
@@ -236,6 +269,17 @@ const fetchGoogleBookById = async (sourceId, apiKey) => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) return { ok: false, status: response.status, result: null };
   return { ok: true, status: response.status, result: mapGoogleBook(payload) };
+};
+
+const fetchGoogleBookByIsbn = async (isbn, apiKey) => {
+  const search = await searchGoogleBooksByIsbn(isbn, apiKey);
+  if (!search.ok) return { ok: false, status: search.status, result: null };
+  const exactMatch = search.results.find((result) => result?.isbn === isbn || result?.isbn_13 === isbn || result?.isbn_10 === isbn);
+  return {
+    ok: Boolean(exactMatch),
+    status: search.status,
+    result: exactMatch || null,
+  };
 };
 
 const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '') => {
@@ -499,6 +543,31 @@ const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
   };
 };
 
+const fetchOpenLibraryBookByIsbn = async (isbn) => {
+  const search = await searchOpenLibraryBooksByIsbn(isbn);
+  if (!search.ok) return { ok: false, status: search.status, result: null };
+
+  const exactMatch = search.results.find((result) => result?.isbn === isbn || result?.isbn_13 === isbn || result?.isbn_10 === isbn) || search.results[0];
+  if (!exactMatch?.source_id) {
+    return { ok: false, status: search.status || 404, result: null };
+  }
+
+  const details = await fetchOpenLibraryBookDetails(exactMatch.source_id, exactMatch.name);
+  if (!details.ok || !details.result) {
+    return {
+      ok: true,
+      status: search.status,
+      result: exactMatch,
+    };
+  }
+
+  return {
+    ok: true,
+    status: details.status || search.status,
+    result: mergeBookMetadata(exactMatch, details.result),
+  };
+};
+
 export async function onRequest(context) {
   const { request, env } = context;
   const requestId = createRequestId(ROUTE_KEY);
@@ -570,6 +639,7 @@ export async function onRequest(context) {
         return applyRateLimitHeaders(badRequest, rateLimit);
       }
 
+      const normalizedIsbn = normalizeIsbn(query);
       const googleQueries = buildGoogleSearchQueries(query);
       let provider = 'google_books';
       let upstreamStatus = 200;
@@ -586,7 +656,15 @@ export async function onRequest(context) {
 
       let results = dedupeBookResults(googleResults);
 
-      if (!googleHadOkResponse || results.length === 0) {
+      if (normalizedIsbn) {
+        const openLibraryIsbn = await searchOpenLibraryBooksByIsbn(normalizedIsbn);
+        provider = 'official_isbn';
+        upstreamStatus = openLibraryIsbn.status || upstreamStatus;
+        results = dedupeBookResults([
+          ...results,
+          ...openLibraryIsbn.results,
+        ]);
+      } else if (!googleHadOkResponse || results.length === 0) {
         const openLibraryKeyword = await searchOpenLibraryBooks(query);
         const openLibraryAuthor = await searchOpenLibraryBooks(query, { byAuthor: true });
         provider = 'open_library';
@@ -723,9 +801,10 @@ export async function onRequest(context) {
     const sourceId = (safeParams.get('source_id') || safeParams.get('id') || '').trim();
     const providerParam = (safeParams.get('provider') || '').trim();
     const query = (safeParams.get('query') || safeParams.get('q') || '').trim();
-    if (!sourceId && !query) {
+    const normalizedIsbn = normalizeIsbn(safeParams.get('isbn') || '');
+    if (!sourceId && !query && !normalizedIsbn) {
       const badRequest = addCorsHeaders(
-        new Response(JSON.stringify({ error: 'Missing source_id or query parameter' }), {
+        new Response(JSON.stringify({ error: 'Missing source_id, isbn or query parameter' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         }),
@@ -756,6 +835,20 @@ export async function onRequest(context) {
       const openLibraryDetails = await fetchOpenLibraryBookDetails(sourceId, query);
       upstreamStatus = openLibraryDetails.status;
       result = openLibraryDetails.result;
+    }
+
+    if (normalizedIsbn) {
+      const googleByIsbn = await fetchGoogleBookByIsbn(normalizedIsbn, googleApiKey);
+      if (googleByIsbn.ok && googleByIsbn.result) {
+        upstreamStatus = googleByIsbn.status || upstreamStatus;
+        result = mergeBookMetadata(result, googleByIsbn.result);
+      }
+
+      const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(normalizedIsbn);
+      if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
+        upstreamStatus = openLibraryByIsbn.status || upstreamStatus;
+        result = mergeBookMetadata(result, openLibraryByIsbn.result);
+      }
     }
 
     if (!result && query) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildGoogleSearchQueries,
   mapGoogleBook,
   mapOpenLibraryBook,
   normalizeIsbn,
@@ -12,6 +13,10 @@ describe('books ISBN mapping', () => {
     expect(normalizeIsbn('978-989-9254-27-5')).toBe('9789899254275');
     expect(normalizeIsbn('989-9254-27-X')).toBe('989925427X');
     expect(normalizeIsbn('invalid')).toBeNull();
+  });
+
+  it('builds direct Google Books ISBN searches for ISBN queries', () => {
+    expect(buildGoogleSearchQueries('978-989-9254-27-5')).toEqual(['isbn:9789899254275']);
   });
 
   it('maps google books identifiers into isbn fields', () => {
