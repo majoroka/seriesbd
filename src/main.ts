@@ -3564,11 +3564,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const dashboardNewsFilterBtn = target.closest('.dashboard-news-filter') as HTMLButtonElement | null;
-        if (dashboardNewsFilterBtn) {
-            const filter = dashboardNewsFilterBtn.dataset.newsFilter;
-            if (filter === 'all' || filter === 'series' || filter === 'movie' || filter === 'book') {
-                UI.setDashboardNewsFilter(filter);
+        const dashboardPanelFilterBtn = target.closest('.dashboard-panel-filter') as HTMLButtonElement | null;
+        if (dashboardPanelFilterBtn) {
+            const panel = dashboardPanelFilterBtn.dataset.dashboardPanel;
+            const filter = dashboardPanelFilterBtn.dataset.dashboardFilter;
+            if (
+                (panel === 'news' || panel === 'upcoming' || panel === 'recent' || panel === 'suggestions')
+                && (filter === 'all' || filter === 'series' || filter === 'movie' || filter === 'book')
+            ) {
+                UI.setDashboardPanelFilter(panel, filter);
             }
             return;
         }

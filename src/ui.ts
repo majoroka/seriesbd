@@ -712,7 +712,8 @@ type DashboardSuggestionEntry = {
     reason: string;
 };
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
-type DashboardNewsFilter = 'all' | 'series' | 'movie' | 'book';
+type DashboardContentFilter = 'all' | 'series' | 'movie' | 'book';
+type DashboardPanelKey = 'news' | 'upcoming' | 'recent' | 'suggestions';
 
 type DashboardTopGenre = {
     label: string;
@@ -748,7 +749,12 @@ let dashboardNewsState: DashboardNewsState = 'idle';
 let dashboardNewsCacheExpiresAt = 0;
 let dashboardNewsInFlight: Promise<void> | null = null;
 let dashboardNewsRequestVersion = 0;
-let dashboardNewsFilter: DashboardNewsFilter = 'all';
+const dashboardPanelFilters: Record<DashboardPanelKey, DashboardContentFilter> = {
+    news: 'all',
+    upcoming: 'all',
+    recent: 'all',
+    suggestions: 'all',
+};
 
 const DASHBOARD_NEWS_STOPWORDS = new Set([
     'para', 'com', 'from', 'that', 'this', 'sobre', 'will', 'into', 'through', 'after', 'before', 'sobre',
@@ -1119,21 +1125,49 @@ function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
     return 'is-pending';
 }
 
-export function setDashboardNewsFilter(filter: DashboardNewsFilter): void {
-    dashboardNewsFilter = filter;
-    renderDashboardNewsFilters();
-    renderDashboardNewsPanel();
+function getDashboardPanelFiltersRoot(panel: DashboardPanelKey): HTMLDivElement | null {
+    if (panel === 'news') return DOM.dashboardNewsFilters;
+    if (panel === 'upcoming') return DOM.dashboardUpcomingFilters;
+    if (panel === 'recent') return DOM.dashboardRecentFilters;
+    if (panel === 'suggestions') return DOM.dashboardSuggestionsFilters;
+    return null;
 }
 
-function renderDashboardNewsFilters(): void {
-    if (!DOM.dashboardNewsFilters) return;
-    DOM.dashboardNewsFilters.classList.toggle('is-hidden', !DASHBOARD_NEWS_ENHANCED_ENABLED);
-    DOM.dashboardNewsFilters.querySelectorAll<HTMLButtonElement>('.dashboard-news-filter').forEach((button) => {
-        const filter = (button.dataset.newsFilter || 'all') as DashboardNewsFilter;
-        const isActive = filter === dashboardNewsFilter;
+function renderDashboardPanelFilters(panel: DashboardPanelKey): void {
+    const root = getDashboardPanelFiltersRoot(panel);
+    if (!root) return;
+    const activeFilter = dashboardPanelFilters[panel];
+    root.querySelectorAll<HTMLButtonElement>('.dashboard-panel-filter').forEach((button) => {
+        const filter = (button.dataset.dashboardFilter || 'all') as DashboardContentFilter;
+        const isActive = filter === activeFilter;
         button.classList.toggle('is-active', isActive);
         button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+}
+
+function renderAllDashboardPanelFilters(): void {
+    renderDashboardPanelFilters('news');
+    renderDashboardPanelFilters('upcoming');
+    renderDashboardPanelFilters('recent');
+    renderDashboardPanelFilters('suggestions');
+}
+
+export function setDashboardPanelFilter(panel: DashboardPanelKey, filter: DashboardContentFilter): void {
+    dashboardPanelFilters[panel] = filter;
+    renderDashboardPanelFilters(panel);
+    if (panel === 'news') {
+        renderDashboardNewsPanel();
+        return;
+    }
+    if (panel === 'upcoming') {
+        renderDashboardUpcomingReleases();
+        return;
+    }
+    if (panel === 'recent') {
+        renderDashboardRecentCarousel();
+        return;
+    }
+    renderDashboardSuggestionsCarousel();
 }
 
 function buildDashboardNewsKeywordWeights(): Map<string, number> {
@@ -1156,8 +1190,8 @@ function buildDashboardNewsKeywordWeights(): Map<string, number> {
     );
 }
 
-function buildDashboardMediaTypeWeights(): Record<DashboardNewsFilter, number> {
-    const weights: Record<DashboardNewsFilter, number> = {
+function buildDashboardMediaTypeWeights(): Record<DashboardContentFilter, number> {
+    const weights: Record<DashboardContentFilter, number> = {
         all: 0,
         series: 0,
         movie: 0,
@@ -1178,7 +1212,7 @@ function computeDashboardNewsRelevance(
     item: DashboardNewsItem,
     topGenres: DashboardTopGenre[],
     keywordWeights: Map<string, number>,
-    mediaTypeWeights: Record<DashboardNewsFilter, number>
+    mediaTypeWeights: Record<DashboardContentFilter, number>
 ): number {
     const haystack = normalizeGenreToken(`${item.title} ${item.summary} ${item.source}`);
     let score = 0;
@@ -1201,10 +1235,14 @@ function computeDashboardNewsRelevance(
     return score;
 }
 
+function matchesDashboardContentFilter(mediaType: string | null | undefined, filter: DashboardContentFilter): boolean {
+    if (filter === 'all') return true;
+    return mediaType === filter;
+}
+
 function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
     const filtered = dashboardNewsEntries.filter((item) => {
-        if (dashboardNewsFilter === 'all') return true;
-        return item.mediaTypeHint === dashboardNewsFilter;
+        return matchesDashboardContentFilter(item.mediaTypeHint, dashboardPanelFilters.news);
     });
 
     const hasHistory = (S.myWatchlist.length + S.myArchive.length) > 0;
@@ -1259,9 +1297,15 @@ function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
     ]);
 }
 
+function buildDashboardNewsMetaText(item: DashboardNewsItem): string {
+    const source = sanitizePlainText(item.source) || 'Fonte';
+    const date = formatDashboardNewsDate(item.publishedAt);
+    return `${source} • ${date}`;
+}
+
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
-    renderDashboardNewsFilters();
+    renderDashboardPanelFilters('news');
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
         DOM.dashboardNewsList.innerHTML = `
@@ -1303,7 +1347,7 @@ function renderDashboardNewsPanel(): void {
     visibleItems.forEach((item) => {
         const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
         const article = el('a', {
-            class: 'dashboard-news-item',
+            class: 'dashboard-recent-item dashboard-news-item',
             href: item.url,
             target: '_blank',
             rel: 'noopener noreferrer',
@@ -1312,13 +1356,10 @@ function renderDashboardNewsPanel(): void {
             'aria-label': `Abrir notícia: ${item.title}`,
         }, [
             createDashboardNewsMedia(item),
-            el('div', { class: 'dashboard-news-content' }, [
-                el('div', { class: 'dashboard-news-meta' }, [
-                    el('span', { class: 'dashboard-news-source', text: item.source }),
-                    el('span', { class: 'dashboard-news-date', text: formatDashboardNewsDate(item.publishedAt) }),
-                    el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
-                ]),
+            el('div', { class: 'dashboard-recent-content dashboard-news-content' }, [
+                el('p', { class: 'dashboard-news-meta-line', text: buildDashboardNewsMetaText(item) }),
                 el('h4', { text: item.title }),
+                el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
                 el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
             ]),
         ]);
@@ -1386,11 +1427,20 @@ function renderDashboardRecentCarousel(): void {
         });
     });
 
-    const visibleItems = uniqueRecent.slice(0, 12);
+    const filter = dashboardPanelFilters.recent;
+    const visibleItems = uniqueRecent
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
+        .slice(0, 12);
     DOM.dashboardRecentCarousel.innerHTML = '';
 
+    renderDashboardPanelFilters('recent');
+
     if (visibleItems.length === 0) {
-        DOM.dashboardRecentCarousel.innerHTML = '<p class="dashboard-empty-message">Ainda não existem conteúdos vistos/lidos recentemente.</p>';
+        DOM.dashboardRecentCarousel.innerHTML = `<p class="dashboard-empty-message">${
+            uniqueRecent.length === 0
+                ? 'Ainda não existem conteúdos vistos/lidos recentemente.'
+                : 'Sem conteúdos recentes para este filtro.'
+        }</p>`;
         return;
     }
 
@@ -1425,13 +1475,22 @@ function renderDashboardSuggestionsCarousel(): void {
     const topGenres = buildTopDashboardGenres();
     void ensureDashboardRecommendations(topGenres);
 
-    const visibleItems = dashboardSuggestedRecommendationEntries.slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
+    const filter = dashboardPanelFilters.suggestions;
+    const visibleItems = dashboardSuggestedRecommendationEntries
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
+        .slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
     DOM.dashboardSuggestionsCarousel.innerHTML = '';
+
+    renderDashboardPanelFilters('suggestions');
 
     if (visibleItems.length === 0) {
         DOM.dashboardSuggestionsCarousel.innerHTML = dashboardSuggestedInFlight
             ? '<p class="dashboard-empty-message">A preparar sugestões para ti...</p>'
-            : '<p class="dashboard-empty-message">Adiciona mais conteúdos para gerar sugestões personalizadas.</p>';
+            : `<p class="dashboard-empty-message">${
+                dashboardSuggestedRecommendationEntries.length === 0
+                    ? 'Adiciona mais conteúdos para gerar sugestões personalizadas.'
+                    : 'Sem sugestões para este filtro.'
+            }</p>`;
         return;
     }
 
@@ -2030,29 +2089,47 @@ function renderDashboardUpcomingReleases(): void {
     const topGenres = buildTopDashboardGenres();
     void ensureDashboardUpcomingSuggestions(topGenres, today);
 
+    const filter = dashboardPanelFilters.upcoming;
+    const visibleEntries = sortedEntries
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
+        .slice(0, 12);
+
     DOM.dashboardUpcomingList.innerHTML = '';
-    if (sortedEntries.length === 0) {
-        DOM.dashboardUpcomingList.innerHTML = '<p class="dashboard-empty-message">Sem lançamentos futuros registados para já.</p>';
+    renderDashboardPanelFilters('upcoming');
+
+    if (visibleEntries.length === 0) {
+        DOM.dashboardUpcomingList.innerHTML = `<p class="dashboard-empty-message">${
+            sortedEntries.length === 0
+                ? 'Sem lançamentos futuros registados para já.'
+                : 'Sem lançamentos para este filtro.'
+        }</p>`;
         return;
     }
 
-    sortedEntries.forEach(({ item, date, label }) => {
+    visibleEntries.forEach(({ item, date, label }) => {
         const mediaType = item.media_type || 'series';
         const posterPath = buildPosterUrl(item.poster_path, 'w185', '/placeholders/poster.svg');
+        const badgeClass = mediaType === 'movie'
+            ? 'is-suggestion-movie'
+            : mediaType === 'book'
+                ? 'is-suggestion-book'
+                : 'is-suggestion-series';
         const entryElement = el('article', {
-            class: 'dashboard-upcoming-item',
+            class: 'dashboard-recent-item dashboard-upcoming-item',
             'data-series-id': String(item.id),
             'data-media-type': mediaType,
+            role: 'listitem',
             tabindex: '0',
             'aria-label': `Abrir detalhe de ${item.name}`,
             title: `Abrir detalhe de ${item.name}`,
         }, [
             createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-upcoming-poster', '/placeholders/poster.svg'),
-            el('div', { class: 'dashboard-upcoming-content' }, [
-                el('p', { class: 'dashboard-upcoming-title', text: item.name }),
+            el('div', { class: 'dashboard-recent-content dashboard-upcoming-content' }, [
+                el('p', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
+                el('h4', { class: 'dashboard-upcoming-title', text: item.name }),
+                el('span', { class: `dashboard-status-badge ${badgeClass}`, text: getMediaTypeLabel(mediaType).toUpperCase() }),
                 el('p', { class: 'dashboard-upcoming-label', text: label }),
             ]),
-            el('span', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
         ]);
         DOM.dashboardUpcomingList.appendChild(entryElement);
     });
@@ -2094,6 +2171,7 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
+    renderAllDashboardPanelFilters();
     renderDashboardNewsPanel();
     void ensureDashboardNews();
     renderDashboardRecentCarousel();

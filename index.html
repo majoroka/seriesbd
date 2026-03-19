@@ -215,31 +215,41 @@
                             </button>
                         </div>
 
-                        <section class="dashboard-panel dashboard-panel-analytics dashboard-panel-news" aria-label="Notícias de séries, filmes e livros">
+                        <section class="dashboard-panel dashboard-panel-news" aria-label="Notícias de séries, filmes e livros">
                             <div class="dashboard-panel-header">
                                 <h3>NOTÍCIAS</h3>
-                                <div id="dashboard-news-filters" class="dashboard-news-filters" aria-label="Filtrar notícias por tipo">
-                                    <button type="button" class="dashboard-news-filter is-active" data-news-filter="all">Todos</button>
-                                    <button type="button" class="dashboard-news-filter" data-news-filter="series">Séries</button>
-                                    <button type="button" class="dashboard-news-filter" data-news-filter="movie">Filmes</button>
-                                    <button type="button" class="dashboard-news-filter" data-news-filter="book">Livros</button>
+                                <div id="dashboard-news-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="news" aria-label="Filtrar notícias por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="news" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="book">Livros</button>
                                 </div>
                             </div>
-                            <div id="dashboard-news-list" class="dashboard-news-grid" role="list" aria-label="Últimas notícias agregadas"></div>
+                            <div id="dashboard-news-list" class="dashboard-recent-carousel dashboard-news-carousel" role="list" aria-label="Últimas notícias agregadas"></div>
                         </section>
 
-                        <aside class="media-dashboard-side-column">
-                            <section class="dashboard-panel dashboard-launches-panel" aria-label="Próximos lançamentos aguardados">
-                                <div class="dashboard-panel-header">
-                                    <h3>PRÓXIMOS LANÇAMENTOS AGUARDADOS</h3>
+                        <section class="dashboard-panel dashboard-launches-panel" aria-label="Próximos lançamentos aguardados">
+                            <div class="dashboard-panel-header">
+                                <h3>PRÓXIMOS LANÇAMENTOS AGUARDADOS</h3>
+                                <div id="dashboard-upcoming-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="upcoming" aria-label="Filtrar lançamentos por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="upcoming" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="book">Livros</button>
                                 </div>
-                                <div id="dashboard-upcoming-list" class="dashboard-upcoming-list"></div>
-                            </section>
-                        </aside>
+                            </div>
+                            <div id="dashboard-upcoming-list" class="dashboard-recent-carousel dashboard-upcoming-carousel" role="list" aria-label="Próximos lançamentos"></div>
+                        </section>
 
                         <section class="dashboard-panel dashboard-panel-recent" aria-label="Conteúdos vistos ou lidos recentemente">
                             <div class="dashboard-panel-header">
                                 <h3>RECENTEMENTE VISTOS / LIDOS</h3>
+                                <div id="dashboard-recent-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="recent" aria-label="Filtrar conteúdos recentes por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="recent" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="book">Livros</button>
+                                </div>
                             </div>
                             <div id="dashboard-recent-carousel" class="dashboard-recent-carousel" role="list"></div>
                         </section>
@@ -247,6 +257,12 @@
                         <section class="dashboard-panel dashboard-panel-suggestions" aria-label="Sugestões personalizadas">
                             <div class="dashboard-panel-header">
                                 <h3>SUGESTÕES PARA TI</h3>
+                                <div id="dashboard-suggestions-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="suggestions" aria-label="Filtrar sugestões por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="suggestions" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="book">Livros</button>
+                                </div>
                             </div>
                             <div id="dashboard-suggestions-carousel" class="dashboard-recent-carousel" role="list"></div>
                         </section>
