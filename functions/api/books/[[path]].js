@@ -76,9 +76,14 @@ const dedupeBookResults = (results) => {
 };
 
 const hasBookText = (value) => String(value || '').trim().length > 0;
+const isWeakBookPosterUrl = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized.includes('books.google.com/books/content');
+};
 const bookNeedsMetadata = (book) => !book || !hasBookText(book.overview) || !book.poster_path;
 
-const mergeBookMetadata = (baseResult, enrichmentResult) => {
+export const mergeBookMetadata = (baseResult, enrichmentResult) => {
   if (!baseResult && !enrichmentResult) return null;
   if (!baseResult) return enrichmentResult;
   if (!enrichmentResult) return baseResult;
@@ -86,7 +91,9 @@ const mergeBookMetadata = (baseResult, enrichmentResult) => {
   return {
     ...baseResult,
     overview: hasBookText(baseResult.overview) ? baseResult.overview : enrichmentResult.overview,
-    poster_path: baseResult.poster_path || enrichmentResult.poster_path || null,
+    poster_path: (!baseResult.poster_path || isWeakBookPosterUrl(baseResult.poster_path))
+      ? (enrichmentResult.poster_path || baseResult.poster_path || null)
+      : (baseResult.poster_path || enrichmentResult.poster_path || null),
     genres: Array.isArray(baseResult.genres) && baseResult.genres.length > 0 ? baseResult.genres : enrichmentResult.genres,
     first_air_date: hasBookText(baseResult.first_air_date) ? baseResult.first_air_date : enrichmentResult.first_air_date,
     original_name: hasBookText(baseResult.original_name) ? baseResult.original_name : enrichmentResult.original_name,

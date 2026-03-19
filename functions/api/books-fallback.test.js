@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGoogleSearchQueries,
   mapGoogleBook,
+  mergeBookMetadata,
   mapOpenLibraryBook,
   normalizeIsbn,
   parseBertrandBookPage,
@@ -49,6 +50,21 @@ describe('books ISBN mapping', () => {
     expect(result.isbn).toBe('9789899254275');
     expect(result.isbn_13).toBe('9789899254275');
     expect(result.isbn_10).toBe('989925427X');
+  });
+
+  it('replaces weak Google Books content cover URLs with stronger fallback covers', () => {
+    const merged = mergeBookMetadata(
+      {
+        source_provider: 'google_books',
+        poster_path: 'https://books.google.com/books/content?id=test&printsec=frontcover&img=1&zoom=3&source=gbs_api',
+      },
+      {
+        source_provider: 'presenca',
+        poster_path: 'https://cdn.shopify.com/s/files/1/teste.jpg?v=1',
+      },
+    );
+
+    expect(merged.poster_path).toBe('https://cdn.shopify.com/s/files/1/teste.jpg?v=1');
   });
 });
 
