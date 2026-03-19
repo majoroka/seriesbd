@@ -719,7 +719,7 @@ type DashboardUpcomingEntry = {
     item: Series;
     date: Date;
     label: string;
-    source: 'library' | 'suggested-movie' | 'suggested-book';
+    source: 'library' | 'suggested-series' | 'suggested-movie' | 'suggested-book';
 };
 type DashboardSuggestionEntry = {
     item: Series;
@@ -738,6 +738,7 @@ type DashboardTopGenre = {
 };
 
 const DASHBOARD_TOP_GENRES_LIMIT = 3;
+const DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
 const DASHBOARD_UPCOMING_RECENT_BOOK_DAYS = 365;
@@ -1921,27 +1922,62 @@ function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     return entries;
 }
 
-async function fetchSuggestedMovieUpcomingEntries(
-    topGenres: DashboardTopGenre[],
+async function fetchSuggestedSeriesUpcomingEntries(
     today: Date,
     libraryKeys: Set<string>
 ): Promise<DashboardUpcomingEntry[]> {
-    const genreIds = Array.from(
-        new Set(topGenres.map((genre) => genre.movieGenreId).filter((value): value is number => Number.isFinite(value)))
-    );
-    if (genreIds.length === 0) return [];
-
     const todayIso = today.toISOString().slice(0, 10);
-    const responses = await Promise.allSettled(
-        genreIds.map((genreId) =>
-            API.fetchNewPremieres(1, null, 'movie', {
-                fromDate: todayIso,
-                sortBy: 'primary_release_date.asc',
-                genreIds: [genreId],
-                withOriginalLanguage: false,
-            })
-        )
-    );
+    const deduped = new Map<string, DashboardUpcomingEntry>();
+    const responses = await Promise.allSettled([
+        API.fetchNewPremieres(1, null, 'series', {
+            fromDate: todayIso,
+            sortBy: 'first_air_date.asc',
+            withOriginalLanguage: false,
+        }),
+    ]);
+
+    responses.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.results.forEach((series) => {
+            const date = parseDateOnly(series.first_air_date);
+            if (!date || date < today) return;
+            const mediaType = series.media_type || 'series';
+            if (mediaType !== 'series') return;
+            const hasPoster = typeof series.poster_path === 'string' && series.poster_path.trim().length > 0;
+            const hasOverview = typeof series.overview === 'string' && series.overview.trim().length > 0;
+            if (!hasPoster || !hasOverview) return;
+            const mediaKey = `${mediaType}:${series.id}`;
+            if (libraryKeys.has(mediaKey)) return;
+            const candidate: DashboardUpcomingEntry = {
+                item: series,
+                date,
+                label: 'Estreia sugerida',
+                source: 'suggested-series',
+            };
+            const existing = deduped.get(mediaKey);
+            if (!existing || date < existing.date) {
+                deduped.set(mediaKey, candidate);
+            }
+        });
+    });
+
+    return Array.from(deduped.values())
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .slice(0, DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS);
+}
+
+async function fetchSuggestedMovieUpcomingEntries(
+    today: Date,
+    libraryKeys: Set<string>
+): Promise<DashboardUpcomingEntry[]> {
+    const todayIso = today.toISOString().slice(0, 10);
+    const responses = await Promise.allSettled([
+        API.fetchNewPremieres(1, null, 'movie', {
+            fromDate: todayIso,
+            sortBy: 'primary_release_date.asc',
+            withOriginalLanguage: false,
+        }),
+    ]);
 
     const deduped = new Map<string, DashboardUpcomingEntry>();
     responses.forEach((result) => {
@@ -2073,12 +2109,13 @@ async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[]
     );
 
     dashboardUpcomingInFlight = (async () => {
-        const [movieSuggestions, bookSuggestions] = await Promise.all([
-            fetchSuggestedMovieUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
+        const [seriesSuggestions, movieSuggestions, bookSuggestions] = await Promise.all([
+            fetchSuggestedSeriesUpcomingEntries(today, libraryKeys).catch(() => []),
+            fetchSuggestedMovieUpcomingEntries(today, libraryKeys).catch(() => []),
             fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
         ]);
         if (requestVersion !== dashboardUpcomingRequestVersion) return;
-        dashboardSuggestedUpcomingEntries = [...movieSuggestions, ...bookSuggestions];
+        dashboardSuggestedUpcomingEntries = [...seriesSuggestions, ...movieSuggestions, ...bookSuggestions];
         syncDashboardSuggestedMediaStore();
         dashboardUpcomingCacheSignature = signature;
         dashboardUpcomingCacheExpiresAt = Date.now() + DASHBOARD_UPCOMING_CACHE_TTL_MS;
