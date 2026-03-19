@@ -3,7 +3,7 @@
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
 Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
-Próximo bloco funcional: **PR-9 (fallback ISBN para metadata/capa de livros)**.
+Próximo bloco funcional: **UI/UX polishing e hardening incremental**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -243,21 +243,29 @@ Estado: **planeado**.
 
 ## PR-9: Fallback ISBN para Livros (Metadata + Capa)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] P9-T01 Confirmar onde o ISBN está disponível no fluxo atual de detalhe/pesquisa de livros.
-- [ ] P9-T02 Criar endpoint server-side de fallback por ISBN.
-- [ ] P9-T03 Implementar fornecedor fallback inicial `Bertrand` com validação exata por ISBN.
-- [ ] P9-T04 Implementar fornecedor fallback inicial `Wook` com validação exata por ISBN.
-- [ ] P9-T05 Extrair apenas metadata mínima necessária:
-  - [ ] sinopse
-  - [ ] imagem de capa
-  - [ ] fonte
-- [ ] P9-T06 Aplicar cache forte no fallback (TTL alto + reaproveitamento de resultados válidos).
-- [ ] P9-T07 Servir capas de fallback via proxy same-origin, sem hotlink direto no browser.
-- [ ] P9-T08 Integrar fallback no fluxo atual apenas quando Google Books e Open Library não trouxerem capa e/ou sinopse válidas.
-- [ ] P9-T09 Garantir que dados das APIs principais nunca são substituídos por fallback menos fiável quando já existem campos válidos.
+- [x] P9-T01 Confirmar onde o ISBN está disponível no fluxo atual de detalhe/pesquisa de livros.
+- [x] P9-T02 Criar endpoint server-side de fallback por ISBN.
+- [x] P9-T03 Testar fornecedores editoriais iniciais `Bertrand` e `Wook` com validação exata por ISBN.
+- [x] P9-T04 Rejeitar `Bertrand` e `Wook` por inviabilidade técnica em automação backend.
+- [x] P9-T05 Validar `Presença` como fornecedor viável com pesquisa/lookup por JSON do Shopify.
+- [x] P9-T06 Extrair metadata mínima necessária:
+  - [x] sinopse
+  - [x] imagem de capa
+  - [x] fonte
+- [x] P9-T07 Servir capas externas por proxy same-origin, sem hotlink direto no browser.
+- [x] P9-T08 Integrar fallback no fluxo atual apenas quando Google Books e Open Library não trouxerem capa e/ou sinopse válidas.
+- [x] P9-T09 Garantir que dados das APIs principais nunca são substituídos por fallback menos fiável quando já existem campos válidos.
+- [x] P9-T10 Reforçar lookup oficial por ISBN em Google Books e Open Library antes do fallback editorial.
+
+### Critérios de aceitação
+- [x] Pesquisa por ISBN continua suportada com fontes oficiais como prioridade.
+- [x] `Presença` só entra como último recurso, com validação estrita por ISBN.
+- [x] Capas externas de fallback são servidas pela app via proxy same-origin.
+- [x] Livros sem capa/sinopse nas APIs oficiais podem ser enriquecidos sem quebrar a app.
+- [x] `Bertrand` e `Wook` ficam explicitamente fora da integração ativa por inviabilidade técnica.
 - [ ] P9-T10 Adicionar logs mínimos e testes unitários para match por ISBN, cache e rejeição de resultados ambíguos.
 
 ### Critérios de aceitação

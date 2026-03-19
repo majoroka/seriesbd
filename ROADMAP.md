@@ -27,6 +27,7 @@
 - **Sprint 9 concluído**: agregador RSS multi-fonte com `/api/news`, normalização, deduplicação, extração de imagem e cache.
 - **Sprint 10 concluído**: substituição do bloco de gráficos da dashboard por um card `NOTÍCIAS`.
 - **Sprint 11 concluído**: filtros rápidos por domínio e relevância personalizada por biblioteca/histórico.
+- **PR-9 concluído**: pesquisa e detalhe de livros reforçados por ISBN com `Google Books` + `Open Library`, e fallback editorial controlado via `Presença` como último recurso para capa/sinopse.
 
 ## Em preparação imediata
 
@@ -36,14 +37,10 @@
 2. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
-3. **Fallback ISBN para livros portugueses/edições recentes (PR-9)**
-   - Manter Google Books + Open Library como fontes principais.
-   - Acrescentar fallback pontual por ISBN via backend para capa/sinopse quando as APIs atuais falharem.
-   - Fornecedores iniciais planeados: Bertrand e Wook, com cache forte e proxy same-origin.
-4. **UI/UX polishing**
+3. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-5. **Hardening final (PR-5)**
+4. **Hardening final (PR-5)**
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
 
@@ -93,17 +90,24 @@
 ## Roadmap futuro: Fallback editorial para livros
 
 1. **F1 | Fallback por ISBN**
-   - Ativar apenas quando Google Books/Open Library não devolverem capa e/ou sinopse.
+   - Estado atual: concluído para `Google Books` + `Open Library` + `Presença`.
+   - Ativado apenas quando Google Books/Open Library não devolverem capa e/ou sinopse.
    - Pesquisa exclusivamente por ISBN, nunca por título, para reduzir falsos positivos.
 2. **F2 | Extração controlada de metadata**
+   - Estado atual: concluído.
    - Extrair apenas capa, sinopse e fonte.
    - Rejeitar resultados sem confirmação explícita do ISBN.
 3. **F3 | Proxy e cache**
+   - Estado atual: proxy de imagem concluído; cache adicional pode ser reforçado mais tarde se necessário.
    - Servir imagens de fallback por endpoint same-origin.
    - Aplicar cache forte para reduzir scraping e latência.
 4. **F4 | Ordem de confiança**
-   - Prioridade continua a ser Google Books -> Open Library -> fallback editorial.
+   - Estado atual: concluído.
+   - Prioridade continua a ser Google Books -> Open Library -> fallback editorial (`Presença`).
    - Nunca substituir dados já válidos das APIs principais por dados menos confiáveis.
+ 5. **F5 | Fornecedores rejeitados**
+   - `Bertrand` e `Wook` testados e descartados para integração automática.
+   - Motivo: baixa viabilidade técnica em automação backend (`search_failed` / `no_product_link`).
 
 ## Backlog técnico (pronto para issues)
 
