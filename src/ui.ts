@@ -50,6 +50,19 @@ function getMediaTypeChipClass(mediaType: MediaType, extraClass = ''): string {
     return extraClass ? `${base} ${extraClass}` : base;
 }
 
+function buildExternalImageProxyUrl(rawUrl: string): string {
+    const normalizedUrl = String(rawUrl || '').trim();
+    if (!normalizedUrl) return '';
+    if (normalizedUrl.startsWith('/api/news-image?url=')) return normalizedUrl;
+    if (/^https?:\/\//i.test(normalizedUrl)) {
+        return `/api/news-image?url=${encodeURIComponent(normalizedUrl)}`;
+    }
+    if (normalizedUrl.startsWith('//')) {
+        return `/api/news-image?url=${encodeURIComponent(`https:${normalizedUrl}`)}`;
+    }
+    return normalizedUrl;
+}
+
 function buildPosterUrl(
     posterPath: string | null | undefined,
     tmdbSize: string,
@@ -58,8 +71,9 @@ function buildPosterUrl(
     if (!posterPath) return fallback;
     const normalizedPath = String(posterPath).trim();
     if (!normalizedPath) return fallback;
-    if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
-    if (normalizedPath.startsWith('//')) return `https:${normalizedPath}`;
+    if (/^https?:\/\//i.test(normalizedPath) || normalizedPath.startsWith('//')) {
+        return buildExternalImageProxyUrl(normalizedPath);
+    }
     return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
 }
 
@@ -1270,7 +1284,7 @@ function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
     const raw = String(item.imageUrl || '').trim();
     if (!raw) return null;
-    return `/api/news-image?url=${encodeURIComponent(raw)}`;
+    return buildExternalImageProxyUrl(raw);
 }
 
 function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
