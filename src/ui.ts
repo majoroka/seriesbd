@@ -1951,6 +1951,9 @@ async function fetchSuggestedMovieUpcomingEntries(
             if (!date || date < today) return;
             const mediaType = movie.media_type || 'movie';
             if (mediaType !== 'movie') return;
+            const hasPoster = typeof movie.poster_path === 'string' && movie.poster_path.trim().length > 0;
+            const hasOverview = typeof movie.overview === 'string' && movie.overview.trim().length > 0;
+            if (!hasPoster || !hasOverview) return;
             const mediaKey = `${mediaType}:${movie.id}`;
             if (libraryKeys.has(mediaKey)) return;
             const candidate: DashboardUpcomingEntry = {
