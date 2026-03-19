@@ -2450,6 +2450,7 @@ export function renderMediaDetails(
         if (media.source_provider === 'tmdb_movie') return 'TMDb';
         if (media.source_provider === 'google_books') return 'Google Books';
         if (media.source_provider === 'open_library') return 'Open Library';
+        if (media.source_provider === 'presenca') return 'Presenca';
         return media.source_provider || 'N/A';
     })();
     const progressLabel = mediaType === 'movie'

@@ -647,6 +647,29 @@ const fetchPresencaFallbackByIsbn = async (isbn) => {
   };
 };
 
+const enrichBookByOfficialSourcesAndPresenca = async (baseResult, isbn, googleApiKey) => {
+  let result = baseResult;
+
+  const googleByIsbn = await fetchGoogleBookByIsbn(isbn, googleApiKey);
+  if (googleByIsbn.ok && googleByIsbn.result) {
+    result = mergeBookMetadata(result, googleByIsbn.result);
+  }
+
+  const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(isbn);
+  if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
+    result = mergeBookMetadata(result, openLibraryByIsbn.result);
+  }
+
+  if (bookNeedsMetadata(result)) {
+    const presencaFallback = await fetchPresencaFallbackByIsbn(isbn);
+    if (presencaFallback.ok && presencaFallback.result) {
+      result = mergeBookMetadata(result, presencaFallback.result);
+    }
+  }
+
+  return result;
+};
+
 const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) return { ok: false, status: 400, result: null };
@@ -787,6 +810,14 @@ export async function onRequest(context) {
           ...results,
           ...openLibraryIsbn.results,
         ]);
+
+        results = await Promise.all(
+          results.map(async (entry) => {
+            const entryIsbn = entry?.isbn || entry?.isbn_13 || entry?.isbn_10;
+            if (entryIsbn !== normalizedIsbn) return entry;
+            return enrichBookByOfficialSourcesAndPresenca(entry, normalizedIsbn, googleApiKey);
+          }),
+        );
       } else if (!googleHadOkResponse || results.length === 0) {
         const openLibraryKeyword = await searchOpenLibraryBooks(query);
         const openLibraryAuthor = await searchOpenLibraryBooks(query, { byAuthor: true });
@@ -965,25 +996,7 @@ export async function onRequest(context) {
     }
 
     if (normalizedIsbn) {
-      const googleByIsbn = await fetchGoogleBookByIsbn(normalizedIsbn, googleApiKey);
-      if (googleByIsbn.ok && googleByIsbn.result) {
-        upstreamStatus = googleByIsbn.status || upstreamStatus;
-        result = mergeBookMetadata(result, googleByIsbn.result);
-      }
-
-      const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(normalizedIsbn);
-      if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
-        upstreamStatus = openLibraryByIsbn.status || upstreamStatus;
-        result = mergeBookMetadata(result, openLibraryByIsbn.result);
-      }
-
-      if (bookNeedsMetadata(result)) {
-        const presencaFallback = await fetchPresencaFallbackByIsbn(normalizedIsbn);
-        if (presencaFallback.ok && presencaFallback.result) {
-          upstreamStatus = presencaFallback.status || upstreamStatus;
-          result = mergeBookMetadata(result, presencaFallback.result);
-        }
-      }
+      result = await enrichBookByOfficialSourcesAndPresenca(result, normalizedIsbn, googleApiKey);
     }
 
     if (!result && query) {
