@@ -740,6 +740,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
         return {
             'watchlist-section': 'Quero Ler',
             'unseen-section': 'A Ler',
+            'all-series-section': 'Lidos',
             'next-aired-section': 'Próximo Episódio',
             'trending-section': 'Tendências',
             'popular-section': 'Top Rated',
@@ -751,6 +752,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
     return {
         'watchlist-section': 'Quero Ver',
         'unseen-section': 'A Ver',
+        'all-series-section': 'Vistos',
         'next-aired-section': 'Próximo Episódio',
         'trending-section': 'Tendências',
         'popular-section': 'Top Rated',
@@ -3334,7 +3336,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     DOM.mainNavLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', async (e) => {
             e.preventDefault();
             const targetId = (link as HTMLElement).dataset.target;
             if (targetId) {
@@ -3342,6 +3344,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.renderWatchlist();
                 } else if (targetId === 'unseen-section') {
                     UI.renderUnseen();
+                } else if (targetId === 'all-series-section') {
+                    const requestedStatus = normalizeAllSeriesStatusFilter((link as HTMLElement).dataset.libraryStatus, 'all');
+                    await setAllSeriesMediaFilterPreference(activeSubmenuMediaTarget);
+                    await setAllSeriesStatusFilterPreference(requestedStatus);
+                    UI.renderAllSeries();
+                    UI.showSection(targetId);
+                    updateMainMenuActiveState(activeSubmenuMediaTarget);
+                    return;
                 } else if (targetId === 'next-aired-section') {
                     if (activeSubmenuMediaTarget !== 'series') {
                         UI.showNotification('Próximo Episódio disponível apenas para séries.');
