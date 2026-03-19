@@ -2,7 +2,8 @@
 
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.
+Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
+Próximo bloco funcional: **PR-9 (fallback ISBN para metadata/capa de livros)**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -239,3 +240,29 @@ Estado: **planeado**.
 - [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
 - [ ] Rollback testado e documentado.
 - [ ] Dashboard estável após janela inicial de monitorização.
+
+## PR-9: Fallback ISBN para Livros (Metadata + Capa)
+
+Estado: **planeado**.
+
+### Tarefas
+- [ ] P9-T01 Confirmar onde o ISBN está disponível no fluxo atual de detalhe/pesquisa de livros.
+- [ ] P9-T02 Criar endpoint server-side de fallback por ISBN.
+- [ ] P9-T03 Implementar fornecedor fallback inicial `Bertrand` com validação exata por ISBN.
+- [ ] P9-T04 Implementar fornecedor fallback inicial `Wook` com validação exata por ISBN.
+- [ ] P9-T05 Extrair apenas metadata mínima necessária:
+  - [ ] sinopse
+  - [ ] imagem de capa
+  - [ ] fonte
+- [ ] P9-T06 Aplicar cache forte no fallback (TTL alto + reaproveitamento de resultados válidos).
+- [ ] P9-T07 Servir capas de fallback via proxy same-origin, sem hotlink direto no browser.
+- [ ] P9-T08 Integrar fallback no fluxo atual apenas quando Google Books e Open Library não trouxerem capa e/ou sinopse válidas.
+- [ ] P9-T09 Garantir que dados das APIs principais nunca são substituídos por fallback menos fiável quando já existem campos válidos.
+- [ ] P9-T10 Adicionar logs mínimos e testes unitários para match por ISBN, cache e rejeição de resultados ambíguos.
+
+### Critérios de aceitação
+- [ ] O fallback só corre quando faltarem dados relevantes no livro.
+- [ ] Nenhum resultado é aceite sem correspondência exata por ISBN.
+- [ ] Capa e sinopse de fallback são obtidas apenas via backend controlado.
+- [ ] O frontend nunca usa diretamente URLs externas dos fornecedores fallback.
+- [ ] Se o fallback falhar, a app continua funcional e sem regressões nos detalhes de livros.

@@ -36,10 +36,14 @@
 2. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
-3. **UI/UX polishing**
+3. **Fallback ISBN para livros portugueses/edições recentes (PR-9)**
+   - Manter Google Books + Open Library como fontes principais.
+   - Acrescentar fallback pontual por ISBN via backend para capa/sinopse quando as APIs atuais falharem.
+   - Fornecedores iniciais planeados: Bertrand e Wook, com cache forte e proxy same-origin.
+4. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-4. **Hardening final (PR-5)**
+5. **Hardening final (PR-5)**
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
 
@@ -85,6 +89,21 @@
 6. **R6 | Fase 2 opcional (reviews por episódio)**
    - Avaliar extensão para comentários por episódio em séries (provider a confirmar).
    - Implementar apenas após estabilidade do MVP por título.
+
+## Roadmap futuro: Fallback editorial para livros
+
+1. **F1 | Fallback por ISBN**
+   - Ativar apenas quando Google Books/Open Library não devolverem capa e/ou sinopse.
+   - Pesquisa exclusivamente por ISBN, nunca por título, para reduzir falsos positivos.
+2. **F2 | Extração controlada de metadata**
+   - Extrair apenas capa, sinopse e fonte.
+   - Rejeitar resultados sem confirmação explícita do ISBN.
+3. **F3 | Proxy e cache**
+   - Servir imagens de fallback por endpoint same-origin.
+   - Aplicar cache forte para reduzir scraping e latência.
+4. **F4 | Ordem de confiança**
+   - Prioridade continua a ser Google Books -> Open Library -> fallback editorial.
+   - Nunca substituir dados já válidos das APIs principais por dados menos confiáveis.
 
 ## Backlog técnico (pronto para issues)
 
