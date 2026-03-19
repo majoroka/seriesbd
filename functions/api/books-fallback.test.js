@@ -5,6 +5,8 @@ import {
   mapOpenLibraryBook,
   normalizeIsbn,
   parseBertrandBookPage,
+  parsePresencaProductPayload,
+  parsePresencaSearchResults,
   parseWookBookPage,
 } from './books/[[path]].js';
 
@@ -107,6 +109,48 @@ describe('books fallback parsers', () => {
     });
   });
 
+  it('parses Presenca search results into a clean product handle', () => {
+    const parsed = parsePresencaSearchResults([
+      {
+        title: 'Ganhei Uma Vida Quando Te Perdi - Edição Especial',
+        handle: '/products/ganhei-uma-vida-quando-te-perdi-edicao-especial?_pos=1&_sid=test&_ss=r',
+        featured_image: '//www.presenca.pt/cdn/shop/files/capa.jpg?v=1',
+      },
+    ], '9789899254787');
+
+    expect(parsed).toEqual({
+      handle: '/products/ganhei-uma-vida-quando-te-perdi-edicao-especial',
+      title: 'Ganhei Uma Vida Quando Te Perdi - Edição Especial',
+      imageUrl: 'https://www.presenca.pt/cdn/shop/files/capa.jpg?v=1',
+    });
+  });
+
+  it('parses Presenca product payload with matching ISBN', () => {
+    const parsed = parsePresencaProductPayload({
+      description: '<p>Sinopse Presenca</p>',
+      featured_image: '//cdn.shopify.com/s/files/1/teste.jpg?v=1',
+      url: '/products/ganhei-uma-vida-quando-te-perdi-edicao-especial',
+      variants: [
+        {
+          sku: '9789899254787',
+          barcode: '9789899254787',
+        },
+      ],
+    }, '9789899254787');
+
+    expect(parsed).toEqual({
+      provider: 'presenca',
+      isbn: '9789899254787',
+      result: expect.objectContaining({
+        source_provider: 'presenca',
+        source_id: 'https://www.presenca.pt/products/ganhei-uma-vida-quando-te-perdi-edicao-especial',
+        isbn: '9789899254787',
+        overview: 'Sinopse Presenca',
+        poster_path: 'https://cdn.shopify.com/s/files/1/teste.jpg?v=1',
+      }),
+    });
+  });
+
   it('rejects fallback pages when ISBN cannot be confirmed', () => {
     const html = `
       <html>
@@ -119,5 +163,6 @@ describe('books fallback parsers', () => {
 
     expect(parseBertrandBookPage(html, 'https://www.bertrand.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parseWookBookPage(html, 'https://www.wook.pt/livro/teste/123', '9789899254275')).toBeNull();
+    expect(parsePresencaProductPayload({ variants: [{ sku: '9781111111111' }] }, '9789899254275')).toBeNull();
   });
 });

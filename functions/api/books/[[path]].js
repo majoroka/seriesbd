@@ -14,6 +14,7 @@ import {
 const GOOGLE_BOOKS_BASE_URL = 'https://www.googleapis.com/books/v1';
 const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
 const OPEN_LIBRARY_COVERS_BASE_URL = 'https://covers.openlibrary.org/b/id';
+const PRESENCA_BASE_URL = 'https://www.presenca.pt';
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
 const ROUTE_KEY = 'books';
@@ -75,6 +76,7 @@ const dedupeBookResults = (results) => {
 };
 
 const hasBookText = (value) => String(value || '').trim().length > 0;
+const bookNeedsMetadata = (book) => !book || !hasBookText(book.overview) || !book.poster_path;
 
 const mergeBookMetadata = (baseResult, enrichmentResult) => {
   if (!baseResult && !enrichmentResult) return null;
@@ -404,6 +406,62 @@ const buildFallbackResult = ({ provider, isbn, productUrl, imageUrl, overview })
   },
 });
 
+const normalizePresencaHandle = (rawHandle) => {
+  const value = String(rawHandle || '').trim();
+  if (!value) return null;
+  try {
+    const parsed = new URL(value, PRESENCA_BASE_URL);
+    return `${parsed.pathname}`.replace(/\.js$/i, '');
+  } catch {
+    const sanitized = value.split('?')[0].trim();
+    return sanitized.startsWith('/') ? sanitized : `/${sanitized}`;
+  }
+};
+
+export const parsePresencaSearchResults = (payload, expectedIsbn) => {
+  const items = Array.isArray(payload) ? payload : [];
+  for (const item of items) {
+    const handle = normalizePresencaHandle(item?.handle);
+    const title = String(item?.title || item?.value || '').trim();
+    const imageUrl = absolutizeUrl(item?.featured_image, PRESENCA_BASE_URL);
+    if (!handle) continue;
+    if (hasBookText(title) || imageUrl) {
+      return {
+        handle,
+        title,
+        imageUrl,
+      };
+    }
+  }
+  return null;
+};
+
+export const parsePresencaProductPayload = (payload, expectedIsbn) => {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const barcodeMatches = Array.isArray(payload.variants)
+    && payload.variants.some((variant) => {
+      const sku = normalizeIsbn(variant?.sku);
+      const barcode = normalizeIsbn(variant?.barcode);
+      return sku === expectedIsbn || barcode === expectedIsbn;
+    });
+
+  if (!barcodeMatches) return null;
+
+  const imageUrl = absolutizeUrl(
+    payload?.featured_image || payload?.media?.[0]?.src || payload?.images?.[0] || null,
+    PRESENCA_BASE_URL,
+  );
+
+  return buildFallbackResult({
+    provider: 'presenca',
+    isbn: expectedIsbn,
+    productUrl: absolutizeUrl(payload?.url || '', PRESENCA_BASE_URL),
+    imageUrl,
+    overview: payload?.description || '',
+  });
+};
+
 export const parseBertrandBookPage = (html, pageUrl, expectedIsbn) => {
   const jsonLdBlocks = parseJsonLdBlocks(html);
   const matchedJsonLd = jsonLdBlocks.find((entry) => collectJsonLdIsbns(entry).includes(expectedIsbn));
@@ -519,6 +577,71 @@ const fetchWookFallbackByIsbn = async (isbn) => {
     ok: Boolean(parsed),
     status: productPage.status,
     provider: 'wook',
+    result: parsed?.result || null,
+    reason: parsed ? null : 'isbn_not_confirmed',
+  };
+};
+
+const resolvePresencaProductByIsbn = async (isbn) => {
+  const searchUrl = `${PRESENCA_BASE_URL}/search?q=${encodeURIComponent(isbn)}&view=json`;
+  const response = await fetch(searchUrl, {
+    method: 'GET',
+    headers: {
+      ...FALLBACK_PROVIDER_HEADERS,
+      Accept: 'application/json,text/plain,*/*',
+    },
+    redirect: 'follow',
+  });
+
+  const rawText = await response.text().catch(() => '');
+  if (!response.ok) {
+    return { ok: false, status: response.status, handle: null, reason: 'search_failed' };
+  }
+
+  try {
+    const payload = JSON.parse(String(rawText || '').trim());
+    const match = parsePresencaSearchResults(payload, isbn);
+    return {
+      ok: Boolean(match?.handle),
+      status: response.status,
+      handle: match?.handle || null,
+      previewImageUrl: match?.imageUrl || null,
+      reason: match?.handle ? null : 'no_product_link',
+    };
+  } catch {
+    return { ok: false, status: response.status, handle: null, reason: 'search_parse_failed' };
+  }
+};
+
+const fetchPresencaFallbackByIsbn = async (isbn) => {
+  const resolved = await resolvePresencaProductByIsbn(isbn);
+  if (!resolved.ok || !resolved.handle) {
+    return { ok: false, status: resolved.status, provider: 'presenca', result: null, reason: resolved.reason };
+  }
+
+  const productUrl = `${PRESENCA_BASE_URL}${resolved.handle}.js`;
+  const response = await fetch(productUrl, {
+    method: 'GET',
+    headers: {
+      ...FALLBACK_PROVIDER_HEADERS,
+      Accept: 'application/json,text/plain,*/*',
+    },
+    redirect: 'follow',
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload) {
+    return { ok: false, status: response.status, provider: 'presenca', result: null, reason: 'product_fetch_failed' };
+  }
+
+  const parsed = parsePresencaProductPayload(payload, isbn);
+  if (parsed?.result && !parsed.result.poster_path && resolved.previewImageUrl) {
+    parsed.result.poster_path = resolved.previewImageUrl;
+  }
+
+  return {
+    ok: Boolean(parsed),
+    status: response.status,
+    provider: 'presenca',
     result: parsed?.result || null,
     reason: parsed ? null : 'isbn_not_confirmed',
   };
@@ -727,7 +850,9 @@ export async function onRequest(context) {
           ? ['bertrand']
           : providerParam === 'wook'
             ? ['wook']
-            : ['bertrand', 'wook'];
+            : providerParam === 'presenca'
+              ? ['presenca']
+              : ['presenca', 'bertrand', 'wook'];
 
       const attempts = [];
       let result = null;
@@ -737,7 +862,9 @@ export async function onRequest(context) {
       for (const fallbackProvider of providers) {
         const fallbackResponse = fallbackProvider === 'bertrand'
           ? await fetchBertrandFallbackByIsbn(normalizedIsbn)
-          : await fetchWookFallbackByIsbn(normalizedIsbn);
+          : fallbackProvider === 'wook'
+            ? await fetchWookFallbackByIsbn(normalizedIsbn)
+            : await fetchPresencaFallbackByIsbn(normalizedIsbn);
         upstreamStatus = fallbackResponse.status || upstreamStatus;
         attempts.push({
           provider: fallbackProvider,
@@ -848,6 +975,14 @@ export async function onRequest(context) {
       if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
         upstreamStatus = openLibraryByIsbn.status || upstreamStatus;
         result = mergeBookMetadata(result, openLibraryByIsbn.result);
+      }
+
+      if (bookNeedsMetadata(result)) {
+        const presencaFallback = await fetchPresencaFallbackByIsbn(normalizedIsbn);
+        if (presencaFallback.ok && presencaFallback.result) {
+          upstreamStatus = presencaFallback.status || upstreamStatus;
+          result = mergeBookMetadata(result, presencaFallback.result);
+        }
       }
     }
 
