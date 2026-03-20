@@ -1067,16 +1067,25 @@ body.light-theme .sidebar-submenu-shell {
 
 .dashboard-media-card[data-media-type="series"] {
     --dashboard-card-accent: var(--primary-accent);
+    --dashboard-card-pending: #63a9ce;
+    --dashboard-card-progress: #60e0f9;
+    --dashboard-card-completed: #025f90;
 }
 
 .dashboard-media-card[data-media-type="movie"] {
     --dashboard-card-accent: #f08f44;
     --dashboard-card-rgb: 240, 143, 68;
+    --dashboard-card-pending: #e7a46d;
+    --dashboard-card-progress: #ffc07a;
+    --dashboard-card-completed: #b45c18;
 }
 
 .dashboard-media-card[data-media-type="book"] {
     --dashboard-card-accent: #7dc86e;
     --dashboard-card-rgb: 125, 200, 110;
+    --dashboard-card-pending: #8bcf7b;
+    --dashboard-card-progress: #b0e98b;
+    --dashboard-card-completed: #4f9a40;
 }
 
 .dashboard-media-card[data-media-type="all"] {
@@ -1128,8 +1137,8 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .dashboard-media-card-total-badge {
-    width: 72px;
-    height: 72px;
+    width: 52px;
+    height: 52px;
     border-radius: 999px;
     border: 1px solid rgba(var(--dashboard-card-rgb), 0.7);
     color: var(--dashboard-card-accent);
@@ -1139,7 +1148,7 @@ body.light-theme .sidebar-submenu-shell {
     justify-content: center;
     flex-shrink: 0;
     font-family: var(--font-main);
-    font-size: 2rem;
+    font-size: 1.45rem;
     font-weight: 400;
     line-height: 1;
 }
@@ -1170,15 +1179,15 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .dashboard-media-card-metric-row.metric-pending {
-    --metric-color: rgba(var(--dashboard-card-rgb), 0.95);
+    --metric-color: var(--dashboard-card-pending, rgba(var(--dashboard-card-rgb), 0.95));
 }
 
 .dashboard-media-card-metric-row.metric-progress {
-    --metric-color: rgba(var(--dashboard-card-rgb), 0.72);
+    --metric-color: var(--dashboard-card-progress, rgba(var(--dashboard-card-rgb), 0.72));
 }
 
 .dashboard-media-card-metric-row.metric-completed {
-    --metric-color: rgba(var(--dashboard-card-rgb), 0.54);
+    --metric-color: var(--dashboard-card-completed, rgba(var(--dashboard-card-rgb), 0.54));
 }
 
 .dashboard-media-card-metrics div::after {
