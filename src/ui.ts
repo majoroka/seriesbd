@@ -738,8 +738,11 @@ type DashboardTopGenre = {
 };
 
 const DASHBOARD_TOP_GENRES_LIMIT = 3;
-const DASHBOARD_UPCOMING_VISIBLE_LIMIT = 12;
-const DASHBOARD_UPCOMING_MIN_SUGGESTED_ITEMS = 4;
+const DASHBOARD_UPCOMING_VISIBLE_LIMIT = 18;
+const DASHBOARD_UPCOMING_LIBRARY_LIMIT = 6;
+const DASHBOARD_UPCOMING_SERIES_SUGGESTED_LIMIT = 6;
+const DASHBOARD_UPCOMING_MOVIE_SUGGESTED_LIMIT = 6;
+const DASHBOARD_UPCOMING_BOOK_SUGGESTED_LIMIT = 4;
 const DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
@@ -1895,27 +1898,56 @@ function dedupeUpcomingEntries(entries: DashboardUpcomingEntry[]): DashboardUpco
     return Array.from(deduped.values());
 }
 
-function selectDashboardUpcomingEntries(entries: DashboardUpcomingEntry[], limit: number): DashboardUpcomingEntry[] {
+function sortUpcomingEntriesForSuggestion(entries: DashboardUpcomingEntry[]): DashboardUpcomingEntry[] {
+    return [...entries].sort((a, b) => {
+        const aRating = typeof a.item.vote_average === 'number' ? a.item.vote_average : 0;
+        const bRating = typeof b.item.vote_average === 'number' ? b.item.vote_average : 0;
+        if (bRating !== aRating) return bRating - aRating;
+        return a.date.getTime() - b.date.getTime();
+    });
+}
+
+function selectDashboardUpcomingEntries(
+    entries: DashboardUpcomingEntry[],
+    limit: number,
+    filter: DashboardContentFilter
+): DashboardUpcomingEntry[] {
     if (entries.length <= limit) return entries;
 
-    const libraryEntries = entries.filter((entry) => entry.source === 'library');
-    const suggestedEntries = entries.filter((entry) => entry.source !== 'library');
-
-    if (suggestedEntries.length === 0) return libraryEntries.slice(0, limit);
-
-    const minSuggested = Math.min(
-        DASHBOARD_UPCOMING_MIN_SUGGESTED_ITEMS,
-        suggestedEntries.length,
-        limit
+    const libraryEntries = entries
+        .filter((entry) => entry.source === 'library')
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const suggestedSeriesEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-series')
     );
-    const maxLibrary = Math.max(0, limit - minSuggested);
+    const suggestedMovieEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-movie')
+    );
+    const suggestedBookEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-book')
+    );
 
-    const selectedLibrary = libraryEntries.slice(0, maxLibrary);
-    const selectedSuggestions = suggestedEntries.slice(0, limit - selectedLibrary.length);
+    if (filter === 'series') {
+        return [...libraryEntries, ...suggestedSeriesEntries].slice(0, limit);
+    }
+    if (filter === 'movie') {
+        return [...libraryEntries, ...suggestedMovieEntries].slice(0, limit);
+    }
+    if (filter === 'book') {
+        return [...libraryEntries, ...suggestedBookEntries].slice(0, limit);
+    }
 
-    return [...selectedLibrary, ...selectedSuggestions]
-        .sort((a, b) => a.date.getTime() - b.date.getTime())
-        .slice(0, limit);
+    const selected = [
+        ...libraryEntries.slice(0, DASHBOARD_UPCOMING_LIBRARY_LIMIT),
+        ...suggestedSeriesEntries.slice(0, DASHBOARD_UPCOMING_SERIES_SUGGESTED_LIMIT),
+        ...suggestedMovieEntries.slice(0, DASHBOARD_UPCOMING_MOVIE_SUGGESTED_LIMIT),
+    ];
+
+    if (selected.length < limit) {
+        selected.push(...suggestedBookEntries.slice(0, Math.min(DASHBOARD_UPCOMING_BOOK_SUGGESTED_LIMIT, limit - selected.length)));
+    }
+
+    return selected.slice(0, limit);
 }
 
 function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
@@ -2106,18 +2138,6 @@ async function fetchSuggestedBookUpcomingEntries(
 }
 
 async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[], today: Date): Promise<void> {
-    if (topGenres.length === 0) {
-        const hadSuggestions = dashboardSuggestedUpcomingEntries.length > 0;
-        dashboardSuggestedUpcomingEntries = [];
-        dashboardUpcomingCacheSignature = '';
-        dashboardUpcomingCacheExpiresAt = 0;
-        syncDashboardSuggestedMediaStore();
-        if (hadSuggestions) {
-            renderDashboardUpcomingReleases();
-        }
-        return;
-    }
-
     const signature = topGenres.map((genre) => `${genre.normalized}:${genre.count}`).join('|');
     const now = Date.now();
     if (
@@ -2137,7 +2157,9 @@ async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[]
         const [seriesSuggestions, movieSuggestions, bookSuggestions] = await Promise.all([
             fetchSuggestedSeriesUpcomingEntries(today, libraryKeys).catch(() => []),
             fetchSuggestedMovieUpcomingEntries(today, libraryKeys).catch(() => []),
-            fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
+            topGenres.length > 0
+                ? fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => [])
+                : Promise.resolve([]),
         ]);
         if (requestVersion !== dashboardUpcomingRequestVersion) return;
         dashboardSuggestedUpcomingEntries = [...seriesSuggestions, ...movieSuggestions, ...bookSuggestions];
@@ -2171,7 +2193,7 @@ function renderDashboardUpcomingReleases(): void {
     const filter = dashboardPanelFilters.upcoming;
     const filteredEntries = sortedEntries
         .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter));
-    const visibleEntries = selectDashboardUpcomingEntries(filteredEntries, DASHBOARD_UPCOMING_VISIBLE_LIMIT);
+    const visibleEntries = selectDashboardUpcomingEntries(filteredEntries, DASHBOARD_UPCOMING_VISIBLE_LIMIT, filter);
 
     DOM.dashboardUpcomingList.innerHTML = '';
     renderDashboardPanelFilters('upcoming');
