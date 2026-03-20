@@ -3544,7 +3544,10 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     if (!DOM.statsGlobalOverview) return;
     const isGlobal = summary.context === 'all';
     DOM.statsGlobalOverview.hidden = !isGlobal;
-    if (DOM.keyStatsGrid) DOM.keyStatsGrid.hidden = isGlobal;
+    if (DOM.keyStatsGrid) {
+        DOM.keyStatsGrid.hidden = isGlobal;
+        DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
+    }
     if (!isGlobal || !DOM.statsGlobalSummaryGrid) return;
 
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
@@ -3740,22 +3743,17 @@ function renderGlobalGenresPanel(stats: StatsSummary): void {
 
     DOM.statsGlobalGenresList.replaceChildren(
         ...topGenres.map((entry) => {
-            const total = Math.max(entry.total, 1);
+            const maxValue = Math.max(entry.counts.series, entry.counts.movie, entry.counts.book, 1);
             return el('article', { class: 'stats-global-genre-row' }, [
-                el('div', { class: 'stats-global-genre-head' }, [
+                el('div', { class: 'stats-global-genre-title' }, [
                     el('strong', { text: entry.name }),
-                    el('span', { text: `${entry.total} itens` }),
                 ]),
-                el('div', { class: 'stats-global-genre-bar' }, (['series', 'movie', 'book'] as MediaType[])
-                    .filter((mediaType) => entry.counts[mediaType] > 0)
-                    .map((mediaType) => el('span', {
-                        class: `stats-global-genre-segment stats-global-genre-segment--${mediaType}`,
-                        style: `width:${(entry.counts[mediaType] / total) * 100}%;background:${visuals[mediaType].completed};`,
-                    }))),
-                el('div', { class: 'stats-global-genre-meta' }, (['series', 'movie', 'book'] as MediaType[]).map((mediaType) =>
-                    el('span', { class: `stats-global-genre-count stats-global-genre-count--${mediaType}` }, [
-                        `${visuals[mediaType].label}: `,
-                        el('strong', { text: String(entry.counts[mediaType]) }),
+                el('div', { class: 'stats-global-genre-bars' }, (['series', 'movie', 'book'] as MediaType[]).map((mediaType) =>
+                    el('div', { class: `stats-global-genre-track stats-global-genre-track--${mediaType}` }, [
+                        el('span', {
+                            class: `stats-global-genre-fill stats-global-genre-fill--${mediaType}`,
+                            style: `width:${(entry.counts[mediaType] / maxValue) * 100}%;background:${visuals[mediaType].progress};`,
+                        }),
                     ]),
                 )),
             ]);

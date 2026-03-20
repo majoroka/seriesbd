@@ -2816,50 +2816,50 @@ body.light-theme .stats-global-summary-card {
 
 .stats-global-genre-row {
     display: grid;
-    gap: 0.45rem;
+    grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+    gap: 0.9rem 1rem;
+    align-items: center;
 }
 
-.stats-global-genre-head,
-.stats-global-genre-meta {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+.stats-global-genre-title {
+    position: relative;
+    padding-right: 0.95rem;
 }
 
-.stats-global-genre-head strong {
-    color: var(--text-primary);
-}
-
-.stats-global-genre-head span,
-.stats-global-genre-count {
-    color: var(--text-secondary);
-    font-size: 0.92rem;
-}
-
-.stats-global-genre-bar {
-    display: flex;
-    width: 100%;
-    min-height: 12px;
+.stats-global-genre-title::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 0;
+    bottom: 8px;
+    width: 3px;
     border-radius: 999px;
-    overflow: hidden;
+    background: rgba(80, 80, 80, 0.65);
+}
+
+.stats-global-genre-title strong {
+    color: var(--text-primary);
+    font-size: 1.35rem;
+    line-height: 1.1;
+}
+
+.stats-global-genre-bars {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.stats-global-genre-track {
+    width: 100%;
+    height: 14px;
+    border-radius: 999px;
     background: rgba(148, 158, 184, 0.14);
+    overflow: hidden;
 }
 
-.stats-global-genre-count strong {
-    font-family: var(--font-mono);
-}
-
-.stats-global-genre-count--series strong {
-    color: #025f90;
-}
-
-.stats-global-genre-count--movie strong {
-    color: #b45c18;
-}
-
-.stats-global-genre-count--book strong {
-    color: #4f9a40;
+.stats-global-genre-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
 }
 
 .stats-global-empty-state {
@@ -3059,7 +3059,7 @@ body.light-theme .stats-global-summary-card {
 
 .stats-global-favorites-groups {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.2rem;
 }
 
@@ -5135,6 +5135,16 @@ body.light-theme .network-logo {
     .stats-global-legend-percentage {
         grid-column: 2;
         justify-self: start;
+    }
+    .stats-global-genre-row {
+        grid-template-columns: 1fr;
+    }
+    .stats-global-genre-title {
+        padding-right: 0;
+        padding-bottom: 0.35rem;
+    }
+    .stats-global-genre-title::after {
+        display: none;
     }
     .stats-global-favorites-groups {
         grid-template-columns: 1fr;
