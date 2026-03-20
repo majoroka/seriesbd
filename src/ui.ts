@@ -1983,14 +1983,10 @@ async function fetchSuggestedSeriesUpcomingEntries(
     today: Date,
     libraryKeys: Set<string>
 ): Promise<DashboardUpcomingEntry[]> {
-    const todayIso = today.toISOString().slice(0, 10);
     const deduped = new Map<string, DashboardUpcomingEntry>();
     const responses = await Promise.allSettled([
-        API.fetchNewPremieres(1, null, 'series', {
-            fromDate: todayIso,
-            sortBy: 'first_air_date.asc',
-            withOriginalLanguage: false,
-        }),
+        API.fetchNewPremieres(1, null, 'series'),
+        API.fetchNewPremieres(2, null, 'series'),
     ]);
 
     responses.forEach((result) => {
@@ -2018,7 +2014,11 @@ async function fetchSuggestedSeriesUpcomingEntries(
     });
 
     return Array.from(deduped.values())
-        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .sort((a, b) => {
+            const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            return a.date.getTime() - b.date.getTime();
+        })
         .slice(0, DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS);
 }
 
@@ -2026,13 +2026,9 @@ async function fetchSuggestedMovieUpcomingEntries(
     today: Date,
     libraryKeys: Set<string>
 ): Promise<DashboardUpcomingEntry[]> {
-    const todayIso = today.toISOString().slice(0, 10);
     const responses = await Promise.allSettled([
-        API.fetchNewPremieres(1, null, 'movie', {
-            fromDate: todayIso,
-            sortBy: 'primary_release_date.asc',
-            withOriginalLanguage: false,
-        }),
+        API.fetchNewPremieres(1, null, 'movie'),
+        API.fetchNewPremieres(2, null, 'movie'),
     ]);
 
     const deduped = new Map<string, DashboardUpcomingEntry>();
@@ -2061,7 +2057,11 @@ async function fetchSuggestedMovieUpcomingEntries(
     });
 
     return Array.from(deduped.values())
-        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .sort((a, b) => {
+            const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            return a.date.getTime() - b.date.getTime();
+        })
         .slice(0, DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS);
 }
 
