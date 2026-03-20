@@ -31,18 +31,39 @@
 
 ## Em preparação imediata
 
-1. **Hardening final das Notícias RSS (Sprint 12-13)**
+1. **PR-10 | Estatísticas Globais acionadas pelo card**
+   - Tornar o card `Estatísticas` clicável e reutilizar a secção de estatísticas em modo global.
+   - Consolidar métricas, distribuição por tipo, progresso, géneros, top ratings e tendência temporal.
+2. **Hardening final das Notícias RSS (Sprint 12-13)**
    - Rever sanitização, observabilidade, custos e licenciamento das fontes.
    - Fechar QA/UAT e rollout final controlado.
-2. **Cutover DNS (S6-T06)**
+3. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
-3. **UI/UX polishing**
+4. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-4. **Hardening final (PR-5)**
+5. **Hardening final (PR-5)**
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
+
+## Roadmap futuro: Estatísticas Globais
+
+1. **G1 | Entrada pela dashboard**
+   - O card `Estatísticas` passa a abrir uma vista global, sem modal.
+   - A navegação reutiliza a secção de estatísticas já existente, com modo `global`.
+2. **G2 | Resumo consolidado**
+   - Total global da biblioteca.
+   - `Quero Ver / Ler`, `A Ver / Ler`, `Concluídos` e percentagem global de conclusão.
+3. **G3 | Distribuição e progresso**
+   - Distribuição por tipo (`Séries`, `Filmes`, `Livros`).
+   - Progresso global agregado (`por iniciar`, `em progresso`, `concluídos`).
+4. **G4 | Métricas avançadas**
+   - Horas de séries, horas de filmes, estimativa de leitura e total agregado.
+   - Top géneros globais e top ratings globais com badge do tipo.
+5. **G5 | Tendência temporal e filtros**
+   - Tendência mensal de consumo/conclusões.
+   - Filtros rápidos no topo: `Tudo`, `Séries`, `Filmes`, `Livros`.
 
 ## Notícias RSS na Dashboard
 

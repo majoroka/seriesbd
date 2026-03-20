@@ -3,7 +3,7 @@
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
 Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
-Próximo bloco funcional: **UI/UX polishing e hardening incremental**.
+Próximo bloco funcional: **PR-10 Estatísticas Globais acionadas pelo card da dashboard**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -274,3 +274,51 @@ Estado: **concluído**.
 - [ ] Capa e sinopse de fallback são obtidas apenas via backend controlado.
 - [ ] O frontend nunca usa diretamente URLs externas dos fornecedores fallback.
 - [ ] Se o fallback falhar, a app continua funcional e sem regressões nos detalhes de livros.
+
+## PR-10: Estatísticas Globais (ação do card `Estatísticas`)
+
+Estado: **planeado**.
+
+### Objetivo
+- Tornar o card `Estatísticas` da dashboard acionável.
+- Reutilizar a secção de estatísticas já existente para apresentar uma vista **global e consolidada** da biblioteca.
+- Manter coerência de navegação com `Séries`, `Filmes`, `Livros` e `Biblioteca`, evitando modais ou fluxos paralelos.
+
+### Tarefas
+- [ ] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
+- [ ] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
+- [ ] P10-T03 Implementar bloco `Resumo Geral`:
+  - [ ] total global
+  - [ ] quero ver / ler
+  - [ ] a ver / ler
+  - [ ] concluídos
+  - [ ] percentagem global de conclusão
+- [ ] P10-T04 Implementar bloco `Distribuição por Tipo`:
+  - [ ] séries
+  - [ ] filmes
+  - [ ] livros
+- [ ] P10-T05 Implementar bloco `Progresso Global` consolidado (`por iniciar`, `em progresso`, `concluídos`).
+- [ ] P10-T06 Implementar bloco `Tempo Consumido`:
+  - [ ] horas de séries
+  - [ ] horas de filmes
+  - [ ] estimativa de leitura para livros
+  - [ ] total agregado
+- [ ] P10-T07 Implementar bloco `Top Géneros Globais`.
+- [ ] P10-T08 Implementar bloco `Top Ratings Globais` misturando séries, filmes e livros com badge de tipo.
+- [ ] P10-T09 Implementar bloco `Tendência Temporal` (conclusões ou horas por mês).
+- [ ] P10-T10 Adicionar filtros rápidos no topo da vista global:
+  - [ ] Tudo
+  - [ ] Séries
+  - [ ] Filmes
+  - [ ] Livros
+- [ ] P10-T11 Garantir navegação consistente:
+  - [ ] clique no card abre a vista
+  - [ ] botão claro para voltar à dashboard
+  - [ ] foco e scroll corretos ao navegar
+
+### Critérios de aceitação
+- [ ] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
+- [ ] A vista global mostra métricas consolidadas reais da biblioteca inteira.
+- [ ] Os filtros `Tudo / Séries / Filmes / Livros` funcionam sobre a mesma vista.
+- [ ] O layout mantém coerência visual com a dashboard e com as secções já existentes.
+- [ ] Não há regressões nas estatísticas atuais por domínio.
