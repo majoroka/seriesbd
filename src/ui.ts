@@ -2001,8 +2001,7 @@ async function fetchSuggestedSeriesUpcomingEntries(
             const mediaType = series.media_type || 'series';
             if (mediaType !== 'series') return;
             const hasPoster = typeof series.poster_path === 'string' && series.poster_path.trim().length > 0;
-            const hasOverview = typeof series.overview === 'string' && series.overview.trim().length > 0;
-            if (!hasPoster || !hasOverview) return;
+            if (!hasPoster) return;
             const mediaKey = `${mediaType}:${series.id}`;
             if (libraryKeys.has(mediaKey)) return;
             const candidate: DashboardUpcomingEntry = {
@@ -2045,8 +2044,7 @@ async function fetchSuggestedMovieUpcomingEntries(
             const mediaType = movie.media_type || 'movie';
             if (mediaType !== 'movie') return;
             const hasPoster = typeof movie.poster_path === 'string' && movie.poster_path.trim().length > 0;
-            const hasOverview = typeof movie.overview === 'string' && movie.overview.trim().length > 0;
-            if (!hasPoster || !hasOverview) return;
+            if (!hasPoster) return;
             const mediaKey = `${mediaType}:${movie.id}`;
             if (libraryKeys.has(mediaKey)) return;
             const candidate: DashboardUpcomingEntry = {
