@@ -706,6 +706,7 @@ type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
 type DashboardCardType = MediaType | 'all';
 type DashboardMetrics = {
     total: number;
+    pending: number;
     inProgress: number;
     completed: number;
 };
@@ -905,6 +906,7 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
     const mediaItems = mediaType === 'all'
         ? allLibraryItems
         : allLibraryItems.filter(item => (item.media_type || 'series') === mediaType);
+    let pending = 0;
     let inProgress = 0;
     let completed = 0;
 
@@ -922,14 +924,33 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
         }
         if (progress > 0) {
             inProgress += 1;
+            return;
         }
+        pending += 1;
     });
 
     return {
         total: mediaItems.length,
+        pending,
         inProgress,
         completed,
     };
+}
+
+function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string): string {
+    if (metricKey === 'pending') {
+        return mediaType === 'book' ? 'Quero Ler' : 'Quero Ver';
+    }
+    if (metricKey === 'in-progress') {
+        return mediaType === 'book' ? 'A Ler' : 'A Ver';
+    }
+    if (metricKey === 'completed') {
+        return 'Concluídas';
+    }
+    if (metricKey === 'total') {
+        return 'Total';
+    }
+    return metricKey;
 }
 
 function getLastTwelveMonthTimeline(): { labels: string[]; keys: string[] } {
@@ -2267,11 +2288,21 @@ export function renderMediaDashboard() {
             : 'series';
         const metrics = computeDashboardMetrics(mediaType);
         const total = card.querySelector<HTMLElement>('[data-metric="total"]');
+        const pending = card.querySelector<HTMLElement>('[data-metric="pending"]');
         const inProgress = card.querySelector<HTMLElement>('[data-metric="in-progress"]');
         const completed = card.querySelector<HTMLElement>('[data-metric="completed"]');
+        const totalBadge = card.querySelector<HTMLElement>('[data-metric-total]');
         if (total) total.textContent = String(metrics.total);
+        if (pending) pending.textContent = String(metrics.pending);
         if (inProgress) inProgress.textContent = String(metrics.inProgress);
         if (completed) completed.textContent = String(metrics.completed);
+        if (totalBadge) totalBadge.textContent = String(metrics.total);
+
+        const metricLabels = card.querySelectorAll<HTMLElement>('[data-metric-label]');
+        metricLabels.forEach((label) => {
+            const metricKey = label.dataset.metricLabel || '';
+            label.textContent = getDashboardMetricLabel(mediaType, metricKey);
+        });
 
         const metricRows = card.querySelectorAll<HTMLElement>('.dashboard-media-card-metrics > div');
         metricRows.forEach((row) => {
@@ -2280,6 +2311,8 @@ export function renderMediaDashboard() {
             let percentage = 0;
             if (metricKey === 'total') {
                 percentage = metrics.total > 0 ? 100 : 0;
+            } else if (metricKey === 'pending') {
+                percentage = metrics.total > 0 ? (metrics.pending / metrics.total) * 100 : 0;
             } else if (metricKey === 'in-progress') {
                 percentage = metrics.total > 0 ? (metrics.inProgress / metrics.total) * 100 : 0;
             } else if (metricKey === 'completed') {

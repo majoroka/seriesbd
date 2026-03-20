@@ -1098,7 +1098,15 @@ body.light-theme .sidebar-submenu-shell {
 .dashboard-media-card-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
+}
+
+.dashboard-media-card-header-main {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
 }
 
 .dashboard-media-card-icon {
@@ -1117,6 +1125,23 @@ body.light-theme .sidebar-submenu-shell {
 .dashboard-media-card-header h3 {
     font-size: 1.3rem;
     letter-spacing: 0.02em;
+}
+
+.dashboard-media-card-total-badge {
+    width: 72px;
+    height: 72px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--dashboard-card-rgb), 0.7);
+    color: var(--dashboard-card-accent);
+    background: rgba(255, 255, 255, 0.03);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: var(--font-main);
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1;
 }
 
 .dashboard-media-card-subtitle {
@@ -1142,6 +1167,18 @@ body.light-theme .sidebar-submenu-shell {
     gap: 0.5rem;
     min-width: 0;
     padding-bottom: 0.75rem;
+}
+
+.dashboard-media-card-metric-row.metric-pending {
+    --metric-color: rgba(var(--dashboard-card-rgb), 0.95);
+}
+
+.dashboard-media-card-metric-row.metric-progress {
+    --metric-color: rgba(var(--dashboard-card-rgb), 0.72);
+}
+
+.dashboard-media-card-metric-row.metric-completed {
+    --metric-color: rgba(var(--dashboard-card-rgb), 0.54);
 }
 
 .dashboard-media-card-metrics div::after {
@@ -1170,7 +1207,8 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .dashboard-media-card-metrics dt {
-    font-size: 0.88rem;
+    font-family: var(--font-main);
+    font-size: 0.98rem;
     color: var(--text-secondary);
     text-transform: none;
     letter-spacing: 0.01em;
@@ -1181,26 +1219,18 @@ body.light-theme .sidebar-submenu-shell {
 
 .dashboard-media-card-metrics dd {
     font-family: var(--font-main);
-    font-size: 1.35rem;
-    font-weight: 700;
+    font-size: 1.55rem;
+    font-weight: 600;
     color: var(--text-primary);
     line-height: 1;
 }
 
-.dashboard-media-card-metrics div:nth-child(1) {
-    --metric-color: #1ea75b;
-}
-
-.dashboard-media-card-metrics div:nth-child(2) {
-    --metric-color: #c8cf2f;
-}
-
-.dashboard-media-card-metrics div:nth-child(3) {
-    --metric-color: var(--dashboard-card-accent);
-}
-
 body.light-theme .dashboard-media-card-metrics div::after {
     background-color: rgba(32, 37, 46, 0.18);
+}
+
+body.light-theme .dashboard-media-card-total-badge {
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .dashboard-panel {
