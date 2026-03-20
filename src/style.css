@@ -277,33 +277,41 @@ textarea:focus-visible,
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.65rem;
-    letter-spacing: 0.02em;
     line-height: 1;
 }
 
-.brand-mark {
-    width: 1.38rem;
-    height: 1.38rem;
+.brand-logo-image-wrap {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    min-height: 42px;
 }
 
-.brand-mark img {
-    width: 100%;
-    height: 100%;
+.brand-logo-image {
+    display: block;
+    height: 42px;
+    width: auto;
     object-fit: contain;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
 }
 
-.brand-media {
-    color: var(--text-primary);
+.brand-logo-image--dark {
+    display: none;
 }
 
-.brand-dex {
-    color: var(--primary-accent);
+body.light-theme .brand-logo-image--light {
+    display: block;
+}
+
+body.light-theme .brand-logo-image--dark {
+    display: none;
+}
+
+body:not(.light-theme) .brand-logo-image--light {
+    display: none;
+}
+
+body:not(.light-theme) .brand-logo-image--dark {
+    display: block;
 }
 
 .primary-nav ul,

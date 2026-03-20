@@ -28,28 +28,35 @@ export default defineConfig(({ command }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       // Ficheiros a serem incluídos no precache, além dos gerados pelo build.
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-16x16.png',
+        'favicon-32x32.png',
+        'apple-touch-icon.png',
+        'logo_tema_claro.svg',
+        'logo_tema_escuro.svg',
+      ],
       manifest: {
-        name: 'Stream App',
-        short_name: 'StreamApp',
-        description: 'A sua aplicação para seguir séries e filmes.',
-        theme_color: '#1e1e1e',
+        name: 'MediaDex',
+        short_name: 'MediaDex',
+        description: 'A sua aplicação para acompanhar séries, filmes e livros.',
+        theme_color: '#121212',
         background_color: '#121212',
         display: 'standalone',
         scope: '/',
         start_url: '/',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'android-chrome-192x192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'android-chrome-512x512.png',
             sizes: '512x512',
             type: 'image/png',
           },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: 'android-chrome-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {
