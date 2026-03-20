@@ -2664,6 +2664,10 @@ body.light-theme #back-to-dashboard-from-library-btn {
     color: var(--secondary-accent);
 }
 
+body.light-theme .stats-global-overview-card {
+    background: #ffffff;
+}
+
 .key-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
