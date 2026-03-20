@@ -939,9 +939,11 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
 
 function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string): string {
     if (metricKey === 'pending') {
+        if (mediaType === 'all') return 'Quero Ver / Ler';
         return mediaType === 'book' ? 'Quero Ler' : 'Quero Ver';
     }
     if (metricKey === 'in-progress') {
+        if (mediaType === 'all') return 'A Ver / Ler';
         return mediaType === 'book' ? 'A Ler' : 'A Ver';
     }
     if (metricKey === 'completed') {

@@ -213,14 +213,17 @@
                             </button>
                             <button class="dashboard-media-card dashboard-media-card--overall" type="button" data-media-type="all" aria-label="Estatísticas gerais da biblioteca">
                                 <div class="dashboard-media-card-header">
-                                    <span class="dashboard-media-card-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
-                                    <h3>Estatísticas</h3>
+                                    <div class="dashboard-media-card-header-main">
+                                        <span class="dashboard-media-card-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                                        <h3>Estatísticas</h3>
+                                    </div>
+                                    <span class="dashboard-media-card-total-badge" data-metric-total>0</span>
                                 </div>
                                 <p class="dashboard-media-card-subtitle">Visão consolidada do consumo em toda a biblioteca.</p>
                                 <dl class="dashboard-media-card-metrics">
-                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                    <div><dt>Ativos</dt><dd data-metric="in-progress">0</dd></div>
-                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-pending"><dt data-metric-label="pending">Quero Ver / Ler</dt><dd data-metric="pending">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-progress"><dt data-metric-label="in-progress">A Ver / Ler</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-completed"><dt data-metric-label="completed">Concluídos</dt><dd data-metric="completed">0</dd></div>
                                 </dl>
                             </button>
                         </div>
