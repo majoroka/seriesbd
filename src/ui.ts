@@ -738,6 +738,8 @@ type DashboardTopGenre = {
 };
 
 const DASHBOARD_TOP_GENRES_LIMIT = 3;
+const DASHBOARD_UPCOMING_VISIBLE_LIMIT = 12;
+const DASHBOARD_UPCOMING_MIN_SUGGESTED_ITEMS = 4;
 const DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
@@ -1893,6 +1895,29 @@ function dedupeUpcomingEntries(entries: DashboardUpcomingEntry[]): DashboardUpco
     return Array.from(deduped.values());
 }
 
+function selectDashboardUpcomingEntries(entries: DashboardUpcomingEntry[], limit: number): DashboardUpcomingEntry[] {
+    if (entries.length <= limit) return entries;
+
+    const libraryEntries = entries.filter((entry) => entry.source === 'library');
+    const suggestedEntries = entries.filter((entry) => entry.source !== 'library');
+
+    if (suggestedEntries.length === 0) return libraryEntries.slice(0, limit);
+
+    const minSuggested = Math.min(
+        DASHBOARD_UPCOMING_MIN_SUGGESTED_ITEMS,
+        suggestedEntries.length,
+        limit
+    );
+    const maxLibrary = Math.max(0, limit - minSuggested);
+
+    const selectedLibrary = libraryEntries.slice(0, maxLibrary);
+    const selectedSuggestions = suggestedEntries.slice(0, limit - selectedLibrary.length);
+
+    return [...selectedLibrary, ...selectedSuggestions]
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .slice(0, limit);
+}
+
 function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     const entries: DashboardUpcomingEntry[] = [];
     [...S.myWatchlist, ...S.myArchive].forEach((item) => {
@@ -2144,9 +2169,9 @@ function renderDashboardUpcomingReleases(): void {
     void ensureDashboardUpcomingSuggestions(topGenres, today);
 
     const filter = dashboardPanelFilters.upcoming;
-    const visibleEntries = sortedEntries
-        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
-        .slice(0, 12);
+    const filteredEntries = sortedEntries
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter));
+    const visibleEntries = selectDashboardUpcomingEntries(filteredEntries, DASHBOARD_UPCOMING_VISIBLE_LIMIT);
 
     DOM.dashboardUpcomingList.innerHTML = '';
     renderDashboardPanelFilters('upcoming');
