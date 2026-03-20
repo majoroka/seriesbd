@@ -1979,6 +1979,18 @@ function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     return entries;
 }
 
+function getPremiereCurationScore(item: Series): number {
+    const voteAverage = typeof item.vote_average === 'number' ? item.vote_average : 0;
+    const voteCount = typeof (item as { vote_count?: unknown }).vote_count === 'number'
+        ? Number((item as { vote_count?: number }).vote_count)
+        : 0;
+    if (voteAverage <= 0) return 0;
+
+    // Reduz o peso de ratings inflacionados com poucas avaliações sem excluir títulos novos.
+    const confidence = Math.min(1, Math.log10(voteCount + 1) / 2);
+    return voteAverage * confidence;
+}
+
 async function fetchSuggestedSeriesUpcomingEntries(
     today: Date,
     libraryKeys: Set<string>
@@ -2015,8 +2027,13 @@ async function fetchSuggestedSeriesUpcomingEntries(
 
     return Array.from(deduped.values())
         .sort((a, b) => {
+            const scoreDiff = getPremiereCurationScore(b.item) - getPremiereCurationScore(a.item);
+            if (scoreDiff !== 0) return scoreDiff;
             const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
             if (ratingDiff !== 0) return ratingDiff;
+            const voteCountDiff = (Number((b.item as { vote_count?: number }).vote_count) || 0)
+                - (Number((a.item as { vote_count?: number }).vote_count) || 0);
+            if (voteCountDiff !== 0) return voteCountDiff;
             return a.date.getTime() - b.date.getTime();
         })
         .slice(0, DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS);
@@ -2058,8 +2075,13 @@ async function fetchSuggestedMovieUpcomingEntries(
 
     return Array.from(deduped.values())
         .sort((a, b) => {
+            const scoreDiff = getPremiereCurationScore(b.item) - getPremiereCurationScore(a.item);
+            if (scoreDiff !== 0) return scoreDiff;
             const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
             if (ratingDiff !== 0) return ratingDiff;
+            const voteCountDiff = (Number((b.item as { vote_count?: number }).vote_count) || 0)
+                - (Number((a.item as { vote_count?: number }).vote_count) || 0);
+            if (voteCountDiff !== 0) return voteCountDiff;
             return a.date.getTime() - b.date.getTime();
         })
         .slice(0, DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS);
