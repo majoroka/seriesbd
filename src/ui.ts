@@ -3551,10 +3551,6 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
         summary: buildStatsSummaryForContext(mediaType),
         visual: getStatsMediaVisual(mediaType),
     }));
-    const overallCompletionPercent = summary.totalItems > 0
-        ? Math.round((summary.completedItems / summary.totalItems) * 100)
-        : 0;
-
     const metricCards = [
         {
             title: 'Itens Concluídos',
@@ -3652,6 +3648,9 @@ function renderGlobalCompletionPanel(summary: StatsSummary): void {
     const isGlobal = summary.context === 'all';
     toggleGlobalStatsPanels(isGlobal);
     if (!isGlobal) return;
+    const overallCompletionPercent = summary.totalItems > 0
+        ? Math.round((summary.completedItems / summary.totalItems) * 100)
+        : 0;
 
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
         summary: buildStatsSummaryForContext(mediaType),
