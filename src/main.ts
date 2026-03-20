@@ -740,7 +740,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
         return {
             'watchlist-section': 'Quero Ler',
             'unseen-section': 'A Ler',
-            'all-series-section': 'Lidos',
+            'all-series-section': 'Concluídos',
             'next-aired-section': 'Próximo Episódio',
             'trending-section': 'Tendências',
             'popular-section': 'Top Rated',
@@ -752,7 +752,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
     return {
         'watchlist-section': 'Quero Ver',
         'unseen-section': 'A Ver',
-        'all-series-section': 'Vistos',
+        'all-series-section': 'Concluídos',
         'next-aired-section': 'Próximo Episódio',
         'trending-section': 'Tendências',
         'popular-section': 'Top Rated',
