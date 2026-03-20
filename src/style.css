@@ -2590,6 +2590,80 @@ body.light-theme #back-to-dashboard-from-library-btn {
 }
 
 /* ========== STATISTICS STYLES ========== */
+.stats-global-overview {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(71, 171, 210, 0.10) 0%, rgba(71, 171, 210, 0.03) 58%, rgba(71, 171, 210, 0.01) 100%),
+        var(--bg-card);
+    box-shadow: 0 16px 34px rgba(8, 16, 24, 0.16);
+}
+
+.stats-global-overview-header {
+    margin-bottom: 1rem;
+}
+
+.stats-global-overview-header h3 {
+    margin: 0 0 0.2rem;
+    color: var(--text-primary);
+    font-size: 1.55rem;
+}
+
+.stats-global-overview-header p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.stats-global-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.9rem;
+}
+
+.stats-global-overview-card {
+    padding: 1rem 1.1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(99, 169, 206, 0.18);
+    background: rgba(12, 18, 28, 0.22);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.stats-global-overview-label {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.stats-global-overview-value {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.stats-global-overview-card--total .stats-global-overview-value {
+    color: var(--primary-accent);
+}
+
+.stats-global-overview-card--pending .stats-global-overview-value {
+    color: #63a9ce;
+}
+
+.stats-global-overview-card--progress .stats-global-overview-value {
+    color: #60e0f9;
+}
+
+.stats-global-overview-card--completed .stats-global-overview-value {
+    color: #025f90;
+}
+
+.stats-global-overview-card--completion .stats-global-overview-value {
+    color: var(--secondary-accent);
+}
+
 .key-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -4795,6 +4869,9 @@ body.light-theme .network-logo {
     /* --- Statistics --- */
     .key-stats-grid {
         grid-template-columns: 1fr;
+        grid-template-columns: 1fr;
+    }
+    .stats-global-overview-grid {
         grid-template-columns: 1fr;
     }
     .charts-grid {

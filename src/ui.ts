@@ -3299,6 +3299,7 @@ type StatsSummary = {
     context: StatsMediaContext;
     meta: StatsUiMeta;
     totalItems: number;
+    pendingItems: number;
     inProgressItems: number;
     completedItems: number;
     activeItems: number;
@@ -3367,7 +3368,7 @@ function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
     }
     if (context === 'all') {
         return {
-            sectionTitle: 'Estatísticas Gerais',
+            sectionTitle: 'Estatísticas Globais',
             primaryLabel: 'Itens Concluídos',
             secondaryLabel: 'Itens por Concluir',
             tertiaryLabel: 'Progresso Médio',
@@ -3423,6 +3424,7 @@ function buildStatsSummary(): StatsSummary {
     const items = getContextItems(context);
 
     let completedItems = 0;
+    let pendingItems = 0;
     let inProgressItems = 0;
     let consumedUnits = 0;
     let pendingUnits = 0;
@@ -3440,8 +3442,9 @@ function buildStatsSummary(): StatsSummary {
             const isCompleted = isArchived || (totalEpisodes > 0 && watchedCount >= totalEpisodes);
 
             progressSum += isCompleted ? 100 : episodeProgress;
-            if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
             if (isCompleted) completedItems += 1;
+            else if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
+            else pendingItems += 1;
 
             totalTimeMinutes += watchedCount * (item.episode_run_time || 30);
 
@@ -3458,8 +3461,9 @@ function buildStatsSummary(): StatsSummary {
         const progress = isArchived ? 100 : getMediaProgressPercent(item);
         const isCompleted = isArchived || progress >= 100;
         progressSum += isCompleted ? 100 : progress;
-        if (progress > 0 && progress < 100) inProgressItems += 1;
         if (isCompleted) completedItems += 1;
+        else if (progress > 0 && progress < 100) inProgressItems += 1;
+        else pendingItems += 1;
 
         if (isCompleted) consumedUnits += 1;
         else pendingUnits += 1;
@@ -3481,6 +3485,7 @@ function buildStatsSummary(): StatsSummary {
         context,
         meta,
         totalItems,
+        pendingItems,
         inProgressItems,
         completedItems,
         activeItems,
@@ -3514,9 +3519,33 @@ function applyStatsLabels(summary: StatsSummary): void {
     if (topRatedTitle) topRatedTitle.textContent = summary.meta.topRatedTitle;
 }
 
+function renderStatsGlobalOverview(summary: StatsSummary): void {
+    if (!DOM.statsGlobalOverview) return;
+    const isGlobal = summary.context === 'all';
+    DOM.statsGlobalOverview.hidden = !isGlobal;
+    if (!isGlobal) return;
+
+    if (DOM.statsOverviewTotal) {
+        DOM.statsOverviewTotal.textContent = summary.totalItems.toLocaleString('pt-PT');
+    }
+    if (DOM.statsOverviewPending) {
+        DOM.statsOverviewPending.textContent = summary.pendingItems.toLocaleString('pt-PT');
+    }
+    if (DOM.statsOverviewInProgress) {
+        DOM.statsOverviewInProgress.textContent = summary.inProgressItems.toLocaleString('pt-PT');
+    }
+    if (DOM.statsOverviewCompleted) {
+        DOM.statsOverviewCompleted.textContent = summary.completedItems.toLocaleString('pt-PT');
+    }
+    if (DOM.statsOverviewCompletion) {
+        DOM.statsOverviewCompletion.textContent = `${summary.averageProgressPercent}%`;
+    }
+}
+
 export function updateKeyStats(animate = false): StatsSummary {
     const summary = buildStatsSummary();
     applyStatsLabels(summary);
+    renderStatsGlobalOverview(summary);
 
     if (animate) {
         animateValue(DOM.statWatchedEpisodes, 0, summary.primaryValue, 3000);

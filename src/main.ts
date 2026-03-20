@@ -3429,7 +3429,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = target.closest<HTMLButtonElement>('.dashboard-media-card');
         if (!card) return;
         const cardMediaType = normalizeAllSeriesMediaFilter(card.dataset.mediaType, 'all');
-        if (cardMediaType === 'all') return;
+        if (cardMediaType === 'all') {
+            UI.setScopedStatsMediaType('all');
+            UI.showSection('stats-section');
+            updateMainMenuActiveState('dashboard');
+            return;
+        }
         await setAllSeriesMediaFilterPreference(cardMediaType);
         await setAllSeriesStatusFilterPreference('all');
         S.setAllSeriesGenreFilter('all');

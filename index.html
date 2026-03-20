@@ -353,6 +353,34 @@
                         <h2 id="stats-section-title"><i class="fas fa-chart-pie"></i> Estatísticas</h2>
                         <button id="export-stats-btn" class="search-bar-button" style="align-self: center;">Exportar Estatísticas</button>
                     </div>
+                    <section id="stats-global-overview" class="stats-global-overview" hidden aria-label="Resumo global da biblioteca">
+                        <div class="stats-global-overview-header">
+                            <h3>Resumo Global</h3>
+                            <p>Visão consolidada da tua biblioteca.</p>
+                        </div>
+                        <div class="stats-global-overview-grid">
+                            <article class="stats-global-overview-card stats-global-overview-card--total">
+                                <span class="stats-global-overview-label">Total</span>
+                                <strong id="stats-overview-total" class="stats-global-overview-value">0</strong>
+                            </article>
+                            <article class="stats-global-overview-card stats-global-overview-card--pending">
+                                <span class="stats-global-overview-label">Quero Ver / Ler</span>
+                                <strong id="stats-overview-pending" class="stats-global-overview-value">0</strong>
+                            </article>
+                            <article class="stats-global-overview-card stats-global-overview-card--progress">
+                                <span class="stats-global-overview-label">A Ver / Ler</span>
+                                <strong id="stats-overview-in-progress" class="stats-global-overview-value">0</strong>
+                            </article>
+                            <article class="stats-global-overview-card stats-global-overview-card--completed">
+                                <span class="stats-global-overview-label">Concluídos</span>
+                                <strong id="stats-overview-completed" class="stats-global-overview-value">0</strong>
+                            </article>
+                            <article class="stats-global-overview-card stats-global-overview-card--completion">
+                                <span class="stats-global-overview-label">Conclusão Global</span>
+                                <strong id="stats-overview-completion" class="stats-global-overview-value">0%</strong>
+                            </article>
+                        </div>
+                    </section>
                     <div class="key-stats-grid">
                         <div class="key-stat-card watched-episodes">
                             <h4 id="stats-primary-label">Episódios Vistos</h4>
