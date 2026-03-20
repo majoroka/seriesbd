@@ -2246,9 +2246,11 @@ function renderDashboardUpcomingReleases(): void {
         }, [
             createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-upcoming-poster', '/placeholders/poster.svg'),
             el('div', { class: 'dashboard-recent-content dashboard-upcoming-content' }, [
-                el('p', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
+                el('div', { class: 'dashboard-upcoming-meta' }, [
+                    el('p', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
+                    el('span', { class: `dashboard-status-badge ${badgeClass}`, text: getMediaTypeLabel(mediaType).toUpperCase() }),
+                ]),
                 el('h4', { class: 'dashboard-upcoming-title', text: item.name }),
-                el('span', { class: `dashboard-status-badge ${badgeClass}`, text: getMediaTypeLabel(mediaType).toUpperCase() }),
                 el('p', { class: 'dashboard-upcoming-label', text: label }),
             ]),
         ]);
