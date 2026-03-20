@@ -3312,11 +3312,29 @@ type StatsSummary = {
     tertiaryValue: number;
 };
 
+type StatsMediaVisual = {
+    mediaType: MediaType;
+    label: string;
+    accent: string;
+    progress: string;
+    completed: string;
+};
+
 function getStatsMediaContext(): StatsMediaContext {
     if (scopedStatsMediaType === 'series' || scopedStatsMediaType === 'movie' || scopedStatsMediaType === 'book') {
         return scopedStatsMediaType;
     }
     return 'all';
+}
+
+function getStatsMediaVisual(mediaType: MediaType): StatsMediaVisual {
+    if (mediaType === 'movie') {
+        return { mediaType, label: 'Filmes', accent: '#e7a46d', progress: '#ffc07a', completed: '#b45c18' };
+    }
+    if (mediaType === 'book') {
+        return { mediaType, label: 'Livros', accent: '#8bcf7b', progress: '#b0e98b', completed: '#4f9a40' };
+    }
+    return { mediaType, label: 'Séries', accent: '#63a9ce', progress: '#60e0f9', completed: '#025f90' };
 }
 
 function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
@@ -3418,8 +3436,7 @@ function getContextItems(context: StatsMediaContext): Series[] {
     return allItems.filter((item) => (item.media_type || 'series') === context);
 }
 
-function buildStatsSummary(): StatsSummary {
-    const context = getStatsMediaContext();
+function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
     const meta = getStatsUiMeta(context);
     const items = getContextItems(context);
 
@@ -3499,6 +3516,10 @@ function buildStatsSummary(): StatsSummary {
     };
 }
 
+function buildStatsSummary(): StatsSummary {
+    return buildStatsSummaryForContext(getStatsMediaContext());
+}
+
 function applyStatsLabels(summary: StatsSummary): void {
     const sectionTitle = document.getElementById('stats-section-title');
     const primaryLabel = document.getElementById('stats-primary-label');
@@ -3523,23 +3544,55 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     if (!DOM.statsGlobalOverview) return;
     const isGlobal = summary.context === 'all';
     DOM.statsGlobalOverview.hidden = !isGlobal;
-    if (!isGlobal) return;
+    if (DOM.keyStatsGrid) DOM.keyStatsGrid.hidden = isGlobal;
+    if (!isGlobal || !DOM.statsGlobalSummaryGrid) return;
 
-    if (DOM.statsOverviewTotal) {
-        DOM.statsOverviewTotal.textContent = summary.totalItems.toLocaleString('pt-PT');
-    }
-    if (DOM.statsOverviewPending) {
-        DOM.statsOverviewPending.textContent = summary.pendingItems.toLocaleString('pt-PT');
-    }
-    if (DOM.statsOverviewInProgress) {
-        DOM.statsOverviewInProgress.textContent = summary.inProgressItems.toLocaleString('pt-PT');
-    }
-    if (DOM.statsOverviewCompleted) {
-        DOM.statsOverviewCompleted.textContent = summary.completedItems.toLocaleString('pt-PT');
-    }
-    if (DOM.statsOverviewCompletion) {
-        DOM.statsOverviewCompletion.textContent = `${summary.averageProgressPercent}%`;
-    }
+    const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+        summary: buildStatsSummaryForContext(mediaType),
+        visual: getStatsMediaVisual(mediaType),
+    }));
+    const overallCompletionPercent = summary.totalItems > 0
+        ? Math.round((summary.completedItems / summary.totalItems) * 100)
+        : 0;
+
+    const metricCards = [
+        {
+            title: 'Itens Concluídos',
+            total: summary.completedItems.toLocaleString('pt-PT'),
+            suffix: '',
+            getValue: (entry: { summary: StatsSummary }) => entry.summary.completedItems.toLocaleString('pt-PT'),
+        },
+        {
+            title: 'Itens por Concluir',
+            total: (summary.totalItems - summary.completedItems).toLocaleString('pt-PT'),
+            suffix: '',
+            getValue: (entry: { summary: StatsSummary }) => (entry.summary.pendingItems + entry.summary.inProgressItems).toLocaleString('pt-PT'),
+        },
+        {
+            title: 'Progresso Médio',
+            total: String(summary.averageProgressPercent),
+            suffix: '%',
+            getValue: (entry: { summary: StatsSummary }) => `${entry.summary.averageProgressPercent}%`,
+        },
+    ];
+
+    DOM.statsGlobalSummaryGrid.replaceChildren(
+        ...metricCards.map((metric) => {
+            const card = el('article', { class: 'stats-global-summary-card' }, [
+                el('div', { class: 'stats-global-summary-card-header' }, [
+                    el('h4', { text: metric.title }),
+                    el('span', { class: 'stats-global-summary-circle', text: `${metric.total}${metric.suffix}` }),
+                ]),
+                el('div', { class: 'stats-global-summary-breakdown' }, mediaSummaries.map(({ summary: mediaSummary, visual }) =>
+                    el('div', { class: `stats-global-summary-row stats-global-summary-row--${visual.mediaType}` }, [
+                        el('span', { class: 'stats-global-summary-row-label', text: visual.label }),
+                        el('strong', { class: 'stats-global-summary-row-value', text: metric.getValue({ summary: mediaSummary }) }),
+                    ])
+                )),
+            ]);
+            return card;
+        }),
+    );
 }
 
 export function updateKeyStats(animate = false): StatsSummary {
@@ -3585,9 +3638,142 @@ function getChartColors() {
     };
 }
 
+function toggleGlobalStatsPanels(isGlobal: boolean): void {
+    const watchedCanvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement | null;
+    const genresCanvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
+    if (watchedCanvas) watchedCanvas.hidden = isGlobal;
+    if (genresCanvas) genresCanvas.hidden = isGlobal;
+    if (DOM.statsGlobalCompletionPanel) DOM.statsGlobalCompletionPanel.hidden = !isGlobal;
+    if (DOM.statsGlobalGenresPanel) DOM.statsGlobalGenresPanel.hidden = !isGlobal;
+}
+
+function renderGlobalCompletionPanel(summary: StatsSummary): void {
+    if (!DOM.statsGlobalCompletionRing || !DOM.statsGlobalCompletionLegend) return;
+    const isGlobal = summary.context === 'all';
+    toggleGlobalStatsPanels(isGlobal);
+    if (!isGlobal) return;
+
+    const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+        summary: buildStatsSummaryForContext(mediaType),
+        visual: getStatsMediaVisual(mediaType),
+    }));
+
+    const ringGeometry = [
+        { radius: 90, stroke: 16 },
+        { radius: 66, stroke: 16 },
+        { radius: 42, stroke: 16 },
+    ];
+
+    const svgRings = mediaSummaries.map(({ summary: mediaSummary, visual }, index) => {
+        const { radius, stroke } = ringGeometry[index];
+        const circumference = 2 * Math.PI * radius;
+        const progress = mediaSummary.totalItems > 0 ? mediaSummary.completedItems / mediaSummary.totalItems : 0;
+        const offset = circumference * (1 - progress);
+        return `
+            <circle class="stats-global-ring-track" cx="120" cy="120" r="${radius}" stroke-width="${stroke}"></circle>
+            <circle class="stats-global-ring-arc" cx="120" cy="120" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${circumference};stroke-dashoffset:${offset};"></circle>
+        `;
+    }).join('');
+
+    DOM.statsGlobalCompletionRing.innerHTML = `
+        <svg viewBox="0 0 240 240" class="stats-global-ring-svg" aria-hidden="true">
+            ${svgRings}
+        </svg>
+        <div class="stats-global-ring-center">
+            <strong>${overallCompletionPercent}%</strong>
+            <span>concluídos</span>
+        </div>
+    `;
+
+    DOM.statsGlobalCompletionLegend.replaceChildren(
+        ...mediaSummaries.map(({ summary: mediaSummary, visual }) => {
+            const completionPercent = mediaSummary.totalItems > 0
+                ? Math.round((mediaSummary.completedItems / mediaSummary.totalItems) * 100)
+                : 0;
+            return (
+            el('div', { class: 'stats-global-legend-row' }, [
+                el('span', { class: 'stats-global-legend-swatch', style: `background:${visual.completed};` }),
+                el('div', { class: 'stats-global-legend-copy' }, [
+                    el('strong', { text: visual.label }),
+                    el('span', { text: `${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos` }),
+                ]),
+                el('span', { class: 'stats-global-legend-percentage', text: `${completionPercent}%` }),
+            ]))
+        }),
+    );
+}
+
+function renderGlobalGenresPanel(stats: StatsSummary): void {
+    if (!DOM.statsGlobalGenresList) return;
+    if (stats.context !== 'all') return;
+
+    const genreMap = new Map<string, Record<MediaType, number>>();
+    (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+        getContextItems(mediaType).forEach((item) => {
+            if (!Array.isArray(item.genres)) return;
+            item.genres.forEach((genre: Genre) => {
+                const genreName = translateGenreName(genre.name) || genre.name;
+                if (!genreName) return;
+                if (!genreMap.has(genreName)) {
+                    genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
+                }
+                genreMap.get(genreName)![mediaType] += 1;
+            });
+        });
+    });
+
+    const topGenres = Array.from(genreMap.entries())
+        .map(([name, counts]) => ({ name, counts, total: counts.series + counts.movie + counts.book }))
+        .filter((entry) => entry.total > 0)
+        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+        .slice(0, 8);
+
+    if (topGenres.length === 0) {
+        DOM.statsGlobalGenresList.innerHTML = '<p class="stats-global-empty-state">Sem dados de género suficientes.</p>';
+        return;
+    }
+
+    const visuals = {
+        series: getStatsMediaVisual('series'),
+        movie: getStatsMediaVisual('movie'),
+        book: getStatsMediaVisual('book'),
+    };
+
+    DOM.statsGlobalGenresList.replaceChildren(
+        ...topGenres.map((entry) => {
+            const total = Math.max(entry.total, 1);
+            return el('article', { class: 'stats-global-genre-row' }, [
+                el('div', { class: 'stats-global-genre-head' }, [
+                    el('strong', { text: entry.name }),
+                    el('span', { text: `${entry.total} itens` }),
+                ]),
+                el('div', { class: 'stats-global-genre-bar' }, (['series', 'movie', 'book'] as MediaType[])
+                    .filter((mediaType) => entry.counts[mediaType] > 0)
+                    .map((mediaType) => el('span', {
+                        class: `stats-global-genre-segment stats-global-genre-segment--${mediaType}`,
+                        style: `width:${(entry.counts[mediaType] / total) * 100}%;background:${visuals[mediaType].completed};`,
+                    }))),
+                el('div', { class: 'stats-global-genre-meta' }, (['series', 'movie', 'book'] as MediaType[]).map((mediaType) =>
+                    el('span', { class: `stats-global-genre-count stats-global-genre-count--${mediaType}` }, [
+                        `${visuals[mediaType].label}: `,
+                        el('strong', { text: String(entry.counts[mediaType]) }),
+                    ]),
+                )),
+            ]);
+        }),
+    );
+}
+
 function renderWatchedUnwatchedChart(stats: StatsSummary) {
     const canvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement;
     if (!canvas) return;
+    if (stats.context === 'all') {
+        if (S.charts.watchedUnwatched) {
+            S.charts.watchedUnwatched.destroy();
+        }
+        renderGlobalCompletionPanel(stats);
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const watchedCount = stats.consumedUnits;
     const unwatchedCount = stats.pendingUnits;
@@ -3682,6 +3868,13 @@ function renderWatchedUnwatchedChart(stats: StatsSummary) {
 function renderGenresChart(stats: StatsSummary) {
     const canvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
+    if (stats.context === 'all') {
+        if (S.charts.genresChart) {
+            S.charts.genresChart.destroy();
+        }
+        renderGlobalGenresPanel(stats);
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
     const allSeries = getContextItems(stats.context);
@@ -3768,6 +3961,75 @@ function renderAiredYearsChart(stats: StatsSummary) {
     if (isMobile) {
         // Em mobile, a altura é controlada pelo CSS.
     }
+    if (S.charts.airedYears) {
+        S.charts.airedYears.destroy();
+    }
+
+    if (stats.context === 'all') {
+        const visuals = {
+            series: getStatsMediaVisual('series'),
+            movie: getStatsMediaVisual('movie'),
+            book: getStatsMediaVisual('book'),
+        };
+        const countsByMedia: Record<MediaType, Record<number, number>> = {
+            series: {},
+            movie: {},
+            book: {},
+        };
+        (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+            getContextItems(mediaType).forEach((item) => {
+                if (!item.first_air_date) return;
+                const year = new Date(item.first_air_date).getFullYear();
+                if (Number.isNaN(year)) return;
+                countsByMedia[mediaType][year] = (countsByMedia[mediaType][year] || 0) + 1;
+            });
+        });
+        const allYears = Array.from(new Set(
+            (['series', 'movie', 'book'] as MediaType[]).flatMap((mediaType) => Object.keys(countsByMedia[mediaType]).map(Number)),
+        )).sort((a, b) => a - b);
+        const labels = allYears.map(String);
+        const datasets = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+            label: getStatsMediaVisual(mediaType).label,
+            data: allYears.map((year) => countsByMedia[mediaType][year] || 0),
+            fill: false,
+            borderColor: visuals[mediaType].completed,
+            backgroundColor: visuals[mediaType].completed,
+            tension: isMobile ? 0 : 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+        }));
+        if (ctx) {
+            S.charts.airedYears = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: !isMobile,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: colors.textColor,
+                                usePointStyle: true,
+                                pointStyle: 'line',
+                                font: { family: "'Rajdhani', sans-serif" },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.textColor, autoSkip: isMobile ? false : true, font: { size: isMobile ? 9 : 12 } },
+                            grid: { color: colors.gridColor },
+                        },
+                        y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } },
+                    },
+                } as any,
+            });
+        }
+        return;
+    }
+
     const allSeries = getContextItems(stats.context);
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
@@ -3780,9 +4042,6 @@ function renderAiredYearsChart(stats: StatsSummary) {
     const labels = sortedYears.map(entry => entry[0]);
     const data = sortedYears.map(entry => entry[1]);
 
-    if (S.charts.airedYears) {
-        S.charts.airedYears.destroy();
-    }
     if (ctx) {
         S.charts.airedYears = new Chart(ctx, {
         type: 'line',
@@ -3822,6 +4081,44 @@ function renderTopRatedSeries(stats: StatsSummary) {
     if (!container) return;
     const existingBtn = container.parentElement?.querySelector('.view-all-btn');
     if (existingBtn) existingBtn.remove();
+    if (stats.context === 'all') {
+        const groups = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => {
+            const visual = getStatsMediaVisual(mediaType);
+            const items = getContextItems(mediaType)
+                .map((item) => {
+                    const userRating = getMediaRating(item);
+                    return userRating > 0 ? { ...item, userRating } : null;
+                })
+                .filter((item): item is Series & { userRating: number } => item !== null)
+                .sort((a, b) => (b.userRating ?? 0) - (a.userRating ?? 0) || a.name.localeCompare(b.name))
+                .slice(0, 5);
+            return { mediaType, visual, items };
+        });
+
+        container.replaceChildren(
+            el('div', { class: 'stats-global-favorites-groups' }, groups.map(({ mediaType, visual, items }) =>
+                el('section', { class: 'stats-global-favorites-group' }, [
+                    el('h4', { class: `stats-global-favorites-title stats-global-favorites-title--${mediaType}`, text: `Os Meus Favoritos ${visual.label}` }),
+                    items.length > 0
+                        ? el('div', { class: 'stats-global-favorites-list' }, items.map((item) => {
+                            const posterPath = buildPosterUrl(item.poster_path, 'w92', '/placeholders/poster.svg');
+                            return el('div', { class: 'top-rated-item', 'data-series-id': String(item.id), 'data-media-type': item.media_type || mediaType, title: `Ver detalhes de ${item.name}` }, [
+                                createPosterImage(
+                                    posterPath,
+                                    `Poster de ${item.name}`,
+                                    'top-rated-item-poster',
+                                    '/placeholders/poster.svg'
+                                ),
+                                el('div', { class: 'top-rated-item-info' }, [el('p', { text: item.name })]),
+                                el('div', { class: `top-rated-item-rating top-rated-item-rating--${mediaType}` }, [el('i', { class: 'fas fa-star' }), el('span', { text: String(item.userRating) })]),
+                            ]);
+                        }))
+                        : el('p', { class: 'stats-global-empty-state', text: `Ainda não avaliou ${visual.label.toLowerCase()}.` }),
+                ]),
+            )),
+        );
+        return;
+    }
     const allSeries = getContextItems(stats.context);
     const ratedSeries: (Series & { userRating: number })[] = allSeries.map(series => {
         const userRating = getMediaRating(series);
@@ -3924,6 +4221,7 @@ export function renderStatistics(stats: StatsSummary) {
         if (chart instanceof Chart) chart.destroy();
     });
     S.setCharts({});
+    toggleGlobalStatsPanels(stats.context === 'all');
     renderWatchedUnwatchedChart(stats);
     renderGenresChart(stats);
     renderAiredYearsChart(stats);

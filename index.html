@@ -363,28 +363,7 @@
                             <h3>Resumo Global</h3>
                             <p>Visão consolidada da tua biblioteca.</p>
                         </div>
-                        <div class="stats-global-overview-grid">
-                            <article class="stats-global-overview-card stats-global-overview-card--total">
-                                <span class="stats-global-overview-label">Total</span>
-                                <strong id="stats-overview-total" class="stats-global-overview-value">0</strong>
-                            </article>
-                            <article class="stats-global-overview-card stats-global-overview-card--pending">
-                                <span class="stats-global-overview-label">Quero Ver / Ler</span>
-                                <strong id="stats-overview-pending" class="stats-global-overview-value">0</strong>
-                            </article>
-                            <article class="stats-global-overview-card stats-global-overview-card--progress">
-                                <span class="stats-global-overview-label">A Ver / Ler</span>
-                                <strong id="stats-overview-in-progress" class="stats-global-overview-value">0</strong>
-                            </article>
-                            <article class="stats-global-overview-card stats-global-overview-card--completed">
-                                <span class="stats-global-overview-label">Concluídos</span>
-                                <strong id="stats-overview-completed" class="stats-global-overview-value">0</strong>
-                            </article>
-                            <article class="stats-global-overview-card stats-global-overview-card--completion">
-                                <span class="stats-global-overview-label">Conclusão Global</span>
-                                <strong id="stats-overview-completion" class="stats-global-overview-value">0%</strong>
-                            </article>
-                        </div>
+                        <div id="stats-global-summary-grid" class="stats-global-summary-grid"></div>
                     </section>
                     <div class="key-stats-grid">
                         <div class="key-stat-card watched-episodes">
@@ -404,10 +383,17 @@
                         <div class="chart-card">
                             <h3 id="stats-doughnut-title">Episódios Vistos vs. Por Ver</h3>
                             <canvas id="watched-unwatched-chart"></canvas>
+                            <div id="stats-global-completion-panel" class="stats-global-completion-panel" hidden>
+                                <div id="stats-global-completion-ring" class="stats-global-completion-ring" aria-label="Concluídos vs. por concluir por secção"></div>
+                                <div id="stats-global-completion-legend" class="stats-global-completion-legend"></div>
+                            </div>
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-genres-title">Top Géneros na Biblioteca</h3>
                             <canvas id="genres-chart"></canvas>
+                            <div id="stats-global-genres-panel" class="stats-global-genres-panel" hidden>
+                                <div id="stats-global-genres-list" class="stats-global-genres-list"></div>
+                            </div>
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-years-title">Séries por Ano de Lançamento</h3>
