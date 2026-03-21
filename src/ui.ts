@@ -1001,6 +1001,10 @@ function renderDashboardEvolutionChart(): void {
         S.charts.dashboardEvolution.destroy();
     }
 
+    const seriesPalette = getMediaPalette('series');
+    const moviePalette = getMediaPalette('movie');
+    const bookPalette = getMediaPalette('book');
+
     S.charts.dashboardEvolution = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1009,8 +1013,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Séries',
                     data: evolutionBuckets.series.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#47ABD2',
-                    backgroundColor: 'rgba(71, 171, 210, 0.12)',
+                    borderColor: seriesPalette.base,
+                    backgroundColor: `rgba(${seriesPalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -1021,8 +1025,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Filmes',
                     data: evolutionBuckets.movie.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#F08F44',
-                    backgroundColor: 'rgba(240, 143, 68, 0.12)',
+                    borderColor: moviePalette.base,
+                    backgroundColor: `rgba(${moviePalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -1033,8 +1037,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Livros',
                     data: evolutionBuckets.book.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#7DC86E',
-                    backgroundColor: 'rgba(125, 200, 110, 0.12)',
+                    borderColor: bookPalette.base,
+                    backgroundColor: `rgba(${bookPalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -1108,7 +1112,17 @@ function renderDashboardGenresChart(): void {
     const values = topGenres.map(([, count]) => count);
     const hasData = values.length > 0;
     const total = values.reduce((sum, value) => sum + value, 0);
-    const palette = ['#47ABD2', '#D24665', '#7DC86E', '#F08F44', '#6DB0FF', '#BED984'];
+    const seriesPalette = getMediaPalette('series');
+    const moviePalette = getMediaPalette('movie');
+    const bookPalette = getMediaPalette('book');
+    const palette = [
+        seriesPalette.base,
+        moviePalette.base,
+        bookPalette.base,
+        seriesPalette.soft,
+        moviePalette.soft,
+        bookPalette.soft,
+    ];
 
     if (S.charts.dashboardGenres) {
         S.charts.dashboardGenres.destroy();
@@ -3328,17 +3342,20 @@ function getStatsMediaContext(): StatsMediaContext {
     return 'all';
 }
 
-function getMediaPalette(mediaType: MediaType): { base: string; soft: string; strong: string } {
+function getMediaPalette(mediaType: MediaType): { base: string; soft: string; strong: string; rgb: string } {
     const styles = getComputedStyle(document.body);
     const prefix = mediaType === 'movie' ? 'movie' : mediaType === 'book' ? 'book' : 'series';
     const read = (suffix: string, fallback: string) =>
         styles.getPropertyValue(`--media-${prefix}${suffix}`).trim() || fallback;
+    const readRgb = (fallback: string) =>
+        styles.getPropertyValue(`--media-${prefix}-rgb`).trim() || fallback;
 
     if (prefix === 'movie') {
         return {
             base: read('', '#c25066'),
             soft: read('-soft', '#d77e91'),
             strong: read('-strong', '#a53b51'),
+            rgb: readRgb('194, 80, 102'),
         };
     }
     if (prefix === 'book') {
@@ -3346,12 +3363,14 @@ function getMediaPalette(mediaType: MediaType): { base: string; soft: string; st
             base: read('', '#c3d88e'),
             soft: read('-soft', '#d7e8af'),
             strong: read('-strong', '#9eb56d'),
+            rgb: readRgb('195, 216, 142'),
         };
     }
     return {
         base: read('', '#63a9ce'),
         soft: read('-soft', '#8fc6e2'),
         strong: read('-strong', '#4a8db3'),
+        rgb: readRgb('99, 169, 206'),
     };
 }
 
@@ -3364,6 +3383,11 @@ function getStatsMediaVisual(mediaType: MediaType): StatsMediaVisual {
         return { mediaType, label: 'Livros', accent: palette.base, progress: palette.soft, completed: palette.strong };
     }
     return { mediaType, label: 'Séries', accent: palette.base, progress: palette.soft, completed: palette.strong };
+}
+
+function rgbaFromMedia(mediaType: MediaType, alpha: number): string {
+    const palette = getMediaPalette(mediaType);
+    return `rgba(${palette.rgb}, ${alpha})`;
 }
 
 function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
@@ -3746,6 +3770,9 @@ function getChartColors() {
         primaryAccentLine: `rgba(${hexToRgb(primaryAccent)}, 0.2)`,
         secondaryAccent: secondaryAccent,
         secondaryAccentTransparent: `rgba(${hexToRgb(secondaryAccent)}, 0.8)`,
+        mediaSeries: getMediaPalette('series'),
+        mediaMovie: getMediaPalette('movie'),
+        mediaBook: getMediaPalette('book'),
     };
 }
 

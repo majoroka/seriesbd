@@ -4,10 +4,10 @@
     --bg-light: #1e1e1e;
     --bg-card: #252525;
     --bg-hover: #2a2a2a;
-    --primary-accent: #47ABD2;
-    --primary-accent-hover: #389CC3;
-    --secondary-accent: #D24665;
-    --tvmaze-accent: #BED984;
+    --primary-accent: var(--media-series);
+    --primary-accent-hover: var(--media-series-strong);
+    --secondary-accent: var(--media-movie);
+    --tvmaze-accent: var(--media-book-strong);
     --danger-color: #ff4d4d;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
@@ -288,8 +288,8 @@ textarea:focus-visible,
 }
 
 .mobile-topbar-toggle[aria-expanded="true"] {
-    border-color: rgba(71, 171, 210, 0.65);
-    box-shadow: 0 0 0 1px rgba(71, 171, 210, 0.2);
+    border-color: rgba(var(--media-series-rgb), 0.65);
+    box-shadow: 0 0 0 1px rgba(var(--media-series-rgb), 0.2);
 }
 
 .mobile-topbar-panel[hidden] {
@@ -523,7 +523,7 @@ body.light-theme .sidebar-submenu-shell {
 
 .auth-status-label.connected {
     color: var(--primary-accent);
-    border-color: rgba(71, 171, 210, 0.45);
+    border-color: rgba(var(--media-series-rgb), 0.45);
 }
 
 .auth-status-label.error {
@@ -552,7 +552,7 @@ body.light-theme .sidebar-submenu-shell {
     border: 1px solid var(--border-color);
     border-radius: 10px;
     background:
-        radial-gradient(circle at 0% 0%, rgba(71, 171, 210, 0.08) 0%, transparent 46%),
+        radial-gradient(circle at 0% 0%, rgba(var(--media-series-rgb), 0.08) 0%, transparent 46%),
         var(--bg-light);
     display: flex;
     flex-direction: column;
@@ -654,8 +654,8 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .topbar-icon-button.has-unread {
-    border-color: rgba(71, 171, 210, 0.65);
-    box-shadow: 0 0 0 1px rgba(71, 171, 210, 0.2);
+    border-color: rgba(var(--media-series-rgb), 0.65);
+    box-shadow: 0 0 0 1px rgba(var(--media-series-rgb), 0.2);
 }
 
 .notifications-menu-wrapper {
@@ -712,7 +712,7 @@ body.light-theme .sidebar-submenu-shell {
     gap: 0.75rem;
     padding: 0.75rem 0.85rem;
     border-bottom: 1px solid var(--border-color);
-    background: linear-gradient(130deg, rgba(71, 171, 210, 0.1), rgba(210, 70, 101, 0.04));
+    background: linear-gradient(130deg, rgba(var(--media-series-rgb), 0.1), rgba(var(--media-movie-rgb), 0.04));
 }
 
 .notifications-menu-header h4 {
@@ -745,7 +745,7 @@ body.light-theme .sidebar-submenu-shell {
 .notifications-menu-action-btn:hover {
     border-color: var(--primary-accent);
     color: var(--primary-accent);
-    background-color: rgba(71, 171, 210, 0.1);
+    background-color: rgba(var(--media-series-rgb), 0.1);
 }
 
 .notifications-clear-btn:hover {
@@ -779,7 +779,7 @@ body.light-theme .sidebar-submenu-shell {
 
 .notification-item:hover {
     transform: translateY(-1px);
-    border-color: rgba(71, 171, 210, 0.5);
+    border-color: rgba(var(--media-series-rgb), 0.5);
 }
 
 .notification-item:focus-visible {
@@ -788,8 +788,8 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .notification-item.is-unread {
-    border-color: rgba(71, 171, 210, 0.56);
-    box-shadow: inset 0 0 0 1px rgba(71, 171, 210, 0.18);
+    border-color: rgba(var(--media-series-rgb), 0.56);
+    box-shadow: inset 0 0 0 1px rgba(var(--media-series-rgb), 0.18);
 }
 
 .notification-item-top {
@@ -1333,14 +1333,14 @@ body.light-theme .dashboard-media-card-total-badge {
 }
 
 .dashboard-panel-filter:hover {
-    border-color: rgba(71, 171, 210, 0.45);
+    border-color: rgba(var(--media-series-rgb), 0.45);
     color: var(--text-primary);
 }
 
 .dashboard-panel-filter.is-active {
     color: #aee9ff;
-    border-color: rgba(71, 171, 210, 0.58);
-    background: rgba(71, 171, 210, 0.14);
+    border-color: rgba(var(--media-series-rgb), 0.58);
+    background: rgba(var(--media-series-rgb), 0.14);
 }
 
 .dashboard-panel-filter[data-dashboard-filter="series"]:hover {
@@ -1375,7 +1375,7 @@ body.light-theme .dashboard-media-card-total-badge {
 
 .dashboard-news-item {
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.12) 0%, rgba(210, 70, 101, 0.05) 100%),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.12) 0%, rgba(var(--media-movie-rgb), 0.05) 100%),
         var(--bg-light);
     text-decoration: none;
     color: inherit;
@@ -1394,7 +1394,7 @@ body.light-theme .dashboard-media-card-total-badge {
     justify-content: space-between;
     padding: 0.9rem;
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.22), rgba(31, 39, 54, 0.85)),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.22), rgba(31, 39, 54, 0.85)),
         var(--bg-hover);
 }
 
@@ -1621,7 +1621,7 @@ body.light-theme .dashboard-media-card-total-badge {
     font-family: var(--font-main);
     font-size: 0.78rem;
     font-weight: 700;
-    border: 1px solid rgba(71, 171, 210, 0.45);
+    border: 1px solid rgba(var(--media-series-rgb), 0.45);
     border-radius: 999px;
     padding: 0.28rem 0.5rem;
     color: var(--primary-accent);
@@ -2243,7 +2243,7 @@ details[open] > .season-summary::before {
     font-family: var(--font-mono);
     font-size: 0.82rem;
     color: var(--text-secondary);
-    background: linear-gradient(150deg, rgba(71, 171, 210, 0.08), rgba(210, 70, 101, 0.04));
+    background: linear-gradient(150deg, rgba(var(--media-series-rgb), 0.08), rgba(var(--media-movie-rgb), 0.04));
 }
 
 .app-init-error-actions {
@@ -2261,7 +2261,7 @@ details[open] > .season-summary::before {
     padding: 1.5rem 1rem;
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    background: linear-gradient(150deg, rgba(71, 171, 210, 0.08), rgba(210, 70, 101, 0.04));
+    background: linear-gradient(150deg, rgba(var(--media-series-rgb), 0.08), rgba(var(--media-movie-rgb), 0.04));
     text-align: center;
 }
 
@@ -2270,9 +2270,9 @@ details[open] > .season-summary::before {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1px solid rgba(71, 171, 210, 0.45);
+    border: 1px solid rgba(var(--media-series-rgb), 0.45);
     color: var(--primary-accent);
-    background-color: rgba(71, 171, 210, 0.14);
+    background-color: rgba(var(--media-series-rgb), 0.14);
     font-size: 0.74rem;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -2589,8 +2589,8 @@ details[open] > .season-summary::before {
 }
 
 .auth-inline-feedback.info {
-    background-color: rgba(71, 171, 210, 0.12);
-    border-color: rgba(71, 171, 210, 0.35);
+    background-color: rgba(var(--media-series-rgb), 0.12);
+    border-color: rgba(var(--media-series-rgb), 0.35);
     color: var(--primary-accent);
 }
 
@@ -2691,7 +2691,7 @@ body.light-theme #back-to-dashboard-from-library-btn {
     border: 1px solid var(--border-color);
     border-radius: 18px;
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.10) 0%, rgba(71, 171, 210, 0.03) 58%, rgba(71, 171, 210, 0.01) 100%),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.10) 0%, rgba(var(--media-series-rgb), 0.03) 58%, rgba(var(--media-series-rgb), 0.01) 100%),
         var(--bg-card);
     box-shadow: 0 16px 34px rgba(8, 16, 24, 0.16);
 }
@@ -4364,7 +4364,7 @@ body.light-theme .network-logo {
 }
 
 .top-rated-filter-toggle.is-on {
-    background-color: rgba(71, 171, 210, 0.2);
+    background-color: rgba(var(--media-series-rgb), 0.2);
     border-color: var(--primary-accent);
 }
 
@@ -4396,7 +4396,7 @@ body.light-theme .network-logo {
 }
 
 .view-toggle .icon-button:hover {
-    background-color: rgba(71, 171, 210, 0.1);
+    background-color: rgba(var(--media-series-rgb), 0.1);
 }
 
 .view-toggle .icon-button.active {
