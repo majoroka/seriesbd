@@ -3664,58 +3664,65 @@ function renderGlobalCompletionPanel(summary: StatsSummary): void {
     const isGlobal = summary.context === 'all';
     toggleGlobalStatsPanels(isGlobal);
     if (!isGlobal) return;
-    const overallCompletionPercent = summary.totalItems > 0
-        ? Math.round((summary.completedItems / summary.totalItems) * 100)
-        : 0;
-
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
         summary: buildStatsSummaryForContext(mediaType),
         visual: getStatsMediaVisual(mediaType),
     }));
 
-    const ringGeometry = [
-        { radius: 90, stroke: 16 },
-        { radius: 66, stroke: 16 },
-        { radius: 42, stroke: 16 },
-    ];
-
-    const svgRings = mediaSummaries.map(({ summary: mediaSummary, visual }, index) => {
-        const { radius, stroke } = ringGeometry[index];
-        const circumference = 2 * Math.PI * radius;
-        const progress = mediaSummary.totalItems > 0 ? mediaSummary.completedItems / mediaSummary.totalItems : 0;
-        const offset = circumference * (1 - progress);
-        return `
-            <circle class="stats-global-ring-track" cx="120" cy="120" r="${radius}" stroke-width="${stroke}"></circle>
-            <circle class="stats-global-ring-arc" cx="120" cy="120" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${circumference};stroke-dashoffset:${offset};"></circle>
-        `;
-    }).join('');
-
-    DOM.statsGlobalCompletionRing.innerHTML = `
-        <svg viewBox="0 0 240 240" class="stats-global-ring-svg" aria-hidden="true">
-            ${svgRings}
-        </svg>
-        <div class="stats-global-ring-center">
-            <strong>${overallCompletionPercent}%</strong>
-            <span>concluídos</span>
-        </div>
-    `;
-
-    DOM.statsGlobalCompletionLegend.replaceChildren(
-        ...mediaSummaries.map(({ summary: mediaSummary, visual }) => {
+    DOM.statsGlobalCompletionRing.replaceChildren(
+        el('div', { class: 'stats-global-completion-donuts' }, mediaSummaries.map(({ summary: mediaSummary, visual }) => {
             const completionPercent = mediaSummary.totalItems > 0
                 ? Math.round((mediaSummary.completedItems / mediaSummary.totalItems) * 100)
                 : 0;
-            return (
-            el('div', { class: 'stats-global-legend-row' }, [
-                el('span', { class: 'stats-global-legend-swatch', style: `background:${visual.completed};` }),
-                el('div', { class: 'stats-global-legend-copy' }, [
-                    el('strong', { text: visual.label }),
-                    el('span', { text: `${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos` }),
+            const completed = mediaSummary.completedItems;
+            const pending = Math.max(mediaSummary.totalItems - mediaSummary.completedItems, 0);
+            return el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` }, [
+                el('div', { class: 'stats-global-donut-figure' }, [
+                    el('svg', { viewBox: '0 0 220 220', class: 'stats-global-donut-svg', 'aria-hidden': 'true' }, [
+                        el('circle', { class: 'stats-global-donut-track', cx: '110', cy: '110', r: '74', 'stroke-width': '34' }),
+                        el('circle', {
+                            class: 'stats-global-donut-segment stats-global-donut-segment--pending',
+                            cx: '110',
+                            cy: '110',
+                            r: '74',
+                            'stroke-width': '34',
+                            pathLength: '100',
+                            style: `stroke-dasharray:${pending} ${Math.max(mediaSummary.totalItems, 1)};stroke-dashoffset:0;`,
+                        }),
+                        el('circle', {
+                            class: 'stats-global-donut-segment stats-global-donut-segment--completed',
+                            cx: '110',
+                            cy: '110',
+                            r: '74',
+                            'stroke-width': '34',
+                            pathLength: '100',
+                            style: `stroke:${visual.completed};stroke-dasharray:${completed} ${Math.max(mediaSummary.totalItems, 1)};stroke-dashoffset:${-pending};`,
+                        }),
+                    ]),
+                    el('div', { class: 'stats-global-donut-center' }, [
+                        el('strong', { text: String(mediaSummary.activeItems) }),
+                        el('span', { text: `${visual.label} Ativas` }),
+                    ]),
                 ]),
-                el('span', { class: 'stats-global-legend-percentage', text: `${completionPercent}%` }),
-            ]))
-        }),
+                el('div', { class: 'stats-global-donut-meta' }, [
+                    el('div', { class: 'stats-global-donut-legend-row' }, [
+                        el('span', { class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--pending' }),
+                        el('span', { text: summary.meta.doughnutPendingLabel }),
+                    ]),
+                    el('div', { class: 'stats-global-donut-legend-row' }, [
+                        el('span', { class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--completed', style: `background:${visual.completed};` }),
+                        el('span', { text: summary.meta.doughnutConsumedLabel }),
+                    ]),
+                    el('div', { class: 'stats-global-donut-stats' }, [
+                        el('span', { text: `${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos` }),
+                        el('strong', { text: `${completionPercent}%` }),
+                    ]),
+                ]),
+            ]);
+        }))
     );
+
+    DOM.statsGlobalCompletionLegend.replaceChildren();
 }
 
 function renderGlobalGenresPanel(stats: StatsSummary): void {
