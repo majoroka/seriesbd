@@ -3981,9 +3981,9 @@ function renderGenresChart(stats: StatsSummary) {
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
-            canvas.style.height = `${Math.max(140, labels.length * 36 + 72)}px`;
+            canvas.style.height = `${Math.max(220, labels.length * 30 + 72)}px`;
         } else {
-            canvas.style.height = `${Math.max(140, labels.length * 30 + 64)}px`;
+            canvas.style.height = '';
         }
 
         S.charts.genresChart = new Chart(ctx, {
@@ -4005,7 +4005,14 @@ function renderGenresChart(stats: StatsSummary) {
             options: {
                 indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: !isMobile,
+                aspectRatio: isMobile ? undefined : Math.max(2.2, 6 / Math.max(labels.length, 1)),
+                layout: {
+                    padding: {
+                        top: 8,
+                        bottom: 4,
+                    },
+                },
                 plugins: {
                     legend: {
                         display: true,
@@ -4017,7 +4024,7 @@ function renderGenresChart(stats: StatsSummary) {
                             pointStyle: 'circle',
                             boxWidth: 12,
                             boxHeight: 12,
-                            padding: 24,
+                            padding: 18,
                         },
                     },
                     tooltip: {
