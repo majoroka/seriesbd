@@ -3674,7 +3674,6 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
 export function updateKeyStats(animate = false): StatsSummary {
     const summary = buildStatsSummary();
     applyStatsLabels(summary);
-    renderStatsGlobalOverview(summary);
 
     if (animate) {
         animateValue(DOM.statWatchedEpisodes, 0, summary.primaryValue, 3000);
@@ -4300,6 +4299,7 @@ export function renderStatistics(stats: StatsSummary) {
         if (chart instanceof Chart) chart.destroy();
     });
     S.setCharts({});
+    renderStatsGlobalOverview(stats);
     toggleGlobalStatsPanels(stats.context === 'all');
     renderWatchedUnwatchedChart(stats);
     renderGenresChart(stats);
