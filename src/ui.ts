@@ -3674,51 +3674,37 @@ function renderGlobalCompletionPanel(summary: StatsSummary): void {
             const completionPercent = mediaSummary.totalItems > 0
                 ? Math.round((mediaSummary.completedItems / mediaSummary.totalItems) * 100)
                 : 0;
-            const completed = mediaSummary.completedItems;
-            const pending = Math.max(mediaSummary.totalItems - mediaSummary.completedItems, 0);
-            return el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` }, [
-                el('div', { class: 'stats-global-donut-figure' }, [
-                    el('svg', { viewBox: '0 0 220 220', class: 'stats-global-donut-svg', 'aria-hidden': 'true' }, [
-                        el('circle', { class: 'stats-global-donut-track', cx: '110', cy: '110', r: '74', 'stroke-width': '34' }),
-                        el('circle', {
-                            class: 'stats-global-donut-segment stats-global-donut-segment--pending',
-                            cx: '110',
-                            cy: '110',
-                            r: '74',
-                            'stroke-width': '34',
-                            pathLength: '100',
-                            style: `stroke-dasharray:${pending} ${Math.max(mediaSummary.totalItems, 1)};stroke-dashoffset:0;`,
-                        }),
-                        el('circle', {
-                            class: 'stats-global-donut-segment stats-global-donut-segment--completed',
-                            cx: '110',
-                            cy: '110',
-                            r: '74',
-                            'stroke-width': '34',
-                            pathLength: '100',
-                            style: `stroke:${visual.completed};stroke-dasharray:${completed} ${Math.max(mediaSummary.totalItems, 1)};stroke-dashoffset:${-pending};`,
-                        }),
-                    ]),
-                    el('div', { class: 'stats-global-donut-center' }, [
-                        el('strong', { text: String(mediaSummary.activeItems) }),
-                        el('span', { text: `${visual.label} Ativas` }),
-                    ]),
-                ]),
-                el('div', { class: 'stats-global-donut-meta' }, [
-                    el('div', { class: 'stats-global-donut-legend-row' }, [
-                        el('span', { class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--pending' }),
-                        el('span', { text: summary.meta.doughnutPendingLabel }),
-                    ]),
-                    el('div', { class: 'stats-global-donut-legend-row' }, [
-                        el('span', { class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--completed', style: `background:${visual.completed};` }),
-                        el('span', { text: summary.meta.doughnutConsumedLabel }),
-                    ]),
-                    el('div', { class: 'stats-global-donut-stats' }, [
-                        el('span', { text: `${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos` }),
-                        el('strong', { text: `${completionPercent}%` }),
-                    ]),
-                ]),
-            ]);
+            const completedRatio = mediaSummary.totalItems > 0 ? Math.max(0, Math.min(100, (mediaSummary.completedItems / mediaSummary.totalItems) * 100)) : 0;
+            const pendingRatio = Math.max(0, 100 - completedRatio);
+            const card = el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` });
+            card.innerHTML = `
+                <div class="stats-global-donut-figure">
+                    <svg viewBox="0 0 220 220" class="stats-global-donut-svg" aria-hidden="true">
+                        <circle class="stats-global-donut-track" cx="110" cy="110" r="74" stroke-width="34"></circle>
+                        <circle class="stats-global-donut-segment stats-global-donut-segment--pending" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke-dasharray:${pendingRatio} 100;stroke-dashoffset:0;"></circle>
+                        <circle class="stats-global-donut-segment stats-global-donut-segment--completed" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke:${visual.completed};stroke-dasharray:${completedRatio} 100;stroke-dashoffset:${-pendingRatio};"></circle>
+                    </svg>
+                    <div class="stats-global-donut-center">
+                        <strong>${mediaSummary.activeItems}</strong>
+                        <span>${visual.label} Ativas</span>
+                    </div>
+                </div>
+                <div class="stats-global-donut-meta">
+                    <div class="stats-global-donut-legend-row">
+                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--pending"></span>
+                        <span>${summary.meta.doughnutPendingLabel}</span>
+                    </div>
+                    <div class="stats-global-donut-legend-row">
+                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--completed" style="background:${visual.completed};"></span>
+                        <span>${summary.meta.doughnutConsumedLabel}</span>
+                    </div>
+                    <div class="stats-global-donut-stats">
+                        <span>${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos</span>
+                        <strong>${completionPercent}%</strong>
+                    </div>
+                </div>
+            `;
+            return card;
         }))
     );
 
