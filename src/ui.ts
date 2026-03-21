@@ -3545,6 +3545,11 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     const isGlobal = summary.context === 'all';
     DOM.statsGlobalOverview.hidden = !isGlobal;
     DOM.statsGlobalOverview.style.display = isGlobal ? 'block' : 'none';
+    const completionChartCard = document.getElementById('watched-unwatched-chart')?.closest('.chart-card') as HTMLElement | null;
+    if (completionChartCard) {
+        completionChartCard.hidden = isGlobal;
+        completionChartCard.style.display = isGlobal ? 'none' : 'block';
+    }
     if (DOM.keyStatsGrid) {
         DOM.keyStatsGrid.hidden = isGlobal;
         DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
@@ -3560,36 +3565,62 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
             title: 'Itens Concluídos',
             total: summary.completedItems.toLocaleString('pt-PT'),
             suffix: '',
-            getValue: (entry: { summary: StatsSummary }) => entry.summary.completedItems.toLocaleString('pt-PT'),
+            getValue: (entry: { summary: StatsSummary }) => entry.summary.completedItems,
         },
         {
             title: 'Itens por Concluir',
             total: (summary.totalItems - summary.completedItems).toLocaleString('pt-PT'),
             suffix: '',
-            getValue: (entry: { summary: StatsSummary }) => (entry.summary.pendingItems + entry.summary.inProgressItems).toLocaleString('pt-PT'),
+            getValue: (entry: { summary: StatsSummary }) => (entry.summary.pendingItems + entry.summary.inProgressItems),
         },
         {
             title: 'Progresso Médio',
             total: String(summary.averageProgressPercent),
             suffix: '%',
-            getValue: (entry: { summary: StatsSummary }) => `${entry.summary.averageProgressPercent}%`,
+            getValue: (entry: { summary: StatsSummary }) => entry.summary.averageProgressPercent,
         },
     ];
 
     DOM.statsGlobalSummaryGrid.replaceChildren(
         ...metricCards.map((metric) => {
-            const card = el('article', { class: 'stats-global-summary-card' }, [
-                el('div', { class: 'stats-global-summary-card-header' }, [
-                    el('h4', { text: metric.title }),
-                    el('span', { class: 'stats-global-summary-circle', text: `${metric.total}${metric.suffix}` }),
-                ]),
-                el('div', { class: 'stats-global-summary-breakdown' }, mediaSummaries.map(({ summary: mediaSummary, visual }) =>
-                    el('div', { class: `stats-global-summary-row stats-global-summary-row--${visual.mediaType}` }, [
-                        el('span', { class: 'stats-global-summary-row-label', text: visual.label }),
-                        el('strong', { class: 'stats-global-summary-row-value', text: metric.getValue({ summary: mediaSummary }) }),
-                    ])
-                )),
-            ]);
+            const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
+            const totalValue = values.reduce((sum, value) => sum + value, 0);
+            let currentOffset = 0;
+            const radius = 74;
+            const stroke = 34;
+            const circumference = 2 * Math.PI * radius;
+            const segments = mediaSummaries.map(({ visual }, index) => {
+                const rawValue = values[index] || 0;
+                const ratio = totalValue > 0 ? rawValue / totalValue : 0;
+                const segmentLength = circumference * ratio;
+                const dashArray = `${segmentLength} ${Math.max(circumference - segmentLength, 0)}`;
+                const dashOffset = -currentOffset;
+                currentOffset += segmentLength;
+                return `<circle class="stats-global-summary-donut-segment" cx="110" cy="110" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${dashArray};stroke-dashoffset:${dashOffset};"></circle>`;
+            }).join('');
+
+            const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
+            card.innerHTML = `
+                <h4 class="stats-global-summary-card-title">${metric.title}</h4>
+                <div class="stats-global-summary-donut-wrap">
+                    <div class="stats-global-summary-donut-figure">
+                        <svg viewBox="0 0 220 220" class="stats-global-summary-donut-svg" aria-hidden="true">
+                            <circle class="stats-global-summary-donut-track" cx="110" cy="110" r="${radius}" stroke-width="${stroke}"></circle>
+                            ${segments}
+                        </svg>
+                        <div class="stats-global-summary-donut-center">${metric.total}${metric.suffix}</div>
+                    </div>
+                </div>
+                <div class="stats-global-summary-legend">
+                    ${mediaSummaries.map(({ visual }, index) => `
+                        <div class="stats-global-summary-legend-row">
+                            <span class="stats-global-summary-legend-dot" style="background:${visual.completed};"></span>
+                            <span class="stats-global-summary-legend-label">${visual.label}</span>
+                            <strong class="stats-global-summary-legend-value">${values[index]}${metric.suffix}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
             return card;
         }),
     );
