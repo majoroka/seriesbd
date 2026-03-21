@@ -3554,6 +3554,13 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
         DOM.keyStatsGrid.hidden = isGlobal;
         DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
     }
+    if (DOM.statsChartsGrid) {
+        DOM.statsChartsGrid.classList.toggle('stats-charts-grid--global', isGlobal);
+    }
+    const topRatedCard = document.getElementById('top-rated-series-card') as HTMLElement | null;
+    if (topRatedCard) {
+        topRatedCard.classList.toggle('stats-global-favorites-card', isGlobal);
+    }
     Object.keys(S.charts)
         .filter((key) => key.startsWith('globalSummaryDonut-'))
         .forEach((key) => {

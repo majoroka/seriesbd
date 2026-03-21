@@ -2913,6 +2913,10 @@ body.light-theme .stats-global-summary-card-title {
     align-items: start;
 }
 
+.charts-grid.stats-charts-grid--global {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .chart-card {
     background-color: var(--bg-card);
     padding: 1.5rem;
@@ -3077,6 +3081,10 @@ body.light-theme .stats-global-summary-card-title {
 .stats-global-favorites-list {
     display: grid;
     gap: 0.65rem;
+}
+
+.stats-global-favorites-card {
+    grid-column: 1 / -1;
 }
 
 .top-rated-item-rating .fa-star {
