@@ -3981,9 +3981,9 @@ function renderGenresChart(stats: StatsSummary) {
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
-            canvas.style.height = `${Math.max(300, labels.length * 72)}px`;
+            canvas.style.height = `${Math.max(140, labels.length * 36 + 72)}px`;
         } else {
-            canvas.style.height = `${Math.max(320, labels.length * 52)}px`;
+            canvas.style.height = `${Math.max(140, labels.length * 30 + 64)}px`;
         }
 
         S.charts.genresChart = new Chart(ctx, {
@@ -3997,7 +3997,7 @@ function renderGenresChart(stats: StatsSummary) {
                     borderColor: visuals[mediaType].progress,
                     borderRadius: 999,
                     borderSkipped: false,
-                    barThickness: isMobile ? 10 : 12,
+                    barThickness: isMobile ? 9 : 10,
                     categoryPercentage: 0.72,
                     barPercentage: 0.9,
                 })),
