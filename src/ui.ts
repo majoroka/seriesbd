@@ -1391,6 +1391,7 @@ function renderDashboardNewsPanel(): void {
         const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
         const article = el('a', {
             class: 'dashboard-recent-item dashboard-news-item',
+            'data-media-type': item.mediaTypeHint || 'all',
             href: item.url,
             target: '_blank',
             rel: 'noopener noreferrer',

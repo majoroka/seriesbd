@@ -84,13 +84,13 @@ body.light-theme .genre-filter select {
 }
 
 body.light-theme .dashboard-status-badge.is-complete {
-    color: #0b5d79;
-    background-color: rgba(71, 171, 210, 0.12);
+    color: var(--media-series-strong);
+    background-color: rgba(var(--media-series-rgb), 0.12);
 }
 
 body.light-theme .dashboard-status-badge.is-progress {
-    color: #8a4a14;
-    background-color: rgba(240, 143, 68, 0.12);
+    color: var(--media-movie-strong);
+    background-color: rgba(var(--media-movie-rgb), 0.12);
 }
 
 body.light-theme .dashboard-status-badge.is-pending {
@@ -98,18 +98,18 @@ body.light-theme .dashboard-status-badge.is-pending {
 }
 
 body.light-theme .dashboard-status-badge.is-suggestion-series {
-    color: #0b5d79;
-    background-color: rgba(71, 171, 210, 0.14);
+    color: var(--media-series-strong);
+    background-color: rgba(var(--media-series-rgb), 0.14);
 }
 
 body.light-theme .dashboard-status-badge.is-suggestion-movie {
-    color: #8a4a14;
-    background-color: rgba(240, 143, 68, 0.14);
+    color: var(--media-movie-strong);
+    background-color: rgba(var(--media-movie-rgb), 0.14);
 }
 
 body.light-theme .dashboard-status-badge.is-suggestion-book {
-    color: #2f6f2b;
-    background-color: rgba(125, 200, 110, 0.16);
+    color: var(--media-book-strong);
+    background-color: rgba(var(--media-book-rgb), 0.16);
 }
 
 body.light-theme .v2-title h1,
@@ -1480,6 +1480,8 @@ body.light-theme .dashboard-media-card-total-badge {
 }
 
 .dashboard-recent-item {
+    --dashboard-item-rgb: 109, 176, 255;
+    --dashboard-item-accent: #6db0ff;
     border: 1px solid var(--border-color);
     border-radius: 10px;
     background-color: var(--bg-light);
@@ -1493,12 +1495,27 @@ body.light-theme .dashboard-media-card-total-badge {
 
 .dashboard-recent-item:hover {
     transform: translateY(-2px);
-    border-color: var(--primary-accent);
+    border-color: rgba(var(--dashboard-item-rgb), 0.55);
 }
 
 .dashboard-recent-item:focus-visible {
-    outline: 2px solid var(--primary-accent);
+    outline: 2px solid var(--dashboard-item-accent);
     outline-offset: 2px;
+}
+
+.dashboard-recent-item[data-media-type="series"] {
+    --dashboard-item-rgb: var(--media-series-rgb);
+    --dashboard-item-accent: var(--media-series);
+}
+
+.dashboard-recent-item[data-media-type="movie"] {
+    --dashboard-item-rgb: var(--media-movie-rgb);
+    --dashboard-item-accent: var(--media-movie);
+}
+
+.dashboard-recent-item[data-media-type="book"] {
+    --dashboard-item-rgb: var(--media-book-rgb);
+    --dashboard-item-accent: var(--media-book);
 }
 
 .dashboard-recent-poster {
@@ -1530,15 +1547,15 @@ body.light-theme .dashboard-media-card-total-badge {
 }
 
 .dashboard-status-badge.is-complete {
-    color: #aee9ff;
-    border-color: rgba(71, 171, 210, 0.55);
-    background-color: rgba(71, 171, 210, 0.14);
+    color: var(--media-series);
+    border-color: rgba(var(--media-series-rgb), 0.55);
+    background-color: rgba(var(--media-series-rgb), 0.14);
 }
 
 .dashboard-status-badge.is-progress {
-    color: #ffd8a8;
-    border-color: rgba(240, 143, 68, 0.55);
-    background-color: rgba(240, 143, 68, 0.14);
+    color: var(--media-movie);
+    border-color: rgba(var(--media-movie-rgb), 0.55);
+    background-color: rgba(var(--media-movie-rgb), 0.14);
 }
 
 .dashboard-status-badge.is-pending {
@@ -1548,21 +1565,21 @@ body.light-theme .dashboard-media-card-total-badge {
 }
 
 .dashboard-status-badge.is-suggestion-series {
-    color: #aee9ff;
-    border-color: rgba(71, 171, 210, 0.55);
-    background-color: rgba(71, 171, 210, 0.16);
+    color: var(--media-series);
+    border-color: rgba(var(--media-series-rgb), 0.55);
+    background-color: rgba(var(--media-series-rgb), 0.16);
 }
 
 .dashboard-status-badge.is-suggestion-movie {
-    color: #ffd8a8;
-    border-color: rgba(240, 143, 68, 0.55);
-    background-color: rgba(240, 143, 68, 0.16);
+    color: var(--media-movie);
+    border-color: rgba(var(--media-movie-rgb), 0.55);
+    background-color: rgba(var(--media-movie-rgb), 0.16);
 }
 
 .dashboard-status-badge.is-suggestion-book {
-    color: #d9f7c8;
-    border-color: rgba(125, 200, 110, 0.55);
-    background-color: rgba(125, 200, 110, 0.16);
+    color: var(--media-book-strong);
+    border-color: rgba(var(--media-book-rgb), 0.55);
+    background-color: rgba(var(--media-book-rgb), 0.16);
 }
 
 .dashboard-upcoming-list {
@@ -2642,26 +2659,26 @@ details[open] > .season-summary::before {
 
 #back-to-dashboard-from-library-btn {
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.46) 0%, rgba(71, 171, 210, 0.26) 58%, rgba(71, 171, 210, 0.14) 100%),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.46) 0%, rgba(var(--media-series-rgb), 0.26) 58%, rgba(var(--media-series-rgb), 0.14) 100%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 65%),
         var(--bg-card);
-    border: 1px solid rgba(71, 171, 210, 0.55);
+    border: 1px solid rgba(var(--media-series-rgb), 0.55);
     color: var(--text-primary);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 #back-to-dashboard-from-library-btn:hover {
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.54) 0%, rgba(71, 171, 210, 0.32) 58%, rgba(71, 171, 210, 0.18) 100%),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.54) 0%, rgba(var(--media-series-rgb), 0.32) 58%, rgba(var(--media-series-rgb), 0.18) 100%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 65%),
         var(--bg-card);
-    border-color: rgba(71, 171, 210, 0.68);
+    border-color: rgba(var(--media-series-rgb), 0.68);
     color: var(--text-primary);
 }
 
 body.light-theme #back-to-dashboard-from-library-btn {
     background:
-        linear-gradient(145deg, rgba(71, 171, 210, 0.30) 0%, rgba(71, 171, 210, 0.18) 58%, rgba(71, 171, 210, 0.09) 100%),
+        linear-gradient(145deg, rgba(var(--media-series-rgb), 0.30) 0%, rgba(var(--media-series-rgb), 0.18) 58%, rgba(var(--media-series-rgb), 0.09) 100%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 65%),
         var(--bg-card);
     box-shadow: 0 6px 14px rgba(18, 30, 44, 0.08);
