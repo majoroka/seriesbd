@@ -3327,14 +3327,42 @@ function getStatsMediaContext(): StatsMediaContext {
     return 'all';
 }
 
+function getMediaPalette(mediaType: MediaType): { base: string; soft: string; strong: string } {
+    const styles = getComputedStyle(document.body);
+    const prefix = mediaType === 'movie' ? 'movie' : mediaType === 'book' ? 'book' : 'series';
+    const read = (suffix: string, fallback: string) =>
+        styles.getPropertyValue(`--media-${prefix}${suffix}`).trim() || fallback;
+
+    if (prefix === 'movie') {
+        return {
+            base: read('', '#c25066'),
+            soft: read('-soft', '#d77e91'),
+            strong: read('-strong', '#a53b51'),
+        };
+    }
+    if (prefix === 'book') {
+        return {
+            base: read('', '#c3d88e'),
+            soft: read('-soft', '#d7e8af'),
+            strong: read('-strong', '#9eb56d'),
+        };
+    }
+    return {
+        base: read('', '#63a9ce'),
+        soft: read('-soft', '#8fc6e2'),
+        strong: read('-strong', '#4a8db3'),
+    };
+}
+
 function getStatsMediaVisual(mediaType: MediaType): StatsMediaVisual {
+    const palette = getMediaPalette(mediaType);
     if (mediaType === 'movie') {
-        return { mediaType, label: 'Filmes', accent: '#e7a46d', progress: '#ffc07a', completed: '#b45c18' };
+        return { mediaType, label: 'Filmes', accent: palette.base, progress: palette.soft, completed: palette.strong };
     }
     if (mediaType === 'book') {
-        return { mediaType, label: 'Livros', accent: '#8bcf7b', progress: '#b0e98b', completed: '#4f9a40' };
+        return { mediaType, label: 'Livros', accent: palette.base, progress: palette.soft, completed: palette.strong };
     }
-    return { mediaType, label: 'Séries', accent: '#63a9ce', progress: '#60e0f9', completed: '#025f90' };
+    return { mediaType, label: 'Séries', accent: palette.base, progress: palette.soft, completed: palette.strong };
 }
 
 function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {

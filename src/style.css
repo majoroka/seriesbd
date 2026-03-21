@@ -28,6 +28,30 @@
     --detail-header-overlay-vertical: linear-gradient(to bottom, rgba(25, 25, 25, 0.98) 20%, rgba(25, 25, 25, 0.85) 100%);
     --font-main: 'Rajdhani', sans-serif;
     --font-mono: 'Share Tech Mono', monospace;
+    --media-series: #63a9ce;
+    --media-series-rgb: 99, 169, 206;
+    --media-series-soft: #8fc6e2;
+    --media-series-strong: #4a8db3;
+    --media-series-surface: rgba(var(--media-series-rgb), 0.12);
+    --media-series-surface-strong: rgba(var(--media-series-rgb), 0.2);
+    --media-series-gradient-start: rgba(var(--media-series-rgb), 0.22);
+    --media-series-gradient-end: rgba(var(--media-series-rgb), 0.08);
+    --media-movie: #c25066;
+    --media-movie-rgb: 194, 80, 102;
+    --media-movie-soft: #d77e91;
+    --media-movie-strong: #a53b51;
+    --media-movie-surface: rgba(var(--media-movie-rgb), 0.12);
+    --media-movie-surface-strong: rgba(var(--media-movie-rgb), 0.2);
+    --media-movie-gradient-start: rgba(var(--media-movie-rgb), 0.22);
+    --media-movie-gradient-end: rgba(var(--media-movie-rgb), 0.08);
+    --media-book: #c3d88e;
+    --media-book-rgb: 195, 216, 142;
+    --media-book-soft: #d7e8af;
+    --media-book-strong: #9eb56d;
+    --media-book-surface: rgba(var(--media-book-rgb), 0.14);
+    --media-book-surface-strong: rgba(var(--media-book-rgb), 0.22);
+    --media-book-gradient-start: rgba(var(--media-book-rgb), 0.24);
+    --media-book-gradient-end: rgba(var(--media-book-rgb), 0.1);
 }
 
 body.light-theme {
@@ -800,21 +824,21 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .notification-item-pill--series {
-    border-color: rgba(71, 171, 210, 0.55);
-    color: #9bdff7;
-    background-color: rgba(71, 171, 210, 0.12);
+    border-color: rgba(var(--media-series-rgb), 0.55);
+    color: var(--media-series);
+    background-color: var(--media-series-surface);
 }
 
 .notification-item-pill--movie {
-    border-color: rgba(240, 143, 68, 0.55);
-    color: #ffd7b2;
-    background-color: rgba(240, 143, 68, 0.12);
+    border-color: rgba(var(--media-movie-rgb), 0.55);
+    color: var(--media-movie);
+    background-color: var(--media-movie-surface);
 }
 
 .notification-item-pill--book {
-    border-color: rgba(125, 200, 110, 0.55);
-    color: #d7f3ca;
-    background-color: rgba(125, 200, 110, 0.12);
+    border-color: rgba(var(--media-book-rgb), 0.55);
+    color: var(--media-book-strong);
+    background-color: var(--media-book-surface);
 }
 
 .notifications-empty {
@@ -1074,26 +1098,27 @@ body.light-theme .sidebar-submenu-shell {
 }
 
 .dashboard-media-card[data-media-type="series"] {
-    --dashboard-card-accent: var(--primary-accent);
-    --dashboard-card-pending: #63a9ce;
-    --dashboard-card-progress: #60e0f9;
-    --dashboard-card-completed: #025f90;
+    --dashboard-card-accent: var(--media-series);
+    --dashboard-card-rgb: var(--media-series-rgb);
+    --dashboard-card-pending: var(--media-series);
+    --dashboard-card-progress: var(--media-series-soft);
+    --dashboard-card-completed: var(--media-series-strong);
 }
 
 .dashboard-media-card[data-media-type="movie"] {
-    --dashboard-card-accent: #f08f44;
-    --dashboard-card-rgb: 240, 143, 68;
-    --dashboard-card-pending: #e7a46d;
-    --dashboard-card-progress: #ffc07a;
-    --dashboard-card-completed: #b45c18;
+    --dashboard-card-accent: var(--media-movie);
+    --dashboard-card-rgb: var(--media-movie-rgb);
+    --dashboard-card-pending: var(--media-movie);
+    --dashboard-card-progress: var(--media-movie-soft);
+    --dashboard-card-completed: var(--media-movie-strong);
 }
 
 .dashboard-media-card[data-media-type="book"] {
-    --dashboard-card-accent: #7dc86e;
-    --dashboard-card-rgb: 125, 200, 110;
-    --dashboard-card-pending: #8bcf7b;
-    --dashboard-card-progress: #b0e98b;
-    --dashboard-card-completed: #4f9a40;
+    --dashboard-card-accent: var(--media-book);
+    --dashboard-card-rgb: var(--media-book-rgb);
+    --dashboard-card-pending: var(--media-book);
+    --dashboard-card-progress: var(--media-book-soft);
+    --dashboard-card-completed: var(--media-book-strong);
 }
 
 .dashboard-media-card[data-media-type="all"] {
@@ -1940,25 +1965,25 @@ details[open] > .season-summary::before {
     white-space: nowrap;
     vertical-align: middle;
     line-height: 1.1;
-    background: linear-gradient(135deg, rgba(71, 171, 210, 0.17), rgba(71, 171, 210, 0.08));
+    background: linear-gradient(135deg, var(--media-series-gradient-start), var(--media-series-gradient-end));
 }
 
 .media-type-chip--series {
-    border-color: #47ABD2;
-    color: #47ABD2;
-    background: linear-gradient(135deg, rgba(71, 171, 210, 0.22), rgba(71, 171, 210, 0.08));
+    border-color: var(--media-series);
+    color: var(--media-series);
+    background: linear-gradient(135deg, var(--media-series-gradient-start), var(--media-series-gradient-end));
 }
 
 .media-type-chip--movie {
-    border-color: #f08f44;
-    color: #f08f44;
-    background: linear-gradient(135deg, rgba(240, 143, 68, 0.2), rgba(240, 143, 68, 0.08));
+    border-color: var(--media-movie);
+    color: var(--media-movie);
+    background: linear-gradient(135deg, var(--media-movie-gradient-start), var(--media-movie-gradient-end));
 }
 
 .media-type-chip--book {
-    border-color: #7dc86e;
-    color: #7dc86e;
-    background: linear-gradient(135deg, rgba(125, 200, 110, 0.2), rgba(125, 200, 110, 0.08));
+    border-color: var(--media-book-strong);
+    color: var(--media-book-strong);
+    background: linear-gradient(135deg, var(--media-book-gradient-start), var(--media-book-gradient-end));
 }
 
 .search-result-info p {
@@ -3037,15 +3062,15 @@ body.light-theme .stats-global-summary-card-title {
 }
 
 .top-rated-item-rating--series {
-    color: #025f90;
+    color: var(--media-series-strong);
 }
 
 .top-rated-item-rating--movie {
-    color: #b45c18;
+    color: var(--media-movie-strong);
 }
 
 .top-rated-item-rating--book {
-    color: #4f9a40;
+    color: var(--media-book-strong);
 }
 
 .stats-global-favorites-groups {
@@ -3070,15 +3095,15 @@ body.light-theme .stats-global-summary-card-title {
 }
 
 .stats-global-favorites-title--series {
-    color: #025f90;
+    color: var(--media-series-strong);
 }
 
 .stats-global-favorites-title--movie {
-    color: #b45c18;
+    color: var(--media-movie-strong);
 }
 
 .stats-global-favorites-title--book {
-    color: #4f9a40;
+    color: var(--media-book-strong);
 }
 
 .stats-global-favorites-list {
