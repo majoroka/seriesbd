@@ -3586,8 +3586,8 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
             const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
             const totalValue = values.reduce((sum, value) => sum + value, 0);
             let currentOffset = 0;
-            const radius = 74;
-            const stroke = 34;
+            const radius = 60;
+            const stroke = 26;
             const circumference = 2 * Math.PI * radius;
             const segments = mediaSummaries.map(({ visual }, index) => {
                 const rawValue = values[index] || 0;
@@ -3596,7 +3596,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
                 const dashArray = `${segmentLength} ${Math.max(circumference - segmentLength, 0)}`;
                 const dashOffset = -currentOffset;
                 currentOffset += segmentLength;
-                return `<circle class="stats-global-summary-donut-segment" cx="110" cy="110" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${dashArray};stroke-dashoffset:${dashOffset};"></circle>`;
+                return `<circle class="stats-global-summary-donut-segment" cx="90" cy="90" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${dashArray};stroke-dashoffset:${dashOffset};"></circle>`;
             }).join('');
 
             const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
@@ -3604,8 +3604,8 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
                 <h4 class="stats-global-summary-card-title">${metric.title}</h4>
                 <div class="stats-global-summary-donut-wrap">
                     <div class="stats-global-summary-donut-figure">
-                        <svg viewBox="0 0 220 220" class="stats-global-summary-donut-svg" aria-hidden="true">
-                            <circle class="stats-global-summary-donut-track" cx="110" cy="110" r="${radius}" stroke-width="${stroke}"></circle>
+                        <svg viewBox="0 0 180 180" class="stats-global-summary-donut-svg" aria-hidden="true">
+                            <circle class="stats-global-summary-donut-track" cx="90" cy="90" r="${radius}" stroke-width="${stroke}"></circle>
                             ${segments}
                         </svg>
                         <div class="stats-global-summary-donut-center">${metric.total}${metric.suffix}</div>
