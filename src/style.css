@@ -2659,64 +2659,9 @@ body.light-theme #back-to-dashboard-from-library-btn {
     aspect-ratio: 1;
 }
 
-.stats-global-summary-donut-svg {
+.stats-global-summary-donut-canvas {
     width: 100%;
     height: 100%;
-    transform: rotate(-90deg);
-}
-
-.stats-global-summary-donut-track,
-.stats-global-summary-donut-segment {
-    fill: none;
-}
-
-.stats-global-summary-donut-track {
-    stroke: rgba(148, 158, 184, 0.14);
-}
-
-.stats-global-summary-donut-segment {
-    stroke-linecap: butt;
-}
-
-.stats-global-summary-donut-center {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 2rem;
-    line-height: 1;
-}
-
-.stats-global-summary-legend {
-    display: grid;
-    gap: 0.55rem;
-}
-
-.stats-global-summary-legend-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.stats-global-summary-legend-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-}
-
-.stats-global-summary-legend-label {
-    color: var(--text-primary);
-    font-size: 1rem;
-}
-
-.stats-global-summary-legend-value {
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 1.05rem;
 }
 
 body.light-theme .stats-global-summary-card {
@@ -2725,10 +2670,7 @@ body.light-theme .stats-global-summary-card {
 
 body.light-theme .stats-global-overview-header h3,
 body.light-theme .stats-global-overview-header p,
-body.light-theme .stats-global-summary-card-title,
-body.light-theme .stats-global-summary-donut-center,
-body.light-theme .stats-global-summary-legend-label,
-body.light-theme .stats-global-summary-legend-value {
+body.light-theme .stats-global-summary-card-title {
     color: #232323;
 }
 

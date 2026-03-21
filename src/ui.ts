@@ -3554,6 +3554,13 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
         DOM.keyStatsGrid.hidden = isGlobal;
         DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
     }
+    Object.keys(S.charts)
+        .filter((key) => key.startsWith('globalSummaryDonut-'))
+        .forEach((key) => {
+            const chart = S.charts[key];
+            if (chart instanceof Chart) chart.destroy();
+            delete S.charts[key];
+        });
     if (!isGlobal || !DOM.statsGlobalSummaryGrid) return;
 
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
@@ -3582,48 +3589,86 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     ];
 
     DOM.statsGlobalSummaryGrid.replaceChildren(
-        ...metricCards.map((metric) => {
+        ...metricCards.map((metric, metricIndex) => {
             const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
-            const totalValue = values.reduce((sum, value) => sum + value, 0);
-            let currentOffset = 0;
-            const radius = 60;
-            const stroke = 26;
-            const circumference = 2 * Math.PI * radius;
-            const segments = mediaSummaries.map(({ visual }, index) => {
-                const rawValue = values[index] || 0;
-                const ratio = totalValue > 0 ? rawValue / totalValue : 0;
-                const segmentLength = circumference * ratio;
-                const dashArray = `${segmentLength} ${Math.max(circumference - segmentLength, 0)}`;
-                const dashOffset = -currentOffset;
-                currentOffset += segmentLength;
-                return `<circle class="stats-global-summary-donut-segment" cx="90" cy="90" r="${radius}" stroke-width="${stroke}" style="stroke:${visual.completed};stroke-dasharray:${dashArray};stroke-dashoffset:${dashOffset};"></circle>`;
-            }).join('');
-
             const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
             card.innerHTML = `
                 <h4 class="stats-global-summary-card-title">${metric.title}</h4>
                 <div class="stats-global-summary-donut-wrap">
                     <div class="stats-global-summary-donut-figure">
-                        <svg viewBox="0 0 180 180" class="stats-global-summary-donut-svg" aria-hidden="true">
-                            <circle class="stats-global-summary-donut-track" cx="90" cy="90" r="${radius}" stroke-width="${stroke}"></circle>
-                            ${segments}
-                        </svg>
-                        <div class="stats-global-summary-donut-center">${metric.total}${metric.suffix}</div>
+                        <canvas id="stats-global-summary-donut-${metricIndex}" class="stats-global-summary-donut-canvas" aria-label="${metric.title}"></canvas>
                     </div>
-                </div>
-                <div class="stats-global-summary-legend">
-                    ${mediaSummaries.map(({ visual }, index) => `
-                        <div class="stats-global-summary-legend-row">
-                            <span class="stats-global-summary-legend-dot" style="background:${visual.completed};"></span>
-                            <span class="stats-global-summary-legend-label">${visual.label}</span>
-                            <strong class="stats-global-summary-legend-value">${values[index]}${metric.suffix}</strong>
-                        </div>
-                    `).join('')}
                 </div>
             `;
             return card;
         }),
     );
+
+    metricCards.forEach((metric, metricIndex) => {
+        const canvas = document.getElementById(`stats-global-summary-donut-${metricIndex}`) as HTMLCanvasElement | null;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
+        const colors = mediaSummaries.map(({ visual }) => visual.completed);
+        const labels = mediaSummaries.map(({ visual }) => visual.label);
+        const centerText = `${metric.total}${metric.suffix}`;
+
+        const chart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: getChartColors().cardBg,
+                    borderWidth: 2,
+                    borderAlign: 'inner',
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                cutout: '60%',
+                animation: { duration: 700 },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: getChartColors().textColor,
+                            font: { family: "'Rajdhani', sans-serif" },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                        },
+                    } as any,
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.label}: ${context.raw}${metric.suffix}`,
+                        },
+                    },
+                    doughnutCenterText: { animatedValue: Number.parseInt(String(metric.total), 10) || 0 },
+                },
+            },
+            plugins: [{
+                id: `globalSummaryDonutCenterText-${metricIndex}`,
+                afterDraw: (chartInstance) => {
+                    const chartCtx = chartInstance.ctx;
+                    const { width, height } = chartInstance;
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+                    chartCtx.font = `700 1.35rem ${getComputedStyle(document.body).getPropertyValue('--font-mono').trim()}`;
+                    chartCtx.textAlign = 'center';
+                    chartCtx.textBaseline = 'middle';
+                    chartCtx.fillStyle = getChartColors().textPrimaryColor;
+                    chartCtx.fillText(centerText, centerX, centerY);
+                },
+            }],
+        });
+
+        S.charts[`globalSummaryDonut-${metricIndex}`] = chart;
+    });
 }
 
 export function updateKeyStats(animate = false): StatsSummary {
