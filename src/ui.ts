@@ -3721,16 +3721,16 @@ function toggleGlobalStatsPanels(isGlobal: boolean): void {
         watchedCanvas.style.display = isGlobal ? 'none' : 'block';
     }
     if (genresCanvas) {
-        genresCanvas.hidden = isGlobal;
-        genresCanvas.style.display = isGlobal ? 'none' : 'block';
+        genresCanvas.hidden = false;
+        genresCanvas.style.display = 'block';
     }
     if (DOM.statsGlobalCompletionPanel) {
         DOM.statsGlobalCompletionPanel.hidden = !isGlobal;
         DOM.statsGlobalCompletionPanel.style.display = isGlobal ? 'grid' : 'none';
     }
     if (DOM.statsGlobalGenresPanel) {
-        DOM.statsGlobalGenresPanel.hidden = !isGlobal;
-        DOM.statsGlobalGenresPanel.style.display = isGlobal ? 'block' : 'none';
+        DOM.statsGlobalGenresPanel.hidden = true;
+        DOM.statsGlobalGenresPanel.style.display = 'none';
     }
 }
 
@@ -3950,7 +3950,101 @@ function renderGenresChart(stats: StatsSummary) {
         if (S.charts.genresChart) {
             S.charts.genresChart.destroy();
         }
-        renderGlobalGenresPanel(stats);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const colors = getChartColors();
+        const visuals = {
+            series: getStatsMediaVisual('series'),
+            movie: getStatsMediaVisual('movie'),
+            book: getStatsMediaVisual('book'),
+        };
+        const genreMap = new Map<string, Record<MediaType, number>>();
+        (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+            getContextItems(mediaType).forEach((item) => {
+                if (!Array.isArray(item.genres)) return;
+                item.genres.forEach((genre: Genre) => {
+                    const genreName = translateGenreName(genre.name) || genre.name;
+                    if (!genreName) return;
+                    if (!genreMap.has(genreName)) {
+                        genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
+                    }
+                    genreMap.get(genreName)![mediaType] += 1;
+                });
+            });
+        });
+        const topGenres = Array.from(genreMap.entries())
+            .map(([name, counts]) => ({ name, counts, total: counts.series + counts.movie + counts.book }))
+            .filter((entry) => entry.total > 0)
+            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+            .slice(0, 8);
+        const labels = topGenres.map((entry) => entry.name);
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            canvas.style.height = `${Math.max(300, labels.length * 72)}px`;
+        } else {
+            canvas.style.height = `${Math.max(320, labels.length * 52)}px`;
+        }
+
+        S.charts.genresChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+                    label: visuals[mediaType].label,
+                    data: topGenres.map((entry) => entry.counts[mediaType]),
+                    backgroundColor: visuals[mediaType].progress,
+                    borderColor: visuals[mediaType].progress,
+                    borderRadius: 999,
+                    borderSkipped: false,
+                    barThickness: isMobile ? 10 : 12,
+                    categoryPercentage: 0.72,
+                    barPercentage: 0.9,
+                })),
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: colors.textColor,
+                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 16 : 18 },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 24,
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${context.raw}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        display: false,
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                    y: {
+                        ticks: {
+                            color: colors.textPrimaryColor,
+                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 18 : 22, weight: 700 },
+                            autoSkip: false,
+                        },
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
+            } as any,
+        });
         return;
     }
     const ctx = canvas.getContext('2d');
