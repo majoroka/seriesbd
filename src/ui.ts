@@ -3977,15 +3977,10 @@ function renderGenresChart(stats: StatsSummary) {
                 name,
                 counts,
                 total: counts.series + counts.movie + counts.book,
-                representedMediaCount: (counts.series > 0 ? 1 : 0) + (counts.movie > 0 ? 1 : 0) + (counts.book > 0 ? 1 : 0),
             }))
             .filter((entry) => entry.total > 0)
-            .sort((a, b) =>
-                b.representedMediaCount - a.representedMediaCount ||
-                b.total - a.total ||
-                a.name.localeCompare(b.name)
-            )
-            .slice(0, 6);
+            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+            .slice(0, 10);
         const labels = topGenres.map((entry) => entry.name);
         const isMobile = window.innerWidth <= 768;
 
@@ -4004,36 +3999,28 @@ function renderGenresChart(stats: StatsSummary) {
                     data: topGenres.map((entry) => entry.counts[mediaType]),
                     backgroundColor: visuals[mediaType].progress,
                     borderColor: visuals[mediaType].progress,
-                    borderRadius: 999,
-                    borderSkipped: false,
-                    barThickness: isMobile ? 8 : 9,
-                    categoryPercentage: 0.62,
-                    barPercentage: 0.82,
+                    borderWidth: 1,
+                    hoverBackgroundColor: visuals[mediaType].progress,
+                    hoverBorderColor: visuals[mediaType].progress,
                 })),
             },
             options: {
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: !isMobile,
-                aspectRatio: isMobile ? undefined : Math.max(2.2, 6 / Math.max(labels.length, 1)),
-                layout: {
-                    padding: {
-                        top: 8,
-                        bottom: 4,
-                    },
-                },
+                aspectRatio: isMobile ? undefined : 1.9,
                 plugins: {
                     legend: {
                         display: true,
                         position: 'bottom',
                         labels: {
                             color: colors.textColor,
-                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 14 : 16, weight: 400 },
+                            font: { family: "'Rajdhani', sans-serif", size: 14, weight: 400 },
                             usePointStyle: true,
                             pointStyle: 'circle',
                             boxWidth: 12,
                             boxHeight: 12,
-                            padding: 18,
+                            padding: 16,
                         },
                     },
                     tooltip: {
@@ -4045,18 +4032,18 @@ function renderGenresChart(stats: StatsSummary) {
                 scales: {
                     x: {
                         beginAtZero: true,
-                        display: false,
-                        grid: { display: false },
-                        border: { display: false },
+                        ticks: { color: colors.textColor, precision: 0 },
+                        grid: { color: colors.gridColor },
                     },
                     y: {
                         ticks: {
-                            color: colors.textPrimaryColor,
-                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 13 : 15, weight: 400 },
+                            color: colors.textColor,
+                            font: { family: "'Rajdhani', sans-serif", size: 12, weight: 400 },
                             autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0,
                         },
                         grid: { display: false },
-                        border: { display: false },
                     },
                 },
             } as any,
