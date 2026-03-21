@@ -3052,11 +3052,14 @@ body.light-theme .stats-global-summary-card-title {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.2rem;
+    align-items: start;
 }
 
 .stats-global-favorites-group {
     display: grid;
     gap: 0.8rem;
+    align-self: start;
+    align-content: start;
 }
 
 .stats-global-favorites-title {
@@ -3081,6 +3084,7 @@ body.light-theme .stats-global-summary-card-title {
 .stats-global-favorites-list {
     display: grid;
     gap: 0.65rem;
+    align-content: start;
 }
 
 .stats-global-favorites-card {
