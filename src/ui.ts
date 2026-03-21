@@ -3973,10 +3973,19 @@ function renderGenresChart(stats: StatsSummary) {
             });
         });
         const topGenres = Array.from(genreMap.entries())
-            .map(([name, counts]) => ({ name, counts, total: counts.series + counts.movie + counts.book }))
+            .map(([name, counts]) => ({
+                name,
+                counts,
+                total: counts.series + counts.movie + counts.book,
+                representedMediaCount: (counts.series > 0 ? 1 : 0) + (counts.movie > 0 ? 1 : 0) + (counts.book > 0 ? 1 : 0),
+            }))
             .filter((entry) => entry.total > 0)
-            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-            .slice(0, 8);
+            .sort((a, b) =>
+                b.representedMediaCount - a.representedMediaCount ||
+                b.total - a.total ||
+                a.name.localeCompare(b.name)
+            )
+            .slice(0, 6);
         const labels = topGenres.map((entry) => entry.name);
         const isMobile = window.innerWidth <= 768;
 
@@ -3997,9 +4006,9 @@ function renderGenresChart(stats: StatsSummary) {
                     borderColor: visuals[mediaType].progress,
                     borderRadius: 999,
                     borderSkipped: false,
-                    barThickness: isMobile ? 9 : 10,
-                    categoryPercentage: 0.72,
-                    barPercentage: 0.9,
+                    barThickness: isMobile ? 8 : 9,
+                    categoryPercentage: 0.62,
+                    barPercentage: 0.82,
                 })),
             },
             options: {
@@ -4019,7 +4028,7 @@ function renderGenresChart(stats: StatsSummary) {
                         position: 'bottom',
                         labels: {
                             color: colors.textColor,
-                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 16 : 18 },
+                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 14 : 16, weight: 400 },
                             usePointStyle: true,
                             pointStyle: 'circle',
                             boxWidth: 12,
@@ -4043,7 +4052,7 @@ function renderGenresChart(stats: StatsSummary) {
                     y: {
                         ticks: {
                             color: colors.textPrimaryColor,
-                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 18 : 22, weight: 700 },
+                            font: { family: "'Rajdhani', sans-serif", size: isMobile ? 13 : 15, weight: 400 },
                             autoSkip: false,
                         },
                         grid: { display: false },
