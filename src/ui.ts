@@ -3544,6 +3544,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     if (!DOM.statsGlobalOverview) return;
     const isGlobal = summary.context === 'all';
     DOM.statsGlobalOverview.hidden = !isGlobal;
+    DOM.statsGlobalOverview.style.display = isGlobal ? 'block' : 'none';
     if (DOM.keyStatsGrid) {
         DOM.keyStatsGrid.hidden = isGlobal;
         DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
@@ -3640,10 +3641,22 @@ function getChartColors() {
 function toggleGlobalStatsPanels(isGlobal: boolean): void {
     const watchedCanvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement | null;
     const genresCanvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
-    if (watchedCanvas) watchedCanvas.hidden = isGlobal;
-    if (genresCanvas) genresCanvas.hidden = isGlobal;
-    if (DOM.statsGlobalCompletionPanel) DOM.statsGlobalCompletionPanel.hidden = !isGlobal;
-    if (DOM.statsGlobalGenresPanel) DOM.statsGlobalGenresPanel.hidden = !isGlobal;
+    if (watchedCanvas) {
+        watchedCanvas.hidden = isGlobal;
+        watchedCanvas.style.display = isGlobal ? 'none' : 'block';
+    }
+    if (genresCanvas) {
+        genresCanvas.hidden = isGlobal;
+        genresCanvas.style.display = isGlobal ? 'none' : 'block';
+    }
+    if (DOM.statsGlobalCompletionPanel) {
+        DOM.statsGlobalCompletionPanel.hidden = !isGlobal;
+        DOM.statsGlobalCompletionPanel.style.display = isGlobal ? 'grid' : 'none';
+    }
+    if (DOM.statsGlobalGenresPanel) {
+        DOM.statsGlobalGenresPanel.hidden = !isGlobal;
+        DOM.statsGlobalGenresPanel.style.display = isGlobal ? 'block' : 'none';
+    }
 }
 
 function renderGlobalCompletionPanel(summary: StatsSummary): void {
