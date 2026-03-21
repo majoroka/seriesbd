@@ -2925,12 +2925,14 @@ body.light-theme .stats-global-summary-card {
     margin-top: 2.5rem;
     border-top: 1px solid var(--border-color);
     padding-top: 2.5rem;
+    align-items: start;
 }
 
 .chart-card {
     background-color: var(--bg-card);
     padding: 1.5rem;
     border-radius: 8px;
+    align-self: start;
 }
 
 .chart-card h3 {
