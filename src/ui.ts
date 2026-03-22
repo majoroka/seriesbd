@@ -947,7 +947,7 @@ function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string
         return mediaType === 'book' ? 'A Ler' : 'A Ver';
     }
     if (metricKey === 'completed') {
-        return 'Concluídas';
+        return mediaType === 'series' ? 'Concluídas' : 'Concluídos';
     }
     if (metricKey === 'total') {
         return 'Total';
