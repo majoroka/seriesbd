@@ -10,7 +10,7 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - livros
 - biblioteca
 
-## Estado de execução (18 Mar 2026)
+## Estado de execução (22 Mar 2026)
 
 - Sprint 7 concluído.
 - Sprint 8 concluído.
@@ -20,7 +20,8 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
 - PR-5 em curso para hardening UX, acessibilidade e regressão final.
 - PR-6, PR-7 e PR-8 concluídos e validados em staging.
-- Frente em aberto: **hardening final/QA das Notícias RSS** e **planeamento da vista de Estatísticas Globais acionada pelo card**.
+- PR-10 concluído no escopo atual.
+- Frente em aberto: **hardening final/QA das Notícias RSS** e **polishing incremental de UI/UX**.
 
 ## Decisões já fechadas
 
@@ -145,29 +146,22 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 
 ## Fase 8 - Estatísticas Globais acionadas pelo card
 
-- DV2-T33 Tornar o card `Estatísticas` da dashboard clicável.
-- DV2-T34 Reutilizar `stats-section` em modo `global`, sem criar modal.
-- DV2-T35 Implementar `Resumo Geral`:
-  - total da biblioteca
-  - `Quero Ver / Ler`
-  - `A Ver / Ler`
-  - `Concluídos`
-  - percentagem global
-- DV2-T36 Implementar `Distribuição por Tipo`:
-  - séries
-  - filmes
-  - livros
-- DV2-T37 Implementar `Progresso Global` agregado.
-- DV2-T38 Implementar `Tempo Consumido` consolidado:
-  - séries
-  - filmes
-  - livros
-  - total
-- DV2-T39 Implementar `Top Géneros Globais`.
-- DV2-T40 Implementar `Top Ratings Globais`.
-- DV2-T41 Implementar `Tendência Temporal` global.
-- DV2-T42 Adicionar filtros rápidos: `Tudo`, `Séries`, `Filmes`, `Livros`.
-- DV2-T43 Garantir navegação consistente com botão claro para voltar à dashboard.
+- [x] DV2-T33 Tornar o card `Estatísticas` da dashboard clicável.
+- [x] DV2-T34 Reutilizar `stats-section` em modo `global`, sem criar modal.
+- [x] DV2-T35 Implementar `Resumo Global` consolidado.
+- [x] DV2-T36 Redesenhar o resumo em 3 cartões globais:
+  - [x] `Itens Concluídos`
+  - [x] `Itens por Concluir`
+  - [x] `Progresso Médio`
+- [x] DV2-T37 Implementar donuts por tipo (`Séries`, `Filmes`, `Livros`) no resumo.
+- [x] DV2-T38 Implementar `Top Géneros Globais`.
+- [x] DV2-T39 Implementar `Conteúdos por Ano de Lançamento` global.
+- [x] DV2-T40 Implementar `Os Meus Favoritos` separados por séries, filmes e livros.
+- [x] DV2-T41 Garantir convivência correta com a navegação/filtros existentes.
+- [ ] DV2-T42 Evolução futura opcional:
+  - [ ] tempo consumido agregado
+  - [ ] top ratings globais adicionais
+  - [ ] refinamentos visuais futuros dos gráficos globais
 
 ## Plano de PRs recomendado
 
@@ -179,7 +173,7 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - [x] PR-6: Fundação do agregador RSS + contrato `/api/news`.
 - [x] PR-7: UI do card de notícias e substituição do bloco de gráficos.
 - [x] PR-8: Relevância/filtros + hardening + rollout controlado.
-- [ ] PR-10: Vista de Estatísticas Globais acionada pelo card `Estatísticas`.
+- [x] PR-10: Vista de Estatísticas Globais acionada pelo card `Estatísticas` (escopo atual entregue).
 
 ## Critérios de aceitação globais
 

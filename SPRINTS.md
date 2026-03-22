@@ -2,8 +2,9 @@
 
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
-Próximo bloco funcional: **PR-10 Estatísticas Globais acionadas pelo card da dashboard**.
+Sprint 12: **parcialmente concluído** (estabilidade e equilíbrio incremental do feed RSS já aplicados).  
+Em aberto: **Sprint 12 e Sprint 13 (sanitização/licenciamento/QA final das Notícias RSS na Dashboard)**.  
+Próximo bloco funcional: **UI/UX polishing e hardening final**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -218,12 +219,17 @@ Estado: **parcialmente concluído / em aberto**.
 - [ ] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
 - [ ] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
 - [ ] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
+- [x] S12-T05 Aumentar o carrossel de notícias da dashboard para até `20` itens.
+- [x] S12-T06 Balancear a seleção final de notícias por fonte, evitando concentração excessiva numa única origem.
+- [x] S12-T07 Melhorar compatibilidade upstream de feeds RSS com headers browser-like e fallback `www` para `ScreenRant` e `MovieWeb`.
 
 ### Critérios de aceitação
 - [ ] Feed não introduz conteúdo inseguro na app.
 - [ ] Custos e chamadas externas mantêm-se controlados com cache.
 - [ ] Erros por fonte ficam rastreáveis em logs.
 - [ ] Créditos de origem visíveis nas notícias.
+- [x] O carrossel mostra até `20` notícias quando existirem itens válidos.
+- [x] `ScreenRant` e `MovieWeb` deixam de falhar por incompatibilidade simples de fetch no Worker.
 
 ## Sprint 13: QA, Rollout e Publicação
 
@@ -277,7 +283,7 @@ Estado: **concluído**.
 
 ## PR-10: Estatísticas Globais (ação do card `Estatísticas`)
 
-Estado: **planeado**.
+Estado: **concluído no escopo atual**.
 
 ### Objetivo
 - Tornar o card `Estatísticas` da dashboard acionável.
@@ -285,40 +291,33 @@ Estado: **planeado**.
 - Manter coerência de navegação com `Séries`, `Filmes`, `Livros` e `Biblioteca`, evitando modais ou fluxos paralelos.
 
 ### Tarefas
-- [ ] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
-- [ ] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
-- [ ] P10-T03 Implementar bloco `Resumo Geral`:
-  - [ ] total global
-  - [ ] quero ver / ler
-  - [ ] a ver / ler
-  - [ ] concluídos
-  - [ ] percentagem global de conclusão
-- [ ] P10-T04 Implementar bloco `Distribuição por Tipo`:
-  - [ ] séries
-  - [ ] filmes
-  - [ ] livros
-- [ ] P10-T05 Implementar bloco `Progresso Global` consolidado (`por iniciar`, `em progresso`, `concluídos`).
-- [ ] P10-T06 Implementar bloco `Tempo Consumido`:
-  - [ ] horas de séries
-  - [ ] horas de filmes
-  - [ ] estimativa de leitura para livros
-  - [ ] total agregado
-- [ ] P10-T07 Implementar bloco `Top Géneros Globais`.
-- [ ] P10-T08 Implementar bloco `Top Ratings Globais` misturando séries, filmes e livros com badge de tipo.
-- [ ] P10-T09 Implementar bloco `Tendência Temporal` (conclusões ou horas por mês).
-- [ ] P10-T10 Adicionar filtros rápidos no topo da vista global:
-  - [ ] Tudo
-  - [ ] Séries
-  - [ ] Filmes
-  - [ ] Livros
-- [ ] P10-T11 Garantir navegação consistente:
-  - [ ] clique no card abre a vista
-  - [ ] botão claro para voltar à dashboard
-  - [ ] foco e scroll corretos ao navegar
+- [x] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
+- [x] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
+- [x] P10-T03 Implementar `Resumo Global` no topo da vista com métricas consolidadas.
+- [x] P10-T04 Redesenhar o resumo em 3 cartões globais:
+  - [x] `Itens Concluídos`
+  - [x] `Itens por Concluir`
+  - [x] `Progresso Médio`
+- [x] P10-T05 Implementar donuts por secção (`Séries`, `Filmes`, `Livros`) no resumo global.
+- [x] P10-T06 Implementar `Top Géneros na Biblioteca` no modo global com `Chart.js`.
+- [x] P10-T07 Implementar `Conteúdos por Ano de Lançamento` no modo global.
+- [x] P10-T08 Implementar `Os Meus Favoritos` separados por:
+  - [x] séries
+  - [x] filmes
+  - [x] livros
+- [x] P10-T09 Manter as estatísticas por domínio (`Séries`, `Filmes`, `Livros`) sem regressões.
+- [x] P10-T10 Garantir navegação consistente:
+  - [x] clique no card abre a vista
+  - [x] foco e scroll corretos ao navegar
+  - [x] convivência correta com filtros existentes `Tudo / Séries / Filmes / Livros`
 
 ### Critérios de aceitação
-- [ ] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
-- [ ] A vista global mostra métricas consolidadas reais da biblioteca inteira.
-- [ ] Os filtros `Tudo / Séries / Filmes / Livros` funcionam sobre a mesma vista.
-- [ ] O layout mantém coerência visual com a dashboard e com as secções já existentes.
-- [ ] Não há regressões nas estatísticas atuais por domínio.
+- [x] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
+- [x] A vista global mostra métricas consolidadas reais da biblioteca inteira.
+- [x] O layout mantém coerência visual com a dashboard e com as secções já existentes.
+- [x] Não há regressões nas estatísticas atuais por domínio.
+
+### Expansão futura opcional
+- [ ] P10-F01 Tempo consumido consolidado (séries, filmes, livros e total).
+- [ ] P10-F02 Top ratings globais adicionais, distintos dos favoritos.
+- [ ] P10-F03 Polishing visual adicional dos gráficos globais conforme futura revisão UX.
