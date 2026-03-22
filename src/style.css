@@ -3157,15 +3157,15 @@ body.light-theme .stats-global-summary-card-title {
 }
 
 .stats-global-favorites-title--series {
-    color: var(--media-series-strong);
+    color: var(--media-series);
 }
 
 .stats-global-favorites-title--movie {
-    color: var(--media-movie-strong);
+    color: var(--media-movie);
 }
 
 .stats-global-favorites-title--book {
-    color: var(--media-book-strong);
+    color: var(--media-book);
 }
 
 .stats-global-favorites-list {

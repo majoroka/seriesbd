@@ -3670,7 +3670,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
-        const colors = mediaSummaries.map(({ visual }) => visual.completed);
+        const colors = mediaSummaries.map(({ visual }) => visual.accent);
         const labels = mediaSummaries.map(({ visual }) => visual.label);
         const centerText = `${metric.total}${metric.suffix}`;
 
@@ -4060,11 +4060,11 @@ function renderGenresChart(stats: StatsSummary) {
                 datasets: (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
                     label: visuals[mediaType].label,
                     data: topGenres.map((entry) => entry.counts[mediaType]),
-                    backgroundColor: visuals[mediaType].progress,
-                    borderColor: visuals[mediaType].progress,
+                    backgroundColor: visuals[mediaType].accent,
+                    borderColor: visuals[mediaType].accent,
                     borderWidth: 1,
-                    hoverBackgroundColor: visuals[mediaType].progress,
-                    hoverBorderColor: visuals[mediaType].progress,
+                    hoverBackgroundColor: visuals[mediaType].accent,
+                    hoverBorderColor: visuals[mediaType].accent,
                 })),
             },
             options: {
@@ -4230,8 +4230,8 @@ function renderAiredYearsChart(stats: StatsSummary) {
             label: getStatsMediaVisual(mediaType).label,
             data: allYears.map((year) => countsByMedia[mediaType][year] || 0),
             fill: false,
-            borderColor: visuals[mediaType].completed,
-            backgroundColor: visuals[mediaType].completed,
+            borderColor: visuals[mediaType].accent,
+            backgroundColor: visuals[mediaType].accent,
             tension: isMobile ? 0 : 0.25,
             pointRadius: 3,
             pointHoverRadius: 5,
