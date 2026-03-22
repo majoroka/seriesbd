@@ -1,8 +1,9 @@
 # Plano de Execução por Sprints
 
-Estado atual: **Sprint 1 a Sprint 8 concluídos**.  
+Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Em planeamento: **Sprint 9 a Sprint 13 (Notícias RSS na Dashboard)**.
+Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
+Próximo bloco funcional: **PR-10 Estatísticas Globais acionadas pelo card da dashboard**.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -160,57 +161,57 @@ Estado: **concluído**.
 
 ## Sprint 9: Notícias RSS (Fundação Backend + Contrato)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S9-T01 Definir catálogo inicial de fontes RSS (séries/filmes/livros) e respetiva prioridade.
-- [ ] S9-T02 Criar endpoint agregador `GET /api/news` em Cloudflare Pages Functions.
-- [ ] S9-T03 Normalizar payload de notícia (`id`, `title`, `url`, `source`, `publishedAt`, `mediaTypeHint`, `imageUrl`, `summary`).
-- [ ] S9-T04 Implementar deduplicação por `guid/link` e ordenação por data de publicação.
-- [ ] S9-T05 Implementar extração de imagem com fallback (`media:content`, `media:thumbnail`, `enclosure`, parsing de conteúdo).
-- [ ] S9-T06 Introduzir cache e timeouts por fonte para evitar bloqueio da app.
+- [x] S9-T01 Definir catálogo inicial de fontes RSS (séries/filmes/livros) e respetiva prioridade.
+- [x] S9-T02 Criar endpoint agregador `GET /api/news` em Cloudflare Pages Functions.
+- [x] S9-T03 Normalizar payload de notícia (`id`, `title`, `url`, `source`, `publishedAt`, `mediaTypeHint`, `imageUrl`, `summary`).
+- [x] S9-T04 Implementar deduplicação por `guid/link` e ordenação por data de publicação.
+- [x] S9-T05 Implementar extração de imagem com fallback (`media:content`, `media:thumbnail`, `enclosure`, parsing de conteúdo).
+- [x] S9-T06 Introduzir cache e timeouts por fonte para evitar bloqueio da app.
 
 ### Critérios de aceitação
-- [ ] `GET /api/news` responde de forma estável mesmo com falha parcial de fontes.
-- [ ] A resposta vem já normalizada para consumo direto no frontend.
-- [ ] A maioria das notícias chega com `imageUrl` válido quando a fonte disponibiliza imagem.
-- [ ] Falhas de feed não quebram a dashboard.
+- [x] `GET /api/news` responde de forma estável mesmo com falha parcial de fontes.
+- [x] A resposta vem já normalizada para consumo direto no frontend.
+- [x] A maioria das notícias chega com `imageUrl` válido quando a fonte disponibiliza imagem.
+- [x] Falhas de feed não quebram a dashboard.
 
 ## Sprint 10: Dashboard Notícias (Substituir Gráficos)
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S10-T01 Remover da dashboard o card atual de `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
-- [ ] S10-T02 Criar no mesmo espaço o card `NOTÍCIAS` com layout coerente ao tema atual.
-- [ ] S10-T03 Mostrar cada notícia com imagem (quando existir), título, fonte, data e tipo (série/filme/livro).
-- [ ] S10-T04 Implementar estados de UX (`loading`, `vazio`, `erro`, `retry`).
-- [ ] S10-T05 Garantir comportamento responsivo sem overflow (desktop/tablet/mobile).
+- [x] S10-T01 Remover da dashboard o card atual de `GRÁFICO DE DESEMPENHO` / `Distribuição por Géneros`.
+- [x] S10-T02 Criar no mesmo espaço o card `NOTÍCIAS` com layout coerente ao tema atual.
+- [x] S10-T03 Mostrar cada notícia com imagem (quando existir), título, fonte, data e tipo (série/filme/livro).
+- [x] S10-T04 Implementar estados de UX (`loading`, `vazio`, `erro`, `retry`).
+- [x] S10-T05 Garantir comportamento responsivo sem overflow (desktop/tablet/mobile).
 
 ### Critérios de aceitação
-- [ ] A zona dos gráficos é totalmente substituída por notícias.
-- [ ] O card de notícias mantém consistência visual com o dashboard.
-- [ ] Notícias sem imagem usam fallback visual sem quebrar layout.
-- [ ] Não há regressões funcionais em `Recentemente vistos/lidos`, `Sugestões` e `Lançamentos`.
+- [x] A zona dos gráficos é totalmente substituída por notícias.
+- [x] O card de notícias mantém consistência visual com o dashboard.
+- [x] Notícias sem imagem usam fallback visual sem quebrar layout.
+- [x] Não há regressões funcionais em `Recentemente vistos/lidos`, `Sugestões` e `Lançamentos`.
 
 ## Sprint 11: Relevância e Personalização de Notícias
 
-Estado: **planeado**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S11-T01 Classificar notícias por `mediaType` (série/filme/livro) com heurística por fonte/título/tags.
-- [ ] S11-T02 Priorizar notícias alinhadas com o histórico da biblioteca do utilizador autenticado.
-- [ ] S11-T03 Definir fallback para utilizador sem histórico (mistura equilibrada por domínio).
-- [ ] S11-T04 Adicionar filtros rápidos de notícias por domínio (Todos, Séries, Filmes, Livros).
+- [x] S11-T01 Classificar notícias por `mediaType` (série/filme/livro) com heurística por fonte/título/tags.
+- [x] S11-T02 Priorizar notícias alinhadas com o histórico da biblioteca do utilizador autenticado.
+- [x] S11-T03 Definir fallback para utilizador sem histórico (mistura equilibrada por domínio).
+- [x] S11-T04 Adicionar filtros rápidos de notícias por domínio (Todos, Séries, Filmes, Livros).
 
 ### Critérios de aceitação
-- [ ] Utilizadores com histórico recebem notícias mais alinhadas ao seu consumo.
-- [ ] Utilizadores sem histórico recebem feed útil e equilibrado.
-- [ ] Filtros por domínio funcionam sem recarregar a página.
+- [x] Utilizadores com histórico recebem notícias mais alinhadas ao seu consumo.
+- [x] Utilizadores sem histórico recebem feed útil e equilibrado.
+- [x] Filtros por domínio funcionam sem recarregar a página.
 
 ## Sprint 12: Hardening de Feed (Qualidade, Segurança, Custos)
 
-Estado: **planeado**.
+Estado: **parcialmente concluído / em aberto**.
 
 ### Tarefas
 - [ ] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
@@ -239,3 +240,85 @@ Estado: **planeado**.
 - [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
 - [ ] Rollback testado e documentado.
 - [ ] Dashboard estável após janela inicial de monitorização.
+
+## PR-9: Fallback ISBN para Livros (Metadata + Capa)
+
+Estado: **concluído**.
+
+### Tarefas
+- [x] P9-T01 Confirmar onde o ISBN está disponível no fluxo atual de detalhe/pesquisa de livros.
+- [x] P9-T02 Criar endpoint server-side de fallback por ISBN.
+- [x] P9-T03 Testar fornecedores editoriais iniciais `Bertrand` e `Wook` com validação exata por ISBN.
+- [x] P9-T04 Rejeitar `Bertrand` e `Wook` por inviabilidade técnica em automação backend.
+- [x] P9-T05 Validar `Presença` como fornecedor viável com pesquisa/lookup por JSON do Shopify.
+- [x] P9-T06 Extrair metadata mínima necessária:
+  - [x] sinopse
+  - [x] imagem de capa
+  - [x] fonte
+- [x] P9-T07 Servir capas externas por proxy same-origin, sem hotlink direto no browser.
+- [x] P9-T08 Integrar fallback no fluxo atual apenas quando Google Books e Open Library não trouxerem capa e/ou sinopse válidas.
+- [x] P9-T09 Garantir que dados das APIs principais nunca são substituídos por fallback menos fiável quando já existem campos válidos.
+- [x] P9-T10 Reforçar lookup oficial por ISBN em Google Books e Open Library antes do fallback editorial.
+
+### Critérios de aceitação
+- [x] Pesquisa por ISBN continua suportada com fontes oficiais como prioridade.
+- [x] `Presença` só entra como último recurso, com validação estrita por ISBN.
+- [x] Capas externas de fallback são servidas pela app via proxy same-origin.
+- [x] Livros sem capa/sinopse nas APIs oficiais podem ser enriquecidos sem quebrar a app.
+- [x] `Bertrand` e `Wook` ficam explicitamente fora da integração ativa por inviabilidade técnica.
+- [ ] P9-T10 Adicionar logs mínimos e testes unitários para match por ISBN, cache e rejeição de resultados ambíguos.
+
+### Critérios de aceitação
+- [ ] O fallback só corre quando faltarem dados relevantes no livro.
+- [ ] Nenhum resultado é aceite sem correspondência exata por ISBN.
+- [ ] Capa e sinopse de fallback são obtidas apenas via backend controlado.
+- [ ] O frontend nunca usa diretamente URLs externas dos fornecedores fallback.
+- [ ] Se o fallback falhar, a app continua funcional e sem regressões nos detalhes de livros.
+
+## PR-10: Estatísticas Globais (ação do card `Estatísticas`)
+
+Estado: **planeado**.
+
+### Objetivo
+- Tornar o card `Estatísticas` da dashboard acionável.
+- Reutilizar a secção de estatísticas já existente para apresentar uma vista **global e consolidada** da biblioteca.
+- Manter coerência de navegação com `Séries`, `Filmes`, `Livros` e `Biblioteca`, evitando modais ou fluxos paralelos.
+
+### Tarefas
+- [ ] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
+- [ ] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
+- [ ] P10-T03 Implementar bloco `Resumo Geral`:
+  - [ ] total global
+  - [ ] quero ver / ler
+  - [ ] a ver / ler
+  - [ ] concluídos
+  - [ ] percentagem global de conclusão
+- [ ] P10-T04 Implementar bloco `Distribuição por Tipo`:
+  - [ ] séries
+  - [ ] filmes
+  - [ ] livros
+- [ ] P10-T05 Implementar bloco `Progresso Global` consolidado (`por iniciar`, `em progresso`, `concluídos`).
+- [ ] P10-T06 Implementar bloco `Tempo Consumido`:
+  - [ ] horas de séries
+  - [ ] horas de filmes
+  - [ ] estimativa de leitura para livros
+  - [ ] total agregado
+- [ ] P10-T07 Implementar bloco `Top Géneros Globais`.
+- [ ] P10-T08 Implementar bloco `Top Ratings Globais` misturando séries, filmes e livros com badge de tipo.
+- [ ] P10-T09 Implementar bloco `Tendência Temporal` (conclusões ou horas por mês).
+- [ ] P10-T10 Adicionar filtros rápidos no topo da vista global:
+  - [ ] Tudo
+  - [ ] Séries
+  - [ ] Filmes
+  - [ ] Livros
+- [ ] P10-T11 Garantir navegação consistente:
+  - [ ] clique no card abre a vista
+  - [ ] botão claro para voltar à dashboard
+  - [ ] foco e scroll corretos ao navegar
+
+### Critérios de aceitação
+- [ ] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
+- [ ] A vista global mostra métricas consolidadas reais da biblioteca inteira.
+- [ ] Os filtros `Tudo / Séries / Filmes / Livros` funcionam sobre a mesma vista.
+- [ ] O layout mantém coerência visual com a dashboard e com as secções já existentes.
+- [ ] Não há regressões nas estatísticas atuais por domínio.

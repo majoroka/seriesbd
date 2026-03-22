@@ -6,7 +6,7 @@
     
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <title>seriesBD</title>
+    <title>MediaDex</title>
 
     <!--
         A CSP é definida por ambiente:
@@ -22,6 +22,11 @@
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+
     <!-- O CSS será importado via JavaScript (main.ts) -->
 </head>
 <body>
@@ -30,10 +35,10 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1 class="brand-logo">
-                    <span class="brand-mark" aria-hidden="true">
-                        <img src="/mediadex-mark.svg" alt="">
+                    <span class="brand-logo-image-wrap">
+                        <img class="brand-logo-image brand-logo-image--light" src="/logo_tema_claro.svg" alt="MediaDex">
+                        <img class="brand-logo-image brand-logo-image--dark" src="/logo_tema_escuro.svg" alt="MediaDex">
                     </span>
-                    <span class="brand-media">Media</span><span class="brand-dex">Dex</span>
                 </h1>
                 <div id="mobile-topbar-controls" class="mobile-topbar-controls" hidden>
                     <button
@@ -64,6 +69,7 @@
                     <ul id="sidebar-submenu-list">
                         <li><a href="#" class="nav-link" data-target="watchlist-section"><i class="fas fa-star"></i> <span class="nav-link-label">Quero Ver</span></a></li>
                         <li><a href="#" class="nav-link" data-target="unseen-section"><i class="fas fa-eye-slash"></i> <span class="nav-link-label">A Ver</span></a></li>
+                        <li><a href="#" class="nav-link" data-target="all-series-section" data-library-status="archive"><i class="fas fa-circle-check"></i> <span class="nav-link-label">Concluídos</span></a></li>
                         <li class="separator"><a href="#" class="nav-link" data-target="next-aired-section"><i class="fas fa-calendar-alt"></i> <span class="nav-link-label">Próximo Episódio</span></a></li>
                         <li class="separator"><a href="#" class="nav-link" data-target="trending-section"><i class="fas fa-fire"></i> <span class="nav-link-label">Tendências</span></a></li>
                         <li><a href="#" class="nav-link" data-target="popular-section"><i class="fas fa-poll"></i> <span class="nav-link-label">Top Rated</span></a></li>
@@ -167,73 +173,101 @@
                         <div class="media-dashboard-grid media-dashboard-grid--kpi" role="list" aria-label="Secções principais da biblioteca">
                             <button class="dashboard-media-card" type="button" data-media-type="series" aria-label="Abrir secção de séries">
                                 <div class="dashboard-media-card-header">
-                                    <span class="dashboard-media-card-icon"><i class="fas fa-tv" aria-hidden="true"></i></span>
-                                    <h3>Séries</h3>
+                                    <div class="dashboard-media-card-header-main">
+                                        <span class="dashboard-media-card-icon"><i class="fas fa-tv" aria-hidden="true"></i></span>
+                                        <h3>Séries</h3>
+                                    </div>
+                                    <span class="dashboard-media-card-total-badge" data-metric-total>0</span>
                                 </div>
                                 <p class="dashboard-media-card-subtitle">Acompanhar temporadas, episódios e progresso.</p>
                                 <dl class="dashboard-media-card-metrics">
-                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-pending"><dt data-metric-label="pending">Quero Ver</dt><dd data-metric="pending">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-progress"><dt data-metric-label="in-progress">A Ver</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-completed"><dt data-metric-label="completed">Concluídas</dt><dd data-metric="completed">0</dd></div>
                                 </dl>
                             </button>
                             <button class="dashboard-media-card" type="button" data-media-type="movie" aria-label="Abrir secção de filmes">
                                 <div class="dashboard-media-card-header">
-                                    <span class="dashboard-media-card-icon"><i class="fas fa-film" aria-hidden="true"></i></span>
-                                    <h3>Filmes</h3>
+                                    <div class="dashboard-media-card-header-main">
+                                        <span class="dashboard-media-card-icon"><i class="fas fa-film" aria-hidden="true"></i></span>
+                                        <h3>Filmes</h3>
+                                    </div>
+                                    <span class="dashboard-media-card-total-badge" data-metric-total>0</span>
                                 </div>
                                 <p class="dashboard-media-card-subtitle">Gerir vistos, por ver e detalhes rápidos.</p>
                                 <dl class="dashboard-media-card-metrics">
-                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-pending"><dt data-metric-label="pending">Quero Ver</dt><dd data-metric="pending">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-progress"><dt data-metric-label="in-progress">A Ver</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-completed"><dt data-metric-label="completed">Concluídos</dt><dd data-metric="completed">0</dd></div>
                                 </dl>
                             </button>
                             <button class="dashboard-media-card" type="button" data-media-type="book" aria-label="Abrir secção de livros">
                                 <div class="dashboard-media-card-header">
-                                    <span class="dashboard-media-card-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
-                                    <h3>Livros</h3>
+                                    <div class="dashboard-media-card-header-main">
+                                        <span class="dashboard-media-card-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
+                                        <h3>Livros</h3>
+                                    </div>
+                                    <span class="dashboard-media-card-total-badge" data-metric-total>0</span>
                                 </div>
                                 <p class="dashboard-media-card-subtitle">Controlar leitura, progresso e concluídos.</p>
                                 <dl class="dashboard-media-card-metrics">
-                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                    <div><dt>Em progresso</dt><dd data-metric="in-progress">0</dd></div>
-                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-pending"><dt data-metric-label="pending">Quero Ler</dt><dd data-metric="pending">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-progress"><dt data-metric-label="in-progress">A Ler</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-completed"><dt data-metric-label="completed">Concluídos</dt><dd data-metric="completed">0</dd></div>
                                 </dl>
                             </button>
                             <button class="dashboard-media-card dashboard-media-card--overall" type="button" data-media-type="all" aria-label="Estatísticas gerais da biblioteca">
                                 <div class="dashboard-media-card-header">
-                                    <span class="dashboard-media-card-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
-                                    <h3>Estatísticas</h3>
+                                    <div class="dashboard-media-card-header-main">
+                                        <span class="dashboard-media-card-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                                        <h3>Estatísticas</h3>
+                                    </div>
+                                    <span class="dashboard-media-card-total-badge" data-metric-total>0</span>
                                 </div>
                                 <p class="dashboard-media-card-subtitle">Visão consolidada do consumo em toda a biblioteca.</p>
                                 <dl class="dashboard-media-card-metrics">
-                                    <div><dt>Total</dt><dd data-metric="total">0</dd></div>
-                                    <div><dt>Ativos</dt><dd data-metric="in-progress">0</dd></div>
-                                    <div><dt>Concluídos</dt><dd data-metric="completed">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-pending"><dt data-metric-label="pending">Quero Ver / Ler</dt><dd data-metric="pending">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-progress"><dt data-metric-label="in-progress">A Ver / Ler</dt><dd data-metric="in-progress">0</dd></div>
+                                    <div class="dashboard-media-card-metric-row metric-completed"><dt data-metric-label="completed">Concluídos</dt><dd data-metric="completed">0</dd></div>
                                 </dl>
                             </button>
                         </div>
 
-                        <section class="dashboard-panel dashboard-panel-analytics dashboard-panel-news" aria-label="Notícias de séries, filmes e livros">
+                        <section class="dashboard-panel dashboard-panel-news" aria-label="Notícias de séries, filmes e livros">
                             <div class="dashboard-panel-header">
                                 <h3>NOTÍCIAS</h3>
+                                <div id="dashboard-news-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="news" aria-label="Filtrar notícias por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="news" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="news" data-dashboard-filter="book">Livros</button>
+                                </div>
                             </div>
-                            <div id="dashboard-news-list" class="dashboard-news-grid" role="list" aria-label="Últimas notícias agregadas"></div>
+                            <div id="dashboard-news-list" class="dashboard-recent-carousel dashboard-news-carousel" role="list" aria-label="Últimas notícias agregadas"></div>
                         </section>
 
-                        <aside class="media-dashboard-side-column">
-                            <section class="dashboard-panel dashboard-launches-panel" aria-label="Próximos lançamentos aguardados">
-                                <div class="dashboard-panel-header">
-                                    <h3>PRÓXIMOS LANÇAMENTOS AGUARDADOS</h3>
+                        <section class="dashboard-panel dashboard-launches-panel" aria-label="Próximos lançamentos aguardados">
+                            <div class="dashboard-panel-header">
+                                <h3>PRÓXIMOS LANÇAMENTOS AGUARDADOS</h3>
+                                <div id="dashboard-upcoming-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="upcoming" aria-label="Filtrar lançamentos por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="upcoming" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="upcoming" data-dashboard-filter="book">Livros</button>
                                 </div>
-                                <div id="dashboard-upcoming-list" class="dashboard-upcoming-list"></div>
-                            </section>
-                        </aside>
+                            </div>
+                            <div id="dashboard-upcoming-list" class="dashboard-recent-carousel dashboard-upcoming-carousel" role="list" aria-label="Próximos lançamentos"></div>
+                        </section>
 
                         <section class="dashboard-panel dashboard-panel-recent" aria-label="Conteúdos vistos ou lidos recentemente">
                             <div class="dashboard-panel-header">
                                 <h3>RECENTEMENTE VISTOS / LIDOS</h3>
+                                <div id="dashboard-recent-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="recent" aria-label="Filtrar conteúdos recentes por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="recent" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="recent" data-dashboard-filter="book">Livros</button>
+                                </div>
                             </div>
                             <div id="dashboard-recent-carousel" class="dashboard-recent-carousel" role="list"></div>
                         </section>
@@ -241,6 +275,12 @@
                         <section class="dashboard-panel dashboard-panel-suggestions" aria-label="Sugestões personalizadas">
                             <div class="dashboard-panel-header">
                                 <h3>SUGESTÕES PARA TI</h3>
+                                <div id="dashboard-suggestions-filters" class="dashboard-panel-filters" data-dashboard-panel-filters="suggestions" aria-label="Filtrar sugestões por tipo">
+                                    <button type="button" class="dashboard-panel-filter is-active" data-dashboard-panel="suggestions" data-dashboard-filter="all">Todos</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="series">Séries</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="movie">Filmes</button>
+                                    <button type="button" class="dashboard-panel-filter" data-dashboard-panel="suggestions" data-dashboard-filter="book">Livros</button>
+                                </div>
                             </div>
                             <div id="dashboard-suggestions-carousel" class="dashboard-recent-carousel" role="list"></div>
                         </section>
@@ -318,6 +358,13 @@
                         <h2 id="stats-section-title"><i class="fas fa-chart-pie"></i> Estatísticas</h2>
                         <button id="export-stats-btn" class="search-bar-button" style="align-self: center;">Exportar Estatísticas</button>
                     </div>
+                    <section id="stats-global-overview" class="stats-global-overview" hidden aria-label="Resumo global da biblioteca">
+                        <div class="stats-global-overview-header">
+                            <h3>Resumo Global</h3>
+                            <p>Visão consolidada da tua biblioteca.</p>
+                        </div>
+                        <div id="stats-global-summary-grid" class="stats-global-summary-grid"></div>
+                    </section>
                     <div class="key-stats-grid">
                         <div class="key-stat-card watched-episodes">
                             <h4 id="stats-primary-label">Episódios Vistos</h4>
@@ -336,10 +383,17 @@
                         <div class="chart-card">
                             <h3 id="stats-doughnut-title">Episódios Vistos vs. Por Ver</h3>
                             <canvas id="watched-unwatched-chart"></canvas>
+                            <div id="stats-global-completion-panel" class="stats-global-completion-panel" hidden>
+                                <div id="stats-global-completion-ring" class="stats-global-completion-ring" aria-label="Concluídos vs. por concluir por secção"></div>
+                                <div id="stats-global-completion-legend" class="stats-global-completion-legend"></div>
+                            </div>
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-genres-title">Top Géneros na Biblioteca</h3>
                             <canvas id="genres-chart"></canvas>
+                            <div id="stats-global-genres-panel" class="stats-global-genres-panel" hidden>
+                                <div id="stats-global-genres-list" class="stats-global-genres-list"></div>
+                            </div>
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-years-title">Séries por Ano de Lançamento</h3>

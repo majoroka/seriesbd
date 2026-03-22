@@ -740,6 +740,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
         return {
             'watchlist-section': 'Quero Ler',
             'unseen-section': 'A Ler',
+            'all-series-section': 'Concluídos',
             'next-aired-section': 'Próximo Episódio',
             'trending-section': 'Tendências',
             'popular-section': 'Top Rated',
@@ -751,6 +752,7 @@ function getSubmenuLabels(mediaTarget: SubmenuMediaTarget): Record<string, strin
     return {
         'watchlist-section': 'Quero Ver',
         'unseen-section': 'A Ver',
+        'all-series-section': 'Concluídos',
         'next-aired-section': 'Próximo Episódio',
         'trending-section': 'Tendências',
         'popular-section': 'Top Rated',
@@ -830,6 +832,31 @@ function getMainMenuTargetFromSection(targetSection: string): MainMenuTarget {
     if (targetSection === 'media-dashboard-section') return 'dashboard';
     if (targetSection === 'all-series-section') return 'library';
     return activeSubmenuMediaTarget;
+}
+
+async function handleDashboardMediaCardNavigation(cardMediaType: AllSeriesMediaFilter): Promise<void> {
+    if (cardMediaType === 'all') {
+        updateMainMenuActiveState('dashboard');
+        UI.setScopedStatsMediaType('all');
+        UI.showSection('stats-section');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
+
+    await setAllSeriesMediaFilterPreference(cardMediaType);
+    await setAllSeriesStatusFilterPreference('all');
+    S.setAllSeriesGenreFilter('all');
+    if (DOM.allSeriesGenreFilter) {
+        DOM.allSeriesGenreFilter.value = 'all';
+    }
+    UI.renderAllSeries();
+    UI.showSection('all-series-section');
+    if (cardMediaType === 'series' || cardMediaType === 'movie' || cardMediaType === 'book') {
+        updateMainMenuActiveState(cardMediaType);
+    } else {
+        updateMainMenuActiveState('library');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function navigateMainMenu(target: MainMenuTarget): Promise<void> {
@@ -3334,7 +3361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     DOM.mainNavLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', async (e) => {
             e.preventDefault();
             const targetId = (link as HTMLElement).dataset.target;
             if (targetId) {
@@ -3342,6 +3369,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.renderWatchlist();
                 } else if (targetId === 'unseen-section') {
                     UI.renderUnseen();
+                } else if (targetId === 'all-series-section') {
+                    const requestedStatus = normalizeAllSeriesStatusFilter((link as HTMLElement).dataset.libraryStatus, 'all');
+                    await setAllSeriesMediaFilterPreference(activeSubmenuMediaTarget);
+                    await setAllSeriesStatusFilterPreference(requestedStatus);
+                    UI.renderAllSeries();
+                    UI.showSection(targetId);
+                    updateMainMenuActiveState(activeSubmenuMediaTarget);
+                    return;
                 } else if (targetId === 'next-aired-section') {
                     if (activeSubmenuMediaTarget !== 'series') {
                         UI.showNotification('Próximo Episódio disponível apenas para séries.');
@@ -3414,25 +3449,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMainMenuActiveState('dashboard');
     });
 
-    DOM.mediaDashboardSection?.addEventListener('click', async (event) => {
-        const target = event.target as HTMLElement;
-        const card = target.closest<HTMLButtonElement>('.dashboard-media-card');
-        if (!card) return;
-        const cardMediaType = normalizeAllSeriesMediaFilter(card.dataset.mediaType, 'all');
-        if (cardMediaType === 'all') return;
-        await setAllSeriesMediaFilterPreference(cardMediaType);
-        await setAllSeriesStatusFilterPreference('all');
-        S.setAllSeriesGenreFilter('all');
-        if (DOM.allSeriesGenreFilter) {
-            DOM.allSeriesGenreFilter.value = 'all';
-        }
-        UI.renderAllSeries();
-        UI.showSection('all-series-section');
-        if (cardMediaType === 'series' || cardMediaType === 'movie' || cardMediaType === 'book') {
-            updateMainMenuActiveState(cardMediaType);
-        } else {
-            updateMainMenuActiveState('library');
-        }
+    DOM.dashboardMediaCards.forEach((card) => {
+        card.addEventListener('click', async () => {
+            const cardMediaType = normalizeAllSeriesMediaFilter(card.dataset.mediaType, 'all');
+            await handleDashboardMediaCardNavigation(cardMediaType);
+        });
     });
 
     // Header Search
@@ -3560,6 +3581,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId && s.media_type === mediaType);
             if (seriesToAdd) {
                 await handleQuickAddAndMarkAllSeen(seriesToAdd, markAllSeenQuickBtn as HTMLButtonElement);
+            }
+            return;
+        }
+
+        const dashboardPanelFilterBtn = target.closest('.dashboard-panel-filter') as HTMLButtonElement | null;
+        if (dashboardPanelFilterBtn) {
+            const panel = dashboardPanelFilterBtn.dataset.dashboardPanel;
+            const filter = dashboardPanelFilterBtn.dataset.dashboardFilter;
+            if (
+                (panel === 'news' || panel === 'upcoming' || panel === 'recent' || panel === 'suggestions')
+                && (filter === 'all' || filter === 'series' || filter === 'movie' || filter === 'book')
+            ) {
+                UI.setDashboardPanelFilter(panel, filter);
             }
             return;
         }

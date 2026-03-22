@@ -2,6 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
+import { DASHBOARD_NEWS_ENHANCED_ENABLED } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
@@ -49,6 +50,19 @@ function getMediaTypeChipClass(mediaType: MediaType, extraClass = ''): string {
     return extraClass ? `${base} ${extraClass}` : base;
 }
 
+function buildExternalImageProxyUrl(rawUrl: string): string {
+    const normalizedUrl = String(rawUrl || '').trim();
+    if (!normalizedUrl) return '';
+    if (normalizedUrl.startsWith('/api/news-image?url=')) return normalizedUrl;
+    if (/^https?:\/\//i.test(normalizedUrl)) {
+        return `/api/news-image?url=${encodeURIComponent(normalizedUrl)}`;
+    }
+    if (normalizedUrl.startsWith('//')) {
+        return `/api/news-image?url=${encodeURIComponent(`https:${normalizedUrl}`)}`;
+    }
+    return normalizedUrl;
+}
+
 function buildPosterUrl(
     posterPath: string | null | undefined,
     tmdbSize: string,
@@ -57,8 +71,9 @@ function buildPosterUrl(
     if (!posterPath) return fallback;
     const normalizedPath = String(posterPath).trim();
     if (!normalizedPath) return fallback;
-    if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
-    if (normalizedPath.startsWith('//')) return `https:${normalizedPath}`;
+    if (/^https?:\/\//i.test(normalizedPath) || normalizedPath.startsWith('//')) {
+        return buildExternalImageProxyUrl(normalizedPath);
+    }
     return `https://image.tmdb.org/t/p/${tmdbSize}${normalizedPath}`;
 }
 
@@ -691,6 +706,7 @@ type LibraryStatusFilter = 'watchlist' | 'unseen' | 'archive';
 type DashboardCardType = MediaType | 'all';
 type DashboardMetrics = {
     total: number;
+    pending: number;
     inProgress: number;
     completed: number;
 };
@@ -704,13 +720,15 @@ type DashboardUpcomingEntry = {
     item: Series;
     date: Date;
     label: string;
-    source: 'library' | 'suggested-movie' | 'suggested-book';
+    source: 'library' | 'suggested-series' | 'suggested-movie' | 'suggested-book';
 };
 type DashboardSuggestionEntry = {
     item: Series;
     reason: string;
 };
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
+type DashboardContentFilter = 'all' | 'series' | 'movie' | 'book';
+type DashboardPanelKey = 'news' | 'upcoming' | 'recent' | 'suggestions';
 
 type DashboardTopGenre = {
     label: string;
@@ -721,6 +739,12 @@ type DashboardTopGenre = {
 };
 
 const DASHBOARD_TOP_GENRES_LIMIT = 3;
+const DASHBOARD_UPCOMING_VISIBLE_LIMIT = 18;
+const DASHBOARD_UPCOMING_LIBRARY_LIMIT = 6;
+const DASHBOARD_UPCOMING_SERIES_SUGGESTED_LIMIT = 6;
+const DASHBOARD_UPCOMING_MOVIE_SUGGESTED_LIMIT = 6;
+const DASHBOARD_UPCOMING_BOOK_SUGGESTED_LIMIT = 4;
+const DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS = 6;
 const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
 const DASHBOARD_UPCOMING_RECENT_BOOK_DAYS = 365;
@@ -729,7 +753,7 @@ const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
 const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
-const DASHBOARD_NEWS_LIMIT = 8;
+const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
@@ -746,6 +770,18 @@ let dashboardNewsState: DashboardNewsState = 'idle';
 let dashboardNewsCacheExpiresAt = 0;
 let dashboardNewsInFlight: Promise<void> | null = null;
 let dashboardNewsRequestVersion = 0;
+const dashboardPanelFilters: Record<DashboardPanelKey, DashboardContentFilter> = {
+    news: 'all',
+    upcoming: 'all',
+    recent: 'all',
+    suggestions: 'all',
+};
+
+const DASHBOARD_NEWS_STOPWORDS = new Set([
+    'para', 'com', 'from', 'that', 'this', 'sobre', 'will', 'into', 'through', 'after', 'before', 'sobre',
+    'uma', 'umas', 'uns', 'the', 'and', 'mais', 'como', 'quando', 'where', 'what', 'have', 'novo', 'nova',
+    'series', 'série', 'filme', 'livro', 'media', 'show', 'shows', 'book', 'books', 'movie', 'movies',
+]);
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -870,6 +906,7 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
     const mediaItems = mediaType === 'all'
         ? allLibraryItems
         : allLibraryItems.filter(item => (item.media_type || 'series') === mediaType);
+    let pending = 0;
     let inProgress = 0;
     let completed = 0;
 
@@ -887,14 +924,35 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
         }
         if (progress > 0) {
             inProgress += 1;
+            return;
         }
+        pending += 1;
     });
 
     return {
         total: mediaItems.length,
+        pending,
         inProgress,
         completed,
     };
+}
+
+function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string): string {
+    if (metricKey === 'pending') {
+        if (mediaType === 'all') return 'Quero Ver / Ler';
+        return mediaType === 'book' ? 'Quero Ler' : 'Quero Ver';
+    }
+    if (metricKey === 'in-progress') {
+        if (mediaType === 'all') return 'A Ver / Ler';
+        return mediaType === 'book' ? 'A Ler' : 'A Ver';
+    }
+    if (metricKey === 'completed') {
+        return 'Concluídas';
+    }
+    if (metricKey === 'total') {
+        return 'Total';
+    }
+    return metricKey;
 }
 
 function getLastTwelveMonthTimeline(): { labels: string[]; keys: string[] } {
@@ -943,6 +1001,10 @@ function renderDashboardEvolutionChart(): void {
         S.charts.dashboardEvolution.destroy();
     }
 
+    const seriesPalette = getMediaPalette('series');
+    const moviePalette = getMediaPalette('movie');
+    const bookPalette = getMediaPalette('book');
+
     S.charts.dashboardEvolution = new Chart(ctx, {
         type: 'line',
         data: {
@@ -951,8 +1013,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Séries',
                     data: evolutionBuckets.series.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#47ABD2',
-                    backgroundColor: 'rgba(71, 171, 210, 0.12)',
+                    borderColor: seriesPalette.base,
+                    backgroundColor: `rgba(${seriesPalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -963,8 +1025,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Filmes',
                     data: evolutionBuckets.movie.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#F08F44',
-                    backgroundColor: 'rgba(240, 143, 68, 0.12)',
+                    borderColor: moviePalette.base,
+                    backgroundColor: `rgba(${moviePalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -975,8 +1037,8 @@ function renderDashboardEvolutionChart(): void {
                 {
                     label: 'Livros',
                     data: evolutionBuckets.book.map((value) => Number(value.toFixed(1))),
-                    borderColor: '#7DC86E',
-                    backgroundColor: 'rgba(125, 200, 110, 0.12)',
+                    borderColor: bookPalette.base,
+                    backgroundColor: `rgba(${bookPalette.rgb}, 0.12)`,
                     borderWidth: 4,
                     tension: 0.35,
                     fill: true,
@@ -1050,7 +1112,17 @@ function renderDashboardGenresChart(): void {
     const values = topGenres.map(([, count]) => count);
     const hasData = values.length > 0;
     const total = values.reduce((sum, value) => sum + value, 0);
-    const palette = ['#47ABD2', '#D24665', '#7DC86E', '#F08F44', '#6DB0FF', '#BED984'];
+    const seriesPalette = getMediaPalette('series');
+    const moviePalette = getMediaPalette('movie');
+    const bookPalette = getMediaPalette('book');
+    const palette = [
+        seriesPalette.base,
+        moviePalette.base,
+        bookPalette.base,
+        seriesPalette.soft,
+        moviePalette.soft,
+        bookPalette.soft,
+    ];
 
     if (S.charts.dashboardGenres) {
         S.charts.dashboardGenres.destroy();
@@ -1110,10 +1182,152 @@ function getDashboardNewsBadgeClass(mediaTypeHint: NewsMediaTypeHint): string {
     return 'is-pending';
 }
 
+function getDashboardPanelFiltersRoot(panel: DashboardPanelKey): HTMLDivElement | null {
+    if (panel === 'news') return DOM.dashboardNewsFilters;
+    if (panel === 'upcoming') return DOM.dashboardUpcomingFilters;
+    if (panel === 'recent') return DOM.dashboardRecentFilters;
+    if (panel === 'suggestions') return DOM.dashboardSuggestionsFilters;
+    return null;
+}
+
+function renderDashboardPanelFilters(panel: DashboardPanelKey): void {
+    const root = getDashboardPanelFiltersRoot(panel);
+    if (!root) return;
+    const activeFilter = dashboardPanelFilters[panel];
+    root.querySelectorAll<HTMLButtonElement>('.dashboard-panel-filter').forEach((button) => {
+        const filter = (button.dataset.dashboardFilter || 'all') as DashboardContentFilter;
+        const isActive = filter === activeFilter;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function renderAllDashboardPanelFilters(): void {
+    renderDashboardPanelFilters('news');
+    renderDashboardPanelFilters('upcoming');
+    renderDashboardPanelFilters('recent');
+    renderDashboardPanelFilters('suggestions');
+}
+
+export function setDashboardPanelFilter(panel: DashboardPanelKey, filter: DashboardContentFilter): void {
+    dashboardPanelFilters[panel] = filter;
+    renderDashboardPanelFilters(panel);
+    if (panel === 'news') {
+        renderDashboardNewsPanel();
+        return;
+    }
+    if (panel === 'upcoming') {
+        renderDashboardUpcomingReleases();
+        return;
+    }
+    if (panel === 'recent') {
+        renderDashboardRecentCarousel();
+        return;
+    }
+    renderDashboardSuggestionsCarousel();
+}
+
+function buildDashboardNewsKeywordWeights(): Map<string, number> {
+    const weights = new Map<string, number>();
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const source = `${item.name || ''} ${item.original_name || ''}`;
+        const tokens = normalizeGenreToken(source)
+            .split(' ')
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 4 && !DASHBOARD_NEWS_STOPWORDS.has(token));
+        tokens.forEach((token) => {
+            weights.set(token, (weights.get(token) || 0) + 1);
+        });
+    });
+
+    return new Map(
+        Array.from(weights.entries())
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 12)
+    );
+}
+
+function buildDashboardMediaTypeWeights(): Record<DashboardContentFilter, number> {
+    const weights: Record<DashboardContentFilter, number> = {
+        all: 0,
+        series: 0,
+        movie: 0,
+        book: 0,
+    };
+
+    [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const mediaType = item.media_type || 'series';
+        if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book') {
+            weights[mediaType] += 1;
+        }
+    });
+
+    return weights;
+}
+
+function computeDashboardNewsRelevance(
+    item: DashboardNewsItem,
+    topGenres: DashboardTopGenre[],
+    keywordWeights: Map<string, number>,
+    mediaTypeWeights: Record<DashboardContentFilter, number>
+): number {
+    const haystack = normalizeGenreToken(`${item.title} ${item.summary} ${item.source}`);
+    let score = 0;
+
+    topGenres.forEach((genre, index) => {
+        if (!genre.normalized || !haystack.includes(genre.normalized)) return;
+        score += ((topGenres.length - index) * 6) + Math.min(genre.count, 5);
+    });
+
+    keywordWeights.forEach((weight, token) => {
+        if (!haystack.includes(token)) return;
+        score += Math.min(weight, 4) + 1;
+    });
+
+    if (item.mediaTypeHint === 'series' || item.mediaTypeHint === 'movie' || item.mediaTypeHint === 'book') {
+        score += mediaTypeWeights[item.mediaTypeHint] || 0;
+    }
+
+    if (item.imageUrl) score += 2;
+    return score;
+}
+
+function matchesDashboardContentFilter(mediaType: string | null | undefined, filter: DashboardContentFilter): boolean {
+    if (filter === 'all') return true;
+    return mediaType === filter;
+}
+
+function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
+    const filtered = dashboardNewsEntries.filter((item) => {
+        return matchesDashboardContentFilter(item.mediaTypeHint, dashboardPanelFilters.news);
+    });
+
+    const hasHistory = (S.myWatchlist.length + S.myArchive.length) > 0;
+    const topGenres = buildTopDashboardGenres();
+    const keywordWeights = buildDashboardNewsKeywordWeights();
+    const mediaTypeWeights = buildDashboardMediaTypeWeights();
+    const scoreById = new Map<string, number>();
+    return [...filtered].sort((a, b) => {
+        const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+        if (!DASHBOARD_NEWS_ENHANCED_ENABLED || !hasHistory) {
+            return bTs - aTs;
+        }
+
+        const scoreA = scoreById.get(a.id) ?? computeDashboardNewsRelevance(a, topGenres, keywordWeights, mediaTypeWeights);
+        const scoreB = scoreById.get(b.id) ?? computeDashboardNewsRelevance(b, topGenres, keywordWeights, mediaTypeWeights);
+        scoreById.set(a.id, scoreA);
+        scoreById.set(b.id, scoreB);
+        const scoreDelta = scoreB - scoreA;
+        if (scoreDelta !== 0) return scoreDelta;
+        return bTs - aTs;
+    }).slice(0, 8);
+}
+
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
     const raw = String(item.imageUrl || '').trim();
     if (!raw) return null;
-    return `/api/news-image?url=${encodeURIComponent(raw)}`;
+    return buildExternalImageProxyUrl(raw);
 }
 
 function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
@@ -1140,8 +1354,15 @@ function createDashboardNewsMedia(item: DashboardNewsItem): HTMLElement {
     ]);
 }
 
+function buildDashboardNewsMetaText(item: DashboardNewsItem): string {
+    const source = sanitizePlainText(item.source) || 'Fonte';
+    const date = formatDashboardNewsDate(item.publishedAt);
+    return `${source} • ${date}`;
+}
+
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
+    renderDashboardPanelFilters('news');
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
         DOM.dashboardNewsList.innerHTML = `
@@ -1169,20 +1390,22 @@ function renderDashboardNewsPanel(): void {
         return;
     }
 
-    if (dashboardNewsEntries.length === 0) {
+    const visibleItems = getVisibleDashboardNewsEntries();
+    if (visibleItems.length === 0) {
         DOM.dashboardNewsList.innerHTML = `
             <div class="dashboard-news-state">
-                <p>Ainda não existem notícias disponíveis.</p>
+                <p>${dashboardNewsEntries.length === 0 ? 'Ainda não existem notícias disponíveis.' : 'Sem notícias para este filtro.'}</p>
             </div>
         `;
         return;
     }
 
     DOM.dashboardNewsList.innerHTML = '';
-    dashboardNewsEntries.forEach((item) => {
+    visibleItems.forEach((item) => {
         const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
         const article = el('a', {
-            class: 'dashboard-news-item',
+            class: 'dashboard-recent-item dashboard-news-item',
+            'data-media-type': item.mediaTypeHint || 'all',
             href: item.url,
             target: '_blank',
             rel: 'noopener noreferrer',
@@ -1191,13 +1414,10 @@ function renderDashboardNewsPanel(): void {
             'aria-label': `Abrir notícia: ${item.title}`,
         }, [
             createDashboardNewsMedia(item),
-            el('div', { class: 'dashboard-news-content' }, [
-                el('div', { class: 'dashboard-news-meta' }, [
-                    el('span', { class: 'dashboard-news-source', text: item.source }),
-                    el('span', { class: 'dashboard-news-date', text: formatDashboardNewsDate(item.publishedAt) }),
-                    el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
-                ]),
+            el('div', { class: 'dashboard-recent-content dashboard-news-content' }, [
+                el('p', { class: 'dashboard-news-meta-line', text: buildDashboardNewsMetaText(item) }),
                 el('h4', { text: item.title }),
+                el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
                 el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
             ]),
         ]);
@@ -1265,11 +1485,20 @@ function renderDashboardRecentCarousel(): void {
         });
     });
 
-    const visibleItems = uniqueRecent.slice(0, 12);
+    const filter = dashboardPanelFilters.recent;
+    const visibleItems = uniqueRecent
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
+        .slice(0, 12);
     DOM.dashboardRecentCarousel.innerHTML = '';
 
+    renderDashboardPanelFilters('recent');
+
     if (visibleItems.length === 0) {
-        DOM.dashboardRecentCarousel.innerHTML = '<p class="dashboard-empty-message">Ainda não existem conteúdos vistos/lidos recentemente.</p>';
+        DOM.dashboardRecentCarousel.innerHTML = `<p class="dashboard-empty-message">${
+            uniqueRecent.length === 0
+                ? 'Ainda não existem conteúdos vistos/lidos recentemente.'
+                : 'Sem conteúdos recentes para este filtro.'
+        }</p>`;
         return;
     }
 
@@ -1304,13 +1533,22 @@ function renderDashboardSuggestionsCarousel(): void {
     const topGenres = buildTopDashboardGenres();
     void ensureDashboardRecommendations(topGenres);
 
-    const visibleItems = dashboardSuggestedRecommendationEntries.slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
+    const filter = dashboardPanelFilters.suggestions;
+    const visibleItems = dashboardSuggestedRecommendationEntries
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
+        .slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
     DOM.dashboardSuggestionsCarousel.innerHTML = '';
+
+    renderDashboardPanelFilters('suggestions');
 
     if (visibleItems.length === 0) {
         DOM.dashboardSuggestionsCarousel.innerHTML = dashboardSuggestedInFlight
             ? '<p class="dashboard-empty-message">A preparar sugestões para ti...</p>'
-            : '<p class="dashboard-empty-message">Adiciona mais conteúdos para gerar sugestões personalizadas.</p>';
+            : `<p class="dashboard-empty-message">${
+                dashboardSuggestedRecommendationEntries.length === 0
+                    ? 'Adiciona mais conteúdos para gerar sugestões personalizadas.'
+                    : 'Sem sugestões para este filtro.'
+            }</p>`;
         return;
     }
 
@@ -1698,6 +1936,58 @@ function dedupeUpcomingEntries(entries: DashboardUpcomingEntry[]): DashboardUpco
     return Array.from(deduped.values());
 }
 
+function sortUpcomingEntriesForSuggestion(entries: DashboardUpcomingEntry[]): DashboardUpcomingEntry[] {
+    return [...entries].sort((a, b) => {
+        const aRating = typeof a.item.vote_average === 'number' ? a.item.vote_average : 0;
+        const bRating = typeof b.item.vote_average === 'number' ? b.item.vote_average : 0;
+        if (bRating !== aRating) return bRating - aRating;
+        return a.date.getTime() - b.date.getTime();
+    });
+}
+
+function selectDashboardUpcomingEntries(
+    entries: DashboardUpcomingEntry[],
+    limit: number,
+    filter: DashboardContentFilter
+): DashboardUpcomingEntry[] {
+    if (entries.length <= limit) return entries;
+
+    const libraryEntries = entries
+        .filter((entry) => entry.source === 'library')
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const suggestedSeriesEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-series')
+    );
+    const suggestedMovieEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-movie')
+    );
+    const suggestedBookEntries = sortUpcomingEntriesForSuggestion(
+        entries.filter((entry) => entry.source === 'suggested-book')
+    );
+
+    if (filter === 'series') {
+        return [...libraryEntries, ...suggestedSeriesEntries].slice(0, limit);
+    }
+    if (filter === 'movie') {
+        return [...libraryEntries, ...suggestedMovieEntries].slice(0, limit);
+    }
+    if (filter === 'book') {
+        return [...libraryEntries, ...suggestedBookEntries].slice(0, limit);
+    }
+
+    const selected = [
+        ...libraryEntries.slice(0, DASHBOARD_UPCOMING_LIBRARY_LIMIT),
+        ...suggestedSeriesEntries.slice(0, DASHBOARD_UPCOMING_SERIES_SUGGESTED_LIMIT),
+        ...suggestedMovieEntries.slice(0, DASHBOARD_UPCOMING_MOVIE_SUGGESTED_LIMIT),
+    ];
+
+    if (selected.length < limit) {
+        selected.push(...suggestedBookEntries.slice(0, Math.min(DASHBOARD_UPCOMING_BOOK_SUGGESTED_LIMIT, limit - selected.length)));
+    }
+
+    return selected.slice(0, limit);
+}
+
 function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     const entries: DashboardUpcomingEntry[] = [];
     [...S.myWatchlist, ...S.myArchive].forEach((item) => {
@@ -1727,27 +2017,74 @@ function getLibraryUpcomingEntries(today: Date): DashboardUpcomingEntry[] {
     return entries;
 }
 
-async function fetchSuggestedMovieUpcomingEntries(
-    topGenres: DashboardTopGenre[],
+function getPremiereCurationScore(item: Series): number {
+    const voteAverage = typeof item.vote_average === 'number' ? item.vote_average : 0;
+    const voteCount = typeof (item as { vote_count?: unknown }).vote_count === 'number'
+        ? Number((item as { vote_count?: number }).vote_count)
+        : 0;
+    if (voteAverage <= 0) return 0;
+
+    // Reduz o peso de ratings inflacionados com poucas avaliações sem excluir títulos novos.
+    const confidence = Math.min(1, Math.log10(voteCount + 1) / 2);
+    return voteAverage * confidence;
+}
+
+async function fetchSuggestedSeriesUpcomingEntries(
     today: Date,
     libraryKeys: Set<string>
 ): Promise<DashboardUpcomingEntry[]> {
-    const genreIds = Array.from(
-        new Set(topGenres.map((genre) => genre.movieGenreId).filter((value): value is number => Number.isFinite(value)))
-    );
-    if (genreIds.length === 0) return [];
+    const deduped = new Map<string, DashboardUpcomingEntry>();
+    const responses = await Promise.allSettled([
+        API.fetchNewPremieres(1, null, 'series'),
+        API.fetchNewPremieres(2, null, 'series'),
+    ]);
 
-    const todayIso = today.toISOString().slice(0, 10);
-    const responses = await Promise.allSettled(
-        genreIds.map((genreId) =>
-            API.fetchNewPremieres(1, null, 'movie', {
-                fromDate: todayIso,
-                sortBy: 'primary_release_date.asc',
-                genreIds: [genreId],
-                withOriginalLanguage: false,
-            })
-        )
-    );
+    responses.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.results.forEach((series) => {
+            const date = parseDateOnly(series.first_air_date);
+            if (!date || date < today) return;
+            const mediaType = series.media_type || 'series';
+            if (mediaType !== 'series') return;
+            const hasPoster = typeof series.poster_path === 'string' && series.poster_path.trim().length > 0;
+            if (!hasPoster) return;
+            const mediaKey = `${mediaType}:${series.id}`;
+            if (libraryKeys.has(mediaKey)) return;
+            const candidate: DashboardUpcomingEntry = {
+                item: series,
+                date,
+                label: 'Estreia sugerida',
+                source: 'suggested-series',
+            };
+            const existing = deduped.get(mediaKey);
+            if (!existing || date < existing.date) {
+                deduped.set(mediaKey, candidate);
+            }
+        });
+    });
+
+    return Array.from(deduped.values())
+        .sort((a, b) => {
+            const scoreDiff = getPremiereCurationScore(b.item) - getPremiereCurationScore(a.item);
+            if (scoreDiff !== 0) return scoreDiff;
+            const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            const voteCountDiff = (Number((b.item as { vote_count?: number }).vote_count) || 0)
+                - (Number((a.item as { vote_count?: number }).vote_count) || 0);
+            if (voteCountDiff !== 0) return voteCountDiff;
+            return a.date.getTime() - b.date.getTime();
+        })
+        .slice(0, DASHBOARD_UPCOMING_MAX_SERIES_SUGGESTIONS);
+}
+
+async function fetchSuggestedMovieUpcomingEntries(
+    today: Date,
+    libraryKeys: Set<string>
+): Promise<DashboardUpcomingEntry[]> {
+    const responses = await Promise.allSettled([
+        API.fetchNewPremieres(1, null, 'movie'),
+        API.fetchNewPremieres(2, null, 'movie'),
+    ]);
 
     const deduped = new Map<string, DashboardUpcomingEntry>();
     responses.forEach((result) => {
@@ -1757,6 +2094,8 @@ async function fetchSuggestedMovieUpcomingEntries(
             if (!date || date < today) return;
             const mediaType = movie.media_type || 'movie';
             if (mediaType !== 'movie') return;
+            const hasPoster = typeof movie.poster_path === 'string' && movie.poster_path.trim().length > 0;
+            if (!hasPoster) return;
             const mediaKey = `${mediaType}:${movie.id}`;
             if (libraryKeys.has(mediaKey)) return;
             const candidate: DashboardUpcomingEntry = {
@@ -1773,7 +2112,16 @@ async function fetchSuggestedMovieUpcomingEntries(
     });
 
     return Array.from(deduped.values())
-        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .sort((a, b) => {
+            const scoreDiff = getPremiereCurationScore(b.item) - getPremiereCurationScore(a.item);
+            if (scoreDiff !== 0) return scoreDiff;
+            const ratingDiff = (Number(b.item.vote_average) || 0) - (Number(a.item.vote_average) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            const voteCountDiff = (Number((b.item as { vote_count?: number }).vote_count) || 0)
+                - (Number((a.item as { vote_count?: number }).vote_count) || 0);
+            if (voteCountDiff !== 0) return voteCountDiff;
+            return a.date.getTime() - b.date.getTime();
+        })
         .slice(0, DASHBOARD_UPCOMING_MAX_MOVIE_SUGGESTIONS);
 }
 
@@ -1848,18 +2196,6 @@ async function fetchSuggestedBookUpcomingEntries(
 }
 
 async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[], today: Date): Promise<void> {
-    if (topGenres.length === 0) {
-        const hadSuggestions = dashboardSuggestedUpcomingEntries.length > 0;
-        dashboardSuggestedUpcomingEntries = [];
-        dashboardUpcomingCacheSignature = '';
-        dashboardUpcomingCacheExpiresAt = 0;
-        syncDashboardSuggestedMediaStore();
-        if (hadSuggestions) {
-            renderDashboardUpcomingReleases();
-        }
-        return;
-    }
-
     const signature = topGenres.map((genre) => `${genre.normalized}:${genre.count}`).join('|');
     const now = Date.now();
     if (
@@ -1876,12 +2212,15 @@ async function ensureDashboardUpcomingSuggestions(topGenres: DashboardTopGenre[]
     );
 
     dashboardUpcomingInFlight = (async () => {
-        const [movieSuggestions, bookSuggestions] = await Promise.all([
-            fetchSuggestedMovieUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
-            fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => []),
+        const [seriesSuggestions, movieSuggestions, bookSuggestions] = await Promise.all([
+            fetchSuggestedSeriesUpcomingEntries(today, libraryKeys).catch(() => []),
+            fetchSuggestedMovieUpcomingEntries(today, libraryKeys).catch(() => []),
+            topGenres.length > 0
+                ? fetchSuggestedBookUpcomingEntries(topGenres, today, libraryKeys).catch(() => [])
+                : Promise.resolve([]),
         ]);
         if (requestVersion !== dashboardUpcomingRequestVersion) return;
-        dashboardSuggestedUpcomingEntries = [...movieSuggestions, ...bookSuggestions];
+        dashboardSuggestedUpcomingEntries = [...seriesSuggestions, ...movieSuggestions, ...bookSuggestions];
         syncDashboardSuggestedMediaStore();
         dashboardUpcomingCacheSignature = signature;
         dashboardUpcomingCacheExpiresAt = Date.now() + DASHBOARD_UPCOMING_CACHE_TTL_MS;
@@ -1909,29 +2248,49 @@ function renderDashboardUpcomingReleases(): void {
     const topGenres = buildTopDashboardGenres();
     void ensureDashboardUpcomingSuggestions(topGenres, today);
 
+    const filter = dashboardPanelFilters.upcoming;
+    const filteredEntries = sortedEntries
+        .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter));
+    const visibleEntries = selectDashboardUpcomingEntries(filteredEntries, DASHBOARD_UPCOMING_VISIBLE_LIMIT, filter);
+
     DOM.dashboardUpcomingList.innerHTML = '';
-    if (sortedEntries.length === 0) {
-        DOM.dashboardUpcomingList.innerHTML = '<p class="dashboard-empty-message">Sem lançamentos futuros registados para já.</p>';
+    renderDashboardPanelFilters('upcoming');
+
+    if (visibleEntries.length === 0) {
+        DOM.dashboardUpcomingList.innerHTML = `<p class="dashboard-empty-message">${
+            sortedEntries.length === 0
+                ? 'Sem lançamentos futuros registados para já.'
+                : 'Sem lançamentos para este filtro.'
+        }</p>`;
         return;
     }
 
-    sortedEntries.forEach(({ item, date, label }) => {
+    visibleEntries.forEach(({ item, date, label }) => {
         const mediaType = item.media_type || 'series';
         const posterPath = buildPosterUrl(item.poster_path, 'w185', '/placeholders/poster.svg');
+        const badgeClass = mediaType === 'movie'
+            ? 'is-suggestion-movie'
+            : mediaType === 'book'
+                ? 'is-suggestion-book'
+                : 'is-suggestion-series';
         const entryElement = el('article', {
-            class: 'dashboard-upcoming-item',
+            class: 'dashboard-recent-item dashboard-upcoming-item',
             'data-series-id': String(item.id),
             'data-media-type': mediaType,
+            role: 'listitem',
             tabindex: '0',
             'aria-label': `Abrir detalhe de ${item.name}`,
             title: `Abrir detalhe de ${item.name}`,
         }, [
             createPosterImage(posterPath, `Poster de ${item.name}`, 'dashboard-upcoming-poster', '/placeholders/poster.svg'),
-            el('div', { class: 'dashboard-upcoming-content' }, [
-                el('p', { class: 'dashboard-upcoming-title', text: item.name }),
+            el('div', { class: 'dashboard-recent-content dashboard-upcoming-content' }, [
+                el('div', { class: 'dashboard-upcoming-meta' }, [
+                    el('p', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
+                    el('span', { class: `dashboard-status-badge ${badgeClass}`, text: getMediaTypeLabel(mediaType).toUpperCase() }),
+                ]),
+                el('h4', { class: 'dashboard-upcoming-title', text: item.name }),
                 el('p', { class: 'dashboard-upcoming-label', text: label }),
             ]),
-            el('span', { class: 'dashboard-upcoming-date', text: formatDashboardUpcomingDate(date) }),
         ]);
         DOM.dashboardUpcomingList.appendChild(entryElement);
     });
@@ -1946,11 +2305,21 @@ export function renderMediaDashboard() {
             : 'series';
         const metrics = computeDashboardMetrics(mediaType);
         const total = card.querySelector<HTMLElement>('[data-metric="total"]');
+        const pending = card.querySelector<HTMLElement>('[data-metric="pending"]');
         const inProgress = card.querySelector<HTMLElement>('[data-metric="in-progress"]');
         const completed = card.querySelector<HTMLElement>('[data-metric="completed"]');
+        const totalBadge = card.querySelector<HTMLElement>('[data-metric-total]');
         if (total) total.textContent = String(metrics.total);
+        if (pending) pending.textContent = String(metrics.pending);
         if (inProgress) inProgress.textContent = String(metrics.inProgress);
         if (completed) completed.textContent = String(metrics.completed);
+        if (totalBadge) totalBadge.textContent = String(metrics.total);
+
+        const metricLabels = card.querySelectorAll<HTMLElement>('[data-metric-label]');
+        metricLabels.forEach((label) => {
+            const metricKey = label.dataset.metricLabel || '';
+            label.textContent = getDashboardMetricLabel(mediaType, metricKey);
+        });
 
         const metricRows = card.querySelectorAll<HTMLElement>('.dashboard-media-card-metrics > div');
         metricRows.forEach((row) => {
@@ -1959,6 +2328,8 @@ export function renderMediaDashboard() {
             let percentage = 0;
             if (metricKey === 'total') {
                 percentage = metrics.total > 0 ? 100 : 0;
+            } else if (metricKey === 'pending') {
+                percentage = metrics.total > 0 ? (metrics.pending / metrics.total) * 100 : 0;
             } else if (metricKey === 'in-progress') {
                 percentage = metrics.total > 0 ? (metrics.inProgress / metrics.total) * 100 : 0;
             } else if (metricKey === 'completed') {
@@ -1973,6 +2344,7 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
+    renderAllDashboardPanelFilters();
     renderDashboardNewsPanel();
     void ensureDashboardNews();
     renderDashboardRecentCarousel();
@@ -2251,6 +2623,7 @@ export function renderMediaDetails(
         if (media.source_provider === 'tmdb_movie') return 'TMDb';
         if (media.source_provider === 'google_books') return 'Google Books';
         if (media.source_provider === 'open_library') return 'Open Library';
+        if (media.source_provider === 'presenca') return 'Presenca';
         return media.source_provider || 'N/A';
     })();
     const progressLabel = mediaType === 'movie'
@@ -2941,6 +3314,7 @@ type StatsSummary = {
     context: StatsMediaContext;
     meta: StatsUiMeta;
     totalItems: number;
+    pendingItems: number;
     inProgressItems: number;
     completedItems: number;
     activeItems: number;
@@ -2953,11 +3327,67 @@ type StatsSummary = {
     tertiaryValue: number;
 };
 
+type StatsMediaVisual = {
+    mediaType: MediaType;
+    label: string;
+    accent: string;
+    progress: string;
+    completed: string;
+};
+
 function getStatsMediaContext(): StatsMediaContext {
     if (scopedStatsMediaType === 'series' || scopedStatsMediaType === 'movie' || scopedStatsMediaType === 'book') {
         return scopedStatsMediaType;
     }
     return 'all';
+}
+
+function getMediaPalette(mediaType: MediaType): { base: string; soft: string; strong: string; rgb: string } {
+    const styles = getComputedStyle(document.body);
+    const prefix = mediaType === 'movie' ? 'movie' : mediaType === 'book' ? 'book' : 'series';
+    const read = (suffix: string, fallback: string) =>
+        styles.getPropertyValue(`--media-${prefix}${suffix}`).trim() || fallback;
+    const readRgb = (fallback: string) =>
+        styles.getPropertyValue(`--media-${prefix}-rgb`).trim() || fallback;
+
+    if (prefix === 'movie') {
+        return {
+            base: read('', '#c25066'),
+            soft: read('-soft', '#d77e91'),
+            strong: read('-strong', '#a53b51'),
+            rgb: readRgb('194, 80, 102'),
+        };
+    }
+    if (prefix === 'book') {
+        return {
+            base: read('', '#c3d88e'),
+            soft: read('-soft', '#d7e8af'),
+            strong: read('-strong', '#9eb56d'),
+            rgb: readRgb('195, 216, 142'),
+        };
+    }
+    return {
+        base: read('', '#63a9ce'),
+        soft: read('-soft', '#8fc6e2'),
+        strong: read('-strong', '#4a8db3'),
+        rgb: readRgb('99, 169, 206'),
+    };
+}
+
+function getStatsMediaVisual(mediaType: MediaType): StatsMediaVisual {
+    const palette = getMediaPalette(mediaType);
+    if (mediaType === 'movie') {
+        return { mediaType, label: 'Filmes', accent: palette.base, progress: palette.soft, completed: palette.strong };
+    }
+    if (mediaType === 'book') {
+        return { mediaType, label: 'Livros', accent: palette.base, progress: palette.soft, completed: palette.strong };
+    }
+    return { mediaType, label: 'Séries', accent: palette.base, progress: palette.soft, completed: palette.strong };
+}
+
+function rgbaFromMedia(mediaType: MediaType, alpha: number): string {
+    const palette = getMediaPalette(mediaType);
+    return `rgba(${palette.rgb}, ${alpha})`;
 }
 
 function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
@@ -3009,7 +3439,7 @@ function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
     }
     if (context === 'all') {
         return {
-            sectionTitle: 'Estatísticas Gerais',
+            sectionTitle: 'Estatísticas Globais',
             primaryLabel: 'Itens Concluídos',
             secondaryLabel: 'Itens por Concluir',
             tertiaryLabel: 'Progresso Médio',
@@ -3059,12 +3489,12 @@ function getContextItems(context: StatsMediaContext): Series[] {
     return allItems.filter((item) => (item.media_type || 'series') === context);
 }
 
-function buildStatsSummary(): StatsSummary {
-    const context = getStatsMediaContext();
+function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
     const meta = getStatsUiMeta(context);
     const items = getContextItems(context);
 
     let completedItems = 0;
+    let pendingItems = 0;
     let inProgressItems = 0;
     let consumedUnits = 0;
     let pendingUnits = 0;
@@ -3082,8 +3512,9 @@ function buildStatsSummary(): StatsSummary {
             const isCompleted = isArchived || (totalEpisodes > 0 && watchedCount >= totalEpisodes);
 
             progressSum += isCompleted ? 100 : episodeProgress;
-            if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
             if (isCompleted) completedItems += 1;
+            else if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
+            else pendingItems += 1;
 
             totalTimeMinutes += watchedCount * (item.episode_run_time || 30);
 
@@ -3100,8 +3531,9 @@ function buildStatsSummary(): StatsSummary {
         const progress = isArchived ? 100 : getMediaProgressPercent(item);
         const isCompleted = isArchived || progress >= 100;
         progressSum += isCompleted ? 100 : progress;
-        if (progress > 0 && progress < 100) inProgressItems += 1;
         if (isCompleted) completedItems += 1;
+        else if (progress > 0 && progress < 100) inProgressItems += 1;
+        else pendingItems += 1;
 
         if (isCompleted) consumedUnits += 1;
         else pendingUnits += 1;
@@ -3123,6 +3555,7 @@ function buildStatsSummary(): StatsSummary {
         context,
         meta,
         totalItems,
+        pendingItems,
         inProgressItems,
         completedItems,
         activeItems,
@@ -3134,6 +3567,10 @@ function buildStatsSummary(): StatsSummary {
         secondaryValue: Math.max(0, secondaryValue),
         tertiaryValue: Math.max(0, tertiaryValue),
     };
+}
+
+function buildStatsSummary(): StatsSummary {
+    return buildStatsSummaryForContext(getStatsMediaContext());
 }
 
 function applyStatsLabels(summary: StatsSummary): void {
@@ -3154,6 +3591,144 @@ function applyStatsLabels(summary: StatsSummary): void {
     if (genresTitle) genresTitle.textContent = summary.meta.genresTitle;
     if (yearsTitle) yearsTitle.textContent = summary.meta.yearsTitle;
     if (topRatedTitle) topRatedTitle.textContent = summary.meta.topRatedTitle;
+}
+
+function renderStatsGlobalOverview(summary: StatsSummary): void {
+    if (!DOM.statsGlobalOverview) return;
+    const isGlobal = summary.context === 'all';
+    DOM.statsGlobalOverview.hidden = !isGlobal;
+    DOM.statsGlobalOverview.style.display = isGlobal ? 'block' : 'none';
+    const completionChartCard = document.getElementById('watched-unwatched-chart')?.closest('.chart-card') as HTMLElement | null;
+    if (completionChartCard) {
+        completionChartCard.hidden = isGlobal;
+        completionChartCard.style.display = isGlobal ? 'none' : 'block';
+    }
+    if (DOM.keyStatsGrid) {
+        DOM.keyStatsGrid.hidden = isGlobal;
+        DOM.keyStatsGrid.style.display = isGlobal ? 'none' : 'grid';
+    }
+    if (DOM.statsChartsGrid) {
+        DOM.statsChartsGrid.classList.toggle('stats-charts-grid--global', isGlobal);
+    }
+    const topRatedCard = document.getElementById('top-rated-series-card') as HTMLElement | null;
+    if (topRatedCard) {
+        topRatedCard.classList.toggle('stats-global-favorites-card', isGlobal);
+    }
+    Object.keys(S.charts)
+        .filter((key) => key.startsWith('globalSummaryDonut-'))
+        .forEach((key) => {
+            const chart = S.charts[key];
+            if (chart instanceof Chart) chart.destroy();
+            delete S.charts[key];
+        });
+    if (!isGlobal || !DOM.statsGlobalSummaryGrid) return;
+
+    const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+        summary: buildStatsSummaryForContext(mediaType),
+        visual: getStatsMediaVisual(mediaType),
+    }));
+    const metricCards = [
+        {
+            title: 'Itens Concluídos',
+            total: summary.completedItems.toLocaleString('pt-PT'),
+            suffix: '',
+            getValue: (entry: { summary: StatsSummary }) => entry.summary.completedItems,
+        },
+        {
+            title: 'Itens por Concluir',
+            total: (summary.totalItems - summary.completedItems).toLocaleString('pt-PT'),
+            suffix: '',
+            getValue: (entry: { summary: StatsSummary }) => (entry.summary.pendingItems + entry.summary.inProgressItems),
+        },
+        {
+            title: 'Progresso Médio',
+            total: String(summary.averageProgressPercent),
+            suffix: '%',
+            getValue: (entry: { summary: StatsSummary }) => entry.summary.averageProgressPercent,
+        },
+    ];
+
+    DOM.statsGlobalSummaryGrid.replaceChildren(
+        ...metricCards.map((metric, metricIndex) => {
+            const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
+            const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
+            card.innerHTML = `
+                <h4 class="stats-global-summary-card-title">${metric.title}</h4>
+                <div class="stats-global-summary-donut-wrap">
+                    <div class="stats-global-summary-donut-figure">
+                        <canvas id="stats-global-summary-donut-${metricIndex}" class="stats-global-summary-donut-canvas" aria-label="${metric.title}"></canvas>
+                    </div>
+                </div>
+            `;
+            return card;
+        }),
+    );
+
+    metricCards.forEach((metric, metricIndex) => {
+        const canvas = document.getElementById(`stats-global-summary-donut-${metricIndex}`) as HTMLCanvasElement | null;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
+        const colors = mediaSummaries.map(({ visual }) => visual.accent);
+        const labels = mediaSummaries.map(({ visual }) => visual.label);
+        const centerText = `${metric.total}${metric.suffix}`;
+
+        const chart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: getChartColors().cardBg,
+                    borderWidth: 2,
+                    borderAlign: 'inner',
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                cutout: '60%',
+                animation: { duration: 700 },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: getChartColors().textColor,
+                            font: { family: "'Rajdhani', sans-serif" },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                        },
+                    } as any,
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.label}: ${context.raw}${metric.suffix}`,
+                        },
+                    },
+                    doughnutCenterText: { animatedValue: Number.parseInt(String(metric.total), 10) || 0 },
+                },
+            },
+            plugins: [{
+                id: `globalSummaryDonutCenterText-${metricIndex}`,
+                afterDraw: (chartInstance) => {
+                    const chartCtx = chartInstance.ctx;
+                    const { width, height } = chartInstance;
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+                    chartCtx.font = `700 1.35rem ${getComputedStyle(document.body).getPropertyValue('--font-mono').trim()}`;
+                    chartCtx.textAlign = 'center';
+                    chartCtx.textBaseline = 'middle';
+                    chartCtx.fillStyle = getChartColors().textPrimaryColor;
+                    chartCtx.fillText(centerText, centerX, centerY);
+                },
+            }],
+        });
+
+        S.charts[`globalSummaryDonut-${metricIndex}`] = chart;
+    });
 }
 
 export function updateKeyStats(animate = false): StatsSummary {
@@ -3195,12 +3770,151 @@ function getChartColors() {
         primaryAccentLine: `rgba(${hexToRgb(primaryAccent)}, 0.2)`,
         secondaryAccent: secondaryAccent,
         secondaryAccentTransparent: `rgba(${hexToRgb(secondaryAccent)}, 0.8)`,
+        mediaSeries: getMediaPalette('series'),
+        mediaMovie: getMediaPalette('movie'),
+        mediaBook: getMediaPalette('book'),
     };
+}
+
+function toggleGlobalStatsPanels(isGlobal: boolean): void {
+    const watchedCanvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement | null;
+    const genresCanvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
+    if (watchedCanvas) {
+        watchedCanvas.hidden = isGlobal;
+        watchedCanvas.style.display = isGlobal ? 'none' : 'block';
+    }
+    if (genresCanvas) {
+        genresCanvas.hidden = false;
+        genresCanvas.style.display = 'block';
+    }
+    if (DOM.statsGlobalCompletionPanel) {
+        DOM.statsGlobalCompletionPanel.hidden = !isGlobal;
+        DOM.statsGlobalCompletionPanel.style.display = isGlobal ? 'grid' : 'none';
+    }
+    if (DOM.statsGlobalGenresPanel) {
+        DOM.statsGlobalGenresPanel.hidden = true;
+        DOM.statsGlobalGenresPanel.style.display = 'none';
+    }
+}
+
+function renderGlobalCompletionPanel(summary: StatsSummary): void {
+    if (!DOM.statsGlobalCompletionRing || !DOM.statsGlobalCompletionLegend) return;
+    const isGlobal = summary.context === 'all';
+    toggleGlobalStatsPanels(isGlobal);
+    if (!isGlobal) return;
+    const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+        summary: buildStatsSummaryForContext(mediaType),
+        visual: getStatsMediaVisual(mediaType),
+    }));
+
+    DOM.statsGlobalCompletionRing.replaceChildren(
+        el('div', { class: 'stats-global-completion-donuts' }, mediaSummaries.map(({ summary: mediaSummary, visual }) => {
+            const completionPercent = mediaSummary.totalItems > 0
+                ? Math.round((mediaSummary.completedItems / mediaSummary.totalItems) * 100)
+                : 0;
+            const completedRatio = mediaSummary.totalItems > 0 ? Math.max(0, Math.min(100, (mediaSummary.completedItems / mediaSummary.totalItems) * 100)) : 0;
+            const pendingRatio = Math.max(0, 100 - completedRatio);
+            const card = el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` });
+            card.innerHTML = `
+                <div class="stats-global-donut-figure">
+                    <svg viewBox="0 0 220 220" class="stats-global-donut-svg" aria-hidden="true">
+                        <circle class="stats-global-donut-track" cx="110" cy="110" r="74" stroke-width="34"></circle>
+                        <circle class="stats-global-donut-segment stats-global-donut-segment--pending" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke-dasharray:${pendingRatio} 100;stroke-dashoffset:0;"></circle>
+                        <circle class="stats-global-donut-segment stats-global-donut-segment--completed" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke:${visual.completed};stroke-dasharray:${completedRatio} 100;stroke-dashoffset:${-pendingRatio};"></circle>
+                    </svg>
+                    <div class="stats-global-donut-center">
+                        <strong>${mediaSummary.activeItems}</strong>
+                        <span>${visual.label} Ativas</span>
+                    </div>
+                </div>
+                <div class="stats-global-donut-meta">
+                    <div class="stats-global-donut-legend-row">
+                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--pending"></span>
+                        <span>${summary.meta.doughnutPendingLabel}</span>
+                    </div>
+                    <div class="stats-global-donut-legend-row">
+                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--completed" style="background:${visual.completed};"></span>
+                        <span>${summary.meta.doughnutConsumedLabel}</span>
+                    </div>
+                    <div class="stats-global-donut-stats">
+                        <span>${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos</span>
+                        <strong>${completionPercent}%</strong>
+                    </div>
+                </div>
+            `;
+            return card;
+        }))
+    );
+
+    DOM.statsGlobalCompletionLegend.replaceChildren();
+}
+
+function renderGlobalGenresPanel(stats: StatsSummary): void {
+    if (!DOM.statsGlobalGenresList) return;
+    if (stats.context !== 'all') return;
+
+    const genreMap = new Map<string, Record<MediaType, number>>();
+    (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+        getContextItems(mediaType).forEach((item) => {
+            if (!Array.isArray(item.genres)) return;
+            item.genres.forEach((genre: Genre) => {
+                const genreName = translateGenreName(genre.name) || genre.name;
+                if (!genreName) return;
+                if (!genreMap.has(genreName)) {
+                    genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
+                }
+                genreMap.get(genreName)![mediaType] += 1;
+            });
+        });
+    });
+
+    const topGenres = Array.from(genreMap.entries())
+        .map(([name, counts]) => ({ name, counts, total: counts.series + counts.movie + counts.book }))
+        .filter((entry) => entry.total > 0)
+        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+        .slice(0, 8);
+
+    if (topGenres.length === 0) {
+        DOM.statsGlobalGenresList.innerHTML = '<p class="stats-global-empty-state">Sem dados de género suficientes.</p>';
+        return;
+    }
+
+    const visuals = {
+        series: getStatsMediaVisual('series'),
+        movie: getStatsMediaVisual('movie'),
+        book: getStatsMediaVisual('book'),
+    };
+
+    DOM.statsGlobalGenresList.replaceChildren(
+        ...topGenres.map((entry) => {
+            const maxValue = Math.max(entry.counts.series, entry.counts.movie, entry.counts.book, 1);
+            return el('article', { class: 'stats-global-genre-row' }, [
+                el('div', { class: 'stats-global-genre-title' }, [
+                    el('strong', { text: entry.name }),
+                ]),
+                el('div', { class: 'stats-global-genre-bars' }, (['series', 'movie', 'book'] as MediaType[]).map((mediaType) =>
+                    el('div', { class: `stats-global-genre-track stats-global-genre-track--${mediaType}` }, [
+                        el('span', {
+                            class: `stats-global-genre-fill stats-global-genre-fill--${mediaType}`,
+                            style: `width:${(entry.counts[mediaType] / maxValue) * 100}%;background:${visuals[mediaType].progress};`,
+                        }),
+                    ]),
+                )),
+            ]);
+        }),
+    );
 }
 
 function renderWatchedUnwatchedChart(stats: StatsSummary) {
     const canvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement;
     if (!canvas) return;
+    if (stats.context === 'all') {
+        if (S.charts.watchedUnwatched) {
+            S.charts.watchedUnwatched.destroy();
+        }
+        renderGlobalCompletionPanel(stats);
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const watchedCount = stats.consumedUnits;
     const unwatchedCount = stats.pendingUnits;
@@ -3295,6 +4009,110 @@ function renderWatchedUnwatchedChart(stats: StatsSummary) {
 function renderGenresChart(stats: StatsSummary) {
     const canvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
+    if (stats.context === 'all') {
+        if (S.charts.genresChart) {
+            S.charts.genresChart.destroy();
+        }
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const colors = getChartColors();
+        const visuals = {
+            series: getStatsMediaVisual('series'),
+            movie: getStatsMediaVisual('movie'),
+            book: getStatsMediaVisual('book'),
+        };
+        const genreMap = new Map<string, Record<MediaType, number>>();
+        (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+            getContextItems(mediaType).forEach((item) => {
+                if (!Array.isArray(item.genres)) return;
+                item.genres.forEach((genre: Genre) => {
+                    const genreName = translateGenreName(genre.name) || genre.name;
+                    if (!genreName) return;
+                    if (!genreMap.has(genreName)) {
+                        genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
+                    }
+                    genreMap.get(genreName)![mediaType] += 1;
+                });
+            });
+        });
+        const topGenres = Array.from(genreMap.entries())
+            .map(([name, counts]) => ({
+                name,
+                counts,
+                total: counts.series + counts.movie + counts.book,
+            }))
+            .filter((entry) => entry.total > 0)
+            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+            .slice(0, 10);
+        const labels = topGenres.map((entry) => entry.name);
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            canvas.style.height = `${Math.max(220, labels.length * 30 + 72)}px`;
+        } else {
+            canvas.style.height = '';
+        }
+
+        S.charts.genresChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+                    label: visuals[mediaType].label,
+                    data: topGenres.map((entry) => entry.counts[mediaType]),
+                    backgroundColor: visuals[mediaType].accent,
+                    borderColor: visuals[mediaType].accent,
+                    borderWidth: 1,
+                    hoverBackgroundColor: visuals[mediaType].accent,
+                    hoverBorderColor: visuals[mediaType].accent,
+                })),
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: !isMobile,
+                aspectRatio: isMobile ? undefined : 1.9,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: colors.textColor,
+                            font: { family: "'Rajdhani', sans-serif", size: 14, weight: 400 },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 16,
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${context.raw}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { color: colors.textColor, precision: 0 },
+                        grid: { color: colors.gridColor },
+                    },
+                    y: {
+                        ticks: {
+                            color: colors.textColor,
+                            font: { family: "'Rajdhani', sans-serif", size: 12, weight: 400 },
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
+                        grid: { display: false },
+                    },
+                },
+            } as any,
+        });
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
     const allSeries = getContextItems(stats.context);
@@ -3381,6 +4199,75 @@ function renderAiredYearsChart(stats: StatsSummary) {
     if (isMobile) {
         // Em mobile, a altura é controlada pelo CSS.
     }
+    if (S.charts.airedYears) {
+        S.charts.airedYears.destroy();
+    }
+
+    if (stats.context === 'all') {
+        const visuals = {
+            series: getStatsMediaVisual('series'),
+            movie: getStatsMediaVisual('movie'),
+            book: getStatsMediaVisual('book'),
+        };
+        const countsByMedia: Record<MediaType, Record<number, number>> = {
+            series: {},
+            movie: {},
+            book: {},
+        };
+        (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
+            getContextItems(mediaType).forEach((item) => {
+                if (!item.first_air_date) return;
+                const year = new Date(item.first_air_date).getFullYear();
+                if (Number.isNaN(year)) return;
+                countsByMedia[mediaType][year] = (countsByMedia[mediaType][year] || 0) + 1;
+            });
+        });
+        const allYears = Array.from(new Set(
+            (['series', 'movie', 'book'] as MediaType[]).flatMap((mediaType) => Object.keys(countsByMedia[mediaType]).map(Number)),
+        )).sort((a, b) => a - b);
+        const labels = allYears.map(String);
+        const datasets = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
+            label: getStatsMediaVisual(mediaType).label,
+            data: allYears.map((year) => countsByMedia[mediaType][year] || 0),
+            fill: false,
+            borderColor: visuals[mediaType].accent,
+            backgroundColor: visuals[mediaType].accent,
+            tension: isMobile ? 0 : 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+        }));
+        if (ctx) {
+            S.charts.airedYears = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: !isMobile,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: colors.textColor,
+                                usePointStyle: true,
+                                pointStyle: 'line',
+                                font: { family: "'Rajdhani', sans-serif" },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.textColor, autoSkip: isMobile ? false : true, font: { size: isMobile ? 9 : 12 } },
+                            grid: { color: colors.gridColor },
+                        },
+                        y: { beginAtZero: true, ticks: { color: colors.textColor, precision: 0 }, grid: { color: colors.gridColor } },
+                    },
+                } as any,
+            });
+        }
+        return;
+    }
+
     const allSeries = getContextItems(stats.context);
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
@@ -3393,9 +4280,6 @@ function renderAiredYearsChart(stats: StatsSummary) {
     const labels = sortedYears.map(entry => entry[0]);
     const data = sortedYears.map(entry => entry[1]);
 
-    if (S.charts.airedYears) {
-        S.charts.airedYears.destroy();
-    }
     if (ctx) {
         S.charts.airedYears = new Chart(ctx, {
         type: 'line',
@@ -3435,6 +4319,44 @@ function renderTopRatedSeries(stats: StatsSummary) {
     if (!container) return;
     const existingBtn = container.parentElement?.querySelector('.view-all-btn');
     if (existingBtn) existingBtn.remove();
+    if (stats.context === 'all') {
+        const groups = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => {
+            const visual = getStatsMediaVisual(mediaType);
+            const items = getContextItems(mediaType)
+                .map((item) => {
+                    const userRating = getMediaRating(item);
+                    return userRating > 0 ? { ...item, userRating } : null;
+                })
+                .filter((item): item is Series & { userRating: number } => item !== null)
+                .sort((a, b) => (b.userRating ?? 0) - (a.userRating ?? 0) || a.name.localeCompare(b.name))
+                .slice(0, 5);
+            return { mediaType, visual, items };
+        });
+
+        container.replaceChildren(
+            el('div', { class: 'stats-global-favorites-groups' }, groups.map(({ mediaType, visual, items }) =>
+                el('section', { class: 'stats-global-favorites-group' }, [
+                    el('h4', { class: `stats-global-favorites-title stats-global-favorites-title--${mediaType}`, text: `Os Meus Favoritos ${visual.label}` }),
+                    items.length > 0
+                        ? el('div', { class: 'stats-global-favorites-list' }, items.map((item) => {
+                            const posterPath = buildPosterUrl(item.poster_path, 'w92', '/placeholders/poster.svg');
+                            return el('div', { class: 'top-rated-item', 'data-series-id': String(item.id), 'data-media-type': item.media_type || mediaType, title: `Ver detalhes de ${item.name}` }, [
+                                createPosterImage(
+                                    posterPath,
+                                    `Poster de ${item.name}`,
+                                    'top-rated-item-poster',
+                                    '/placeholders/poster.svg'
+                                ),
+                                el('div', { class: 'top-rated-item-info' }, [el('p', { text: item.name })]),
+                                el('div', { class: `top-rated-item-rating top-rated-item-rating--${mediaType}` }, [el('i', { class: 'fas fa-star' }), el('span', { text: String(item.userRating) })]),
+                            ]);
+                        }))
+                        : el('p', { class: 'stats-global-empty-state', text: `Ainda não avaliou ${visual.label.toLowerCase()}.` }),
+                ]),
+            )),
+        );
+        return;
+    }
     const allSeries = getContextItems(stats.context);
     const ratedSeries: (Series & { userRating: number })[] = allSeries.map(series => {
         const userRating = getMediaRating(series);
@@ -3537,6 +4459,8 @@ export function renderStatistics(stats: StatsSummary) {
         if (chart instanceof Chart) chart.destroy();
     });
     S.setCharts({});
+    renderStatsGlobalOverview(stats);
+    toggleGlobalStatsPanels(stats.context === 'all');
     renderWatchedUnwatchedChart(stats);
     renderGenresChart(stats);
     renderAiredYearsChart(stats);

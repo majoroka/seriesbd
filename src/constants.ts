@@ -7,3 +7,4 @@ export const ALL_SERIES_MEDIA_FILTER_KEY: string = 'seriesdb.allSeriesMediaFilte
 export const THEME_STORAGE_KEY: string = 'seriesdb.theme';
 export const TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY: string = 'seriesdb.topRated.excludeAsianAnimation';
 export const SEASON_CACHE_DURATION: number = 7 * 24 * 60 * 60 * 1000; // 7 dias
+export const DASHBOARD_NEWS_ENHANCED_ENABLED: boolean = true;

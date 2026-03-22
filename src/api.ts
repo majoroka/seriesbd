@@ -168,7 +168,13 @@ export async function searchBooks(query: string, signal: AbortSignal): Promise<{
 export async function fetchBookDetails(book: Series, signal: AbortSignal | null): Promise<Series> {
     const sourceId = String(book.source_id || '').trim();
     const provider = String(book.source_provider || '').trim();
-    const detailsUrl = `/api/books/details?source_id=${encodeURIComponent(sourceId)}&provider=${encodeURIComponent(provider)}&query=${encodeURIComponent(book.name || '')}`;
+    const isbn = String(book.isbn || book.isbn_13 || book.isbn_10 || '').trim();
+    const params = new URLSearchParams();
+    if (sourceId) params.set('source_id', sourceId);
+    if (provider) params.set('provider', provider);
+    if (book.name) params.set('query', book.name);
+    if (isbn) params.set('isbn', isbn);
+    const detailsUrl = `/api/books/details?${params.toString()}`;
 
     try {
         const response = await fetchWithRetry(detailsUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);

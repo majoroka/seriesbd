@@ -14,9 +14,13 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 
 - Sprint 7 concluído.
 - Sprint 8 concluído.
+- Sprint 9 concluído.
+- Sprint 10 concluído.
+- Sprint 11 concluído.
 - PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
 - PR-5 em curso para hardening UX, acessibilidade e regressão final.
-- Próxima frente aprovada: **Notícias RSS na Dashboard** (substituição do bloco de gráficos).
+- PR-6, PR-7 e PR-8 concluídos e validados em staging.
+- Frente em aberto: **hardening final/QA das Notícias RSS** e **planeamento da vista de Estatísticas Globais acionada pelo card**.
 
 ## Decisões já fechadas
 
@@ -139,6 +143,32 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - DV2-T31 Personalizar relevância por histórico do utilizador (com fallback para feed geral).
 - DV2-T32 Validar responsividade do card em desktop/tablet/mobile sem overflow.
 
+## Fase 8 - Estatísticas Globais acionadas pelo card
+
+- DV2-T33 Tornar o card `Estatísticas` da dashboard clicável.
+- DV2-T34 Reutilizar `stats-section` em modo `global`, sem criar modal.
+- DV2-T35 Implementar `Resumo Geral`:
+  - total da biblioteca
+  - `Quero Ver / Ler`
+  - `A Ver / Ler`
+  - `Concluídos`
+  - percentagem global
+- DV2-T36 Implementar `Distribuição por Tipo`:
+  - séries
+  - filmes
+  - livros
+- DV2-T37 Implementar `Progresso Global` agregado.
+- DV2-T38 Implementar `Tempo Consumido` consolidado:
+  - séries
+  - filmes
+  - livros
+  - total
+- DV2-T39 Implementar `Top Géneros Globais`.
+- DV2-T40 Implementar `Top Ratings Globais`.
+- DV2-T41 Implementar `Tendência Temporal` global.
+- DV2-T42 Adicionar filtros rápidos: `Tudo`, `Séries`, `Filmes`, `Livros`.
+- DV2-T43 Garantir navegação consistente com botão claro para voltar à dashboard.
+
 ## Plano de PRs recomendado
 
 - [x] PR-1: Shell da dashboard, sidebar, top bar, tema e navegação base.
@@ -146,9 +176,10 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - [x] PR-3: Sub-menus por domínio e integração biblioteca geral.
 - [x] PR-4: Recomendações personalizadas + notificações reais.
 - [ ] PR-5: Hardening UX, acessibilidade e regressão final.
-- [ ] PR-6: Fundação do agregador RSS + contrato `/api/news`.
-- [ ] PR-7: UI do card de notícias e substituição do bloco de gráficos.
-- [ ] PR-8: Relevância/filtros + hardening + rollout controlado.
+- [x] PR-6: Fundação do agregador RSS + contrato `/api/news`.
+- [x] PR-7: UI do card de notícias e substituição do bloco de gráficos.
+- [x] PR-8: Relevância/filtros + hardening + rollout controlado.
+- [ ] PR-10: Vista de Estatísticas Globais acionada pelo card `Estatísticas`.
 
 ## Critérios de aceitação globais
 
