@@ -754,6 +754,7 @@ const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 const DASHBOARD_NEWS_LIMIT = 24;
+const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
 const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
@@ -947,7 +948,7 @@ function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string
         return mediaType === 'book' ? 'A Ler' : 'A Ver';
     }
     if (metricKey === 'completed') {
-        return 'Concluídas';
+        return mediaType === 'series' ? 'Concluídas' : 'Concluídos';
     }
     if (metricKey === 'total') {
         return 'Total';
@@ -1297,6 +1298,37 @@ function matchesDashboardContentFilter(mediaType: string | null | undefined, fil
     return mediaType === filter;
 }
 
+function balanceDashboardNewsBySource(items: DashboardNewsItem[], limit: number): DashboardNewsItem[] {
+    if (items.length <= limit) return items;
+
+    const groups = new Map<string, DashboardNewsItem[]>();
+    const orderedSourceKeys: string[] = [];
+
+    items.forEach((item) => {
+        const sourceKey = item.sourceKey || item.source || 'rss';
+        if (!groups.has(sourceKey)) {
+            groups.set(sourceKey, []);
+            orderedSourceKeys.push(sourceKey);
+        }
+        groups.get(sourceKey)!.push(item);
+    });
+
+    const selected: DashboardNewsItem[] = [];
+    while (selected.length < limit) {
+        let pickedThisRound = false;
+        for (const sourceKey of orderedSourceKeys) {
+            const queue = groups.get(sourceKey);
+            if (!queue || queue.length === 0) continue;
+            selected.push(queue.shift()!);
+            pickedThisRound = true;
+            if (selected.length >= limit) break;
+        }
+        if (!pickedThisRound) break;
+    }
+
+    return selected;
+}
+
 function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
     const filtered = dashboardNewsEntries.filter((item) => {
         return matchesDashboardContentFilter(item.mediaTypeHint, dashboardPanelFilters.news);
@@ -1307,7 +1339,7 @@ function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
     const keywordWeights = buildDashboardNewsKeywordWeights();
     const mediaTypeWeights = buildDashboardMediaTypeWeights();
     const scoreById = new Map<string, number>();
-    return [...filtered].sort((a, b) => {
+    const ranked = [...filtered].sort((a, b) => {
         const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
         const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
         if (!DASHBOARD_NEWS_ENHANCED_ENABLED || !hasHistory) {
@@ -1321,7 +1353,9 @@ function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
         const scoreDelta = scoreB - scoreA;
         if (scoreDelta !== 0) return scoreDelta;
         return bTs - aTs;
-    }).slice(0, 8);
+    });
+
+    return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
 }
 
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {

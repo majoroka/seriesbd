@@ -21,12 +21,14 @@ const NEWS_FEEDS = [
     key: 'screenrant',
     source: 'ScreenRant',
     url: 'https://screenrant.com/feed/',
+    fallbackUrls: ['https://www.screenrant.com/feed/'],
     defaultMediaType: 'general',
   },
   {
     key: 'movieweb',
     source: 'MovieWeb',
     url: 'https://movieweb.com/feed/',
+    fallbackUrls: ['https://www.movieweb.com/feed/'],
     defaultMediaType: 'movie',
   },
   {
@@ -238,29 +240,56 @@ const dedupeNewsItems = (items) => {
   });
 };
 
+const buildFeedRequestHeaders = (feedConfig) => {
+  let referer = 'https://seriesbd.pages.dev/';
+  try {
+    referer = `${new URL(feedConfig.url).origin}/`;
+  } catch {
+    referer = 'https://seriesbd.pages.dev/';
+  }
+
+  return {
+    Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, application/atom+xml;q=0.8, text/html;q=0.7, */*;q=0.1',
+    'Accept-Language': 'en-US,en;q=0.9,pt-PT;q=0.8,pt;q=0.7',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    Referer: referer,
+    'User-Agent': 'Mozilla/5.0 (compatible; MediaDexRSS/1.0; +https://seriesbd.pages.dev)',
+  };
+};
+
 const fetchFeedXml = async (feedConfig) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const candidateUrls = [feedConfig.url, ...(feedConfig.fallbackUrls || [])];
+  const headers = buildFeedRequestHeaders(feedConfig);
 
   try {
-    const response = await fetch(feedConfig.url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.1',
-      },
-      signal: controller.signal,
-    });
+    let lastError = null;
+    for (const candidateUrl of candidateUrls) {
+      try {
+        const response = await fetch(candidateUrl, {
+          method: 'GET',
+          headers,
+          redirect: 'follow',
+          signal: controller.signal,
+        });
 
-    if (!response.ok) {
-      throw new Error(`Feed responded with status ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Feed responded with status ${response.status}`);
+        }
+
+        const xml = await response.text();
+        if (!xml.includes('<rss') && !xml.includes('<feed')) {
+          throw new Error('Feed response is not valid RSS/XML');
+        }
+
+        return xml;
+      } catch (error) {
+        lastError = error;
+      }
     }
-
-    const xml = await response.text();
-    if (!xml.includes('<rss') && !xml.includes('<feed')) {
-      throw new Error('Feed response is not valid RSS/XML');
-    }
-
-    return xml;
+    throw lastError || new Error('Feed request failed');
   } finally {
     clearTimeout(timeoutId);
   }
