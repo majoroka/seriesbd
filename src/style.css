@@ -211,12 +211,9 @@ textarea:focus-visible,
 
 /* ========== SIDEBAR ========== */
 .sidebar {
-    --sidebar-theme-rgb: 71, 171, 210;
     width: 250px;
     flex-shrink: 0;
-    background:
-        radial-gradient(circle at 5% 0%, rgba(var(--sidebar-theme-rgb), 0.12) 0%, transparent 55%),
-        var(--bg-light);
+    background: var(--bg-light);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -225,23 +222,6 @@ textarea:focus-visible,
     height: 100vh;
     position: sticky;
     top: 0;
-}
-
-.sidebar[data-main-theme="series"] {
-    --sidebar-theme-rgb: var(--media-series-rgb);
-}
-
-.sidebar[data-main-theme="movie"] {
-    --sidebar-theme-rgb: var(--media-movie-rgb);
-}
-
-.sidebar[data-main-theme="book"] {
-    --sidebar-theme-rgb: var(--media-book-rgb);
-}
-
-.sidebar[data-main-theme="library"],
-.sidebar[data-main-theme="dashboard"] {
-    --sidebar-theme-rgb: 109, 176, 255;
 }
 
 .sidebar-header {
