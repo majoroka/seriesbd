@@ -782,6 +782,8 @@ const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
+const DASHBOARD_NEWS_BOOK_MIN_VISIBLE = 1;
+const DASHBOARD_NEWS_BOOK_MAX_VISIBLE = 2;
 const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
@@ -1380,7 +1382,31 @@ function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
         return bTs - aTs;
     });
 
-    return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    if (dashboardPanelFilters.news !== 'all') {
+        return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    }
+
+    const rankedBooks = ranked.filter((item) => item.mediaTypeHint === 'book');
+    if (rankedBooks.length === 0) {
+        return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    }
+
+    const reservedBookCount = Math.max(
+        Math.min(rankedBooks.length, DASHBOARD_NEWS_BOOK_MAX_VISIBLE),
+        Math.min(rankedBooks.length, DASHBOARD_NEWS_BOOK_MIN_VISIBLE)
+    );
+    const selectedBooks = balanceDashboardNewsBySource(rankedBooks, reservedBookCount);
+    const selectedBookIds = new Set(selectedBooks.map((item) => item.id));
+    const rankedNonBooks = ranked.filter((item) => !selectedBookIds.has(item.id));
+    const selectedOthers = balanceDashboardNewsBySource(
+        rankedNonBooks,
+        Math.max(0, DASHBOARD_NEWS_VISIBLE_LIMIT - selectedBooks.length)
+    );
+    const selectedIds = new Set([...selectedBooks, ...selectedOthers].map((item) => item.id));
+
+    return ranked
+        .filter((item) => selectedIds.has(item.id))
+        .slice(0, DASHBOARD_NEWS_VISIBLE_LIMIT);
 }
 
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
