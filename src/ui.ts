@@ -2,7 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
-import { DASHBOARD_NEWS_ENHANCED_ENABLED } from './constants';
+import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
@@ -1218,6 +1218,35 @@ function getDashboardPanelFiltersRoot(panel: DashboardPanelKey): HTMLDivElement 
     return null;
 }
 
+function getDashboardNewsPanel(): HTMLElement | null {
+    return DOM.dashboardNewsList?.closest('.dashboard-panel-news') as HTMLElement | null;
+}
+
+function syncDashboardNewsPanelVisibility(): boolean {
+    const panel = getDashboardNewsPanel();
+    const filters = DOM.dashboardNewsFilters;
+    const list = DOM.dashboardNewsList;
+    const isEnabled = isDashboardNewsRolloutEnabled();
+
+    if (panel) {
+        panel.hidden = !isEnabled;
+        panel.style.display = isEnabled ? '' : 'none';
+        panel.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    if (filters) {
+        filters.hidden = !isEnabled;
+        filters.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    if (list) {
+        list.hidden = !isEnabled;
+        list.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    return isEnabled;
+}
+
 function renderDashboardPanelFilters(panel: DashboardPanelKey): void {
     const root = getDashboardPanelFiltersRoot(panel);
     if (!root) return;
@@ -1452,6 +1481,7 @@ function buildDashboardNewsAttributionText(item: DashboardNewsItem): string {
 
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
+    if (!syncDashboardNewsPanelVisibility()) return;
     renderDashboardPanelFilters('news');
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
@@ -1520,6 +1550,10 @@ function renderDashboardNewsPanel(): void {
 }
 
 async function ensureDashboardNews(force = false): Promise<void> {
+    if (!syncDashboardNewsPanelVisibility()) {
+        dashboardNewsInFlight = null;
+        return;
+    }
     const now = Date.now();
     if (!force && dashboardNewsEntries.length > 0 && now < dashboardNewsCacheExpiresAt) {
         dashboardNewsState = 'ready';
@@ -2438,9 +2472,12 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
+    syncDashboardNewsPanelVisibility();
     renderAllDashboardPanelFilters();
     renderDashboardNewsPanel();
-    void ensureDashboardNews();
+    if (isDashboardNewsRolloutEnabled()) {
+        void ensureDashboardNews();
+    }
     renderDashboardRecentCarousel();
     renderDashboardSuggestionsCarousel();
     renderDashboardUpcomingReleases();
