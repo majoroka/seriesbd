@@ -22,6 +22,7 @@ const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[]
 let modalA11yInitialized = false;
 let scopedLibraryMediaType: 'all' | MediaType = 'all';
 let scopedStatsMediaType: 'all' | MediaType = 'all';
+let movieStatsRuntimeBackfillPromise: Promise<void> | null = null;
 
 export function setScopedLibraryMediaType(mediaType: 'all' | MediaType): void {
     if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book' || mediaType === 'all') {
@@ -151,6 +152,24 @@ function getMediaProgressPercent(series: Series): number {
     const progress = S.userData[getMediaStateKey(series)]?.progress_percent;
     if (typeof progress !== 'number' || Number.isNaN(progress)) return 0;
     return Math.max(0, Math.min(100, progress));
+}
+
+function parsePositiveRuntimeMinutes(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        return Math.round(value);
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value.trim());
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return Math.round(parsed);
+        }
+    }
+    return 0;
+}
+
+function getMovieRuntimeMinutes(item: Series): number {
+    const legacyRuntime = (item as Series & { runtime?: number | string | null }).runtime;
+    return parsePositiveRuntimeMinutes(item.episode_run_time) || parsePositiveRuntimeMinutes(legacyRuntime);
 }
 
 function getMediaRating(series: Series): number {
@@ -892,9 +911,7 @@ function getItemConsumedHours(item: Series): number {
     const baseProgress = resolveDashboardProgress(item);
     const progressPercent = isItemArchived(item) && baseProgress <= 0 ? 100 : baseProgress;
     if (mediaType === 'movie') {
-        const runtimeMinutes = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
-            ? item.episode_run_time
-            : 110;
+        const runtimeMinutes = getMovieRuntimeMinutes(item) || 110;
         return (runtimeMinutes * Math.max(0, Math.min(100, progressPercent))) / 100 / 60;
     }
 
@@ -3573,12 +3590,7 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
         else pendingUnits += 1;
 
         if (mediaType === 'movie') {
-            const legacyRuntime = (item as Series & { runtime?: number | null }).runtime;
-            const runtime = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
-                ? item.episode_run_time
-                : typeof legacyRuntime === 'number' && legacyRuntime > 0
-                    ? legacyRuntime
-                    : 0;
+            const runtime = getMovieRuntimeMinutes(item);
             totalTimeMinutes += Math.round(runtime * (Math.max(0, Math.min(100, progress)) / 100));
         }
     });
@@ -3610,6 +3622,43 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
 
 function buildStatsSummary(): StatsSummary {
     return buildStatsSummaryForContext(getStatsMediaContext());
+}
+
+async function backfillMovieRuntimeForStats(summary: StatsSummary): Promise<void> {
+    if (summary.context !== 'movie') return;
+    if (summary.completedItems <= 0) return;
+    if (summary.totalTimeMinutes > 0) return;
+    if (movieStatsRuntimeBackfillPromise) return;
+
+    const candidates = getContextItems('movie')
+        .filter((item) => (isItemArchived(item) || getMediaProgressPercent(item) >= 100))
+        .filter((item) => item.source_provider === 'tmdb_movie' && String(item.source_id || '').trim().length > 0)
+        .filter((item) => getMovieRuntimeMinutes(item) <= 0);
+
+    if (candidates.length === 0) return;
+
+    movieStatsRuntimeBackfillPromise = (async () => {
+        for (const item of candidates) {
+            try {
+                const details = await API.fetchMovieDetails(item.id, null, item.source_id);
+                if (getMovieRuntimeMinutes(details) <= 0) continue;
+                await S.updateSeries({
+                    ...item,
+                    ...details,
+                    id: item.id,
+                    media_type: 'movie',
+                });
+            } catch (error) {
+                console.warn('[stats] Falha ao preencher duração de filme em falta.', {
+                    movieId: item.id,
+                    sourceId: item.source_id,
+                    error,
+                });
+            }
+        }
+    })().finally(() => {
+        movieStatsRuntimeBackfillPromise = null;
+    });
 }
 
 function applyStatsLabels(summary: StatsSummary): void {
@@ -4494,6 +4543,7 @@ function renderRatedSeriesByRating(rating: number) {
 }
 
 export function renderStatistics(stats: StatsSummary) {
+    void backfillMovieRuntimeForStats(stats);
     Object.values(S.charts).forEach(chart => {
         if (chart instanceof Chart) chart.destroy();
     });
