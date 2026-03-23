@@ -23,6 +23,19 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - PR-10 concluído no escopo atual.
 - Frente em aberto: **hardening final/QA das Notícias RSS** e **polishing incremental de UI/UX**.
 
+## Sequência recomendada a partir do estado atual
+
+1. **PR-5**
+   - hardening UX, acessibilidade e regressão visual curta.
+2. **Sprint 12**
+   - sanitização, limites/cache, observabilidade e licenciamento do feed RSS.
+3. **Sprint 13**
+   - QA/UAT final, rollback e preparação de release.
+4. **S6-T06**
+   - cutover DNS para Cloudflare Pages após validação.
+5. **Pós-release**
+   - logs/testes extra do fallback editorial e refinamentos incrementais da dashboard/estatísticas.
+
 ## Decisões já fechadas
 
 - `Dashboard` passa a ser o ecrã de entrada.

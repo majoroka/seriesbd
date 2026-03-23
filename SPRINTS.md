@@ -6,6 +6,21 @@ Sprint 12: **parcialmente concluído** (estabilidade e equilíbrio incremental d
 Em aberto: **Sprint 12 e Sprint 13 (sanitização/licenciamento/QA final das Notícias RSS na Dashboard)**.  
 Próximo bloco funcional: **UI/UX polishing e hardening final**.
 
+## Prioridade de execução recomendada
+
+1. **PR-5 | Hardening UX e Acessibilidade**
+   - fechar foco visível, navegação por teclado, modais/dropdowns e micro-ajustes UX.
+2. **Sprint 12 | Hardening RSS**
+   - sanitização, limites/cache, observabilidade por fonte e revisão de atribuição/licenciamento.
+3. **Sprint 13 | QA e Rollout**
+   - smoke/regressão completa, UAT final, rollback e aprovação de release.
+4. **S6-T06 | Cutover DNS**
+   - mudar o domínio definitivo para Cloudflare Pages só depois de estabilidade funcional.
+5. **Pós-release recomendável**
+   - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
+6. **Futuro opcional**
+   - expansão de estatísticas globais e reviews da comunidade.
+
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
 ### Tarefas

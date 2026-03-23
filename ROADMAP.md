@@ -49,6 +49,21 @@
    - Acessibilidade e micro-interações finais.
    - Regressão manual curta antes de promover para `main`.
 
+## Prioridade operacional recomendada
+
+1. **PR-5 | Hardening UX e Acessibilidade**
+   - primeiro fechar coerência de interação, foco, teclado e pequenos ajustes transversais.
+2. **Sprint 12 | Hardening RSS**
+   - estabilizar definitivamente o feed antes de fechar release.
+3. **Sprint 13 | QA e Rollout**
+   - executar regressão/UAT final e validar rollback.
+4. **S6-T06 | Cutover DNS**
+   - fazer o cutover apenas depois da app estar estabilizada.
+5. **Pós-release recomendado**
+   - reforçar `PR-9` com logs/testes extra e continuar polishing visual incremental.
+6. **Futuro opcional**
+   - evolução das estatísticas globais e reviews da comunidade.
+
 ## Evolução futura: Estatísticas Globais
 
 1. **G1 | Métricas avançadas**
