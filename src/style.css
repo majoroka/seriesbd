@@ -1423,6 +1423,27 @@ body.light-theme .dashboard-media-card-total-badge {
     overflow: hidden;
 }
 
+.dashboard-news-attribution {
+    margin-top: auto;
+    padding-top: 0.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.74rem;
+    line-height: 1.25;
+}
+
+.dashboard-news-attribution-source {
+    color: var(--text-secondary);
+}
+
+.dashboard-news-attribution-link {
+    color: var(--text-primary);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .dashboard-news-state {
     display: grid;
     place-items: center;

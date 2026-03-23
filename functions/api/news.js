@@ -15,6 +15,7 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8_000;
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 60;
+const ALLOWED_TYPES = new Set(['all', 'series', 'movie', 'book']);
 
 const NEWS_FEEDS = [
   {
@@ -70,17 +71,23 @@ const decodeHtmlEntities = (value) => String(value || '')
   .replace(/&gt;/gi, '>')
   .replace(/&nbsp;/gi, ' ');
 
-const stripHtml = (value) => decodeHtmlEntities(String(value || ''))
+const sanitizePlainText = (value) => decodeHtmlEntities(String(value || ''))
+  .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const stripHtml = (value) => sanitizePlainText(
+  decodeHtmlEntities(String(value || ''))
   .replace(/<script[\s\S]*?<\/script>/gi, ' ')
   .replace(/<style[\s\S]*?<\/style>/gi, ' ')
   .replace(/<br\s*\/?>/gi, ' ')
   .replace(/<\/p>/gi, ' ')
   .replace(/<[^>]+>/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim();
+);
 
 const truncateText = (value, maxLength = 320) => {
-  const normalized = String(value || '').trim();
+  const normalized = sanitizePlainText(value);
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
 };
@@ -135,7 +142,7 @@ const extractImageUrl = (itemXml) => {
 };
 
 const normalizeUrl = (value) => {
-  const raw = decodeHtmlEntities(String(value || '').trim());
+  const raw = sanitizePlainText(value);
   if (!raw) return '';
   try {
     const parsed = new URL(raw);
@@ -147,7 +154,7 @@ const normalizeUrl = (value) => {
 };
 
 const normalizeDate = (value) => {
-  const raw = String(value || '').trim();
+  const raw = sanitizePlainText(value);
   if (!raw) return null;
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -204,7 +211,7 @@ const classifyMediaType = (feedConfig, title, summary) => {
 const parseFeedItems = (xml, feedConfig) => {
   const itemMatches = xml.match(/<item\b[\s\S]*?<\/item>/gi) || [];
   return itemMatches.map((itemXml, index) => {
-    const title = stripHtml(extractTagValue(itemXml, 'title'));
+    const title = truncateText(stripHtml(extractTagValue(itemXml, 'title')), 220);
     const url = normalizeUrl(extractTagValue(itemXml, 'link'));
     const guid = stripHtml(extractTagValue(itemXml, 'guid'));
     const publishedAt = normalizeDate(extractTagValue(itemXml, ['pubDate', 'dc:date']));
@@ -376,9 +383,21 @@ const parseLimit = (url) => {
   return Math.min(MAX_LIMIT, Math.max(1, Math.round(raw)));
 };
 
+const parseRequestedType = (url) => {
+  const requestedType = sanitizePlainText(url.searchParams.get('type') || 'all').toLowerCase();
+  if (!ALLOWED_TYPES.has(requestedType)) return 'all';
+  return requestedType;
+};
+
 const filterItemsByType = (items, requestedType) => {
   if (!requestedType || requestedType === 'all') return items;
   return items.filter((item) => item.mediaTypeHint === requestedType);
+};
+
+const resolveSourceHealth = (result) => {
+  if (result.ok && result.fromCache) return 'stale';
+  if (result.ok) return 'healthy';
+  return 'error';
 };
 
 export const resetNewsCache = () => {
@@ -418,7 +437,7 @@ export async function onRequest(context) {
 
   const url = new URL(request.url);
   const limit = parseLimit(url);
-  const requestedType = String(url.searchParams.get('type') || 'all').toLowerCase();
+  const requestedType = parseRequestedType(url);
 
   try {
     const feedResults = await Promise.all(NEWS_FEEDS.map((feedConfig) => fetchNewsFromFeed(feedConfig, requestId)));
@@ -433,6 +452,19 @@ export async function onRequest(context) {
     const successfulSources = feedResults.filter((result) => result.ok).length;
     const hadPartialFailure = successfulSources < NEWS_FEEDS.length;
     const upstreamStatus = successfulSources > 0 ? 200 : 502;
+    const totalFetchedItems = feedResults.reduce((sum, result) => sum + result.items.length, 0);
+
+    logEvent('info', 'news.aggregate.success', {
+      requestId,
+      requestedType,
+      requestedLimit: limit,
+      totalFetchedItems,
+      totalReturnedItems: filteredItems.length,
+      successfulSources,
+      failedSources: NEWS_FEEDS.length - successfulSources,
+      partialFailure: hadPartialFailure,
+      durationMs: Date.now() - startedAt,
+    });
 
     const response = addCorsHeaders(jsonResponse({
       ok: successfulSources > 0,
@@ -443,10 +475,19 @@ export async function onRequest(context) {
         limit,
         generatedAt: new Date().toISOString(),
         partialFailure: hadPartialFailure,
+        successfulSources,
+        failedSources: NEWS_FEEDS.length - successfulSources,
+        totalFetchedItems,
+        sourceHealth: {
+          healthy: feedResults.filter((result) => resolveSourceHealth(result) === 'healthy').length,
+          stale: feedResults.filter((result) => resolveSourceHealth(result) === 'stale').length,
+          error: feedResults.filter((result) => resolveSourceHealth(result) === 'error').length,
+        },
         sources: feedResults.map((result) => ({
           key: result.sourceKey,
           source: result.source,
           ok: result.ok,
+          health: resolveSourceHealth(result),
           itemCount: result.items.length,
           durationMs: result.durationMs,
           fromCache: Boolean(result.fromCache),
@@ -455,7 +496,7 @@ export async function onRequest(context) {
         })),
       },
     }, upstreamStatus, {
-      'Cache-Control': 'public, max-age=300',
+      'Cache-Control': 'public, max-age=300, s-maxage=900, stale-while-revalidate=900',
     }), corsConfig);
 
     addProxyHeaders(response, {

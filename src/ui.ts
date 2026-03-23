@@ -1445,6 +1445,11 @@ function buildDashboardNewsMetaText(item: DashboardNewsItem): string {
     return `${source} • ${date}`;
 }
 
+function buildDashboardNewsAttributionText(item: DashboardNewsItem): string {
+    const source = sanitizePlainText(item.source) || 'Fonte';
+    return `Fonte original: ${source}`;
+}
+
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
     renderDashboardPanelFilters('news');
@@ -1496,7 +1501,7 @@ function renderDashboardNewsPanel(): void {
             rel: 'noopener noreferrer',
             role: 'listitem',
             title: `${item.title} • ${item.source}`,
-            'aria-label': `Abrir notícia: ${item.title}`,
+            'aria-label': `Abrir notícia original de ${item.source}: ${item.title}`,
         }, [
             createDashboardNewsMedia(item),
             el('div', { class: 'dashboard-recent-content dashboard-news-content' }, [
@@ -1504,6 +1509,10 @@ function renderDashboardNewsPanel(): void {
                 el('h4', { text: item.title }),
                 el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
                 el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
+                el('div', { class: 'dashboard-news-attribution' }, [
+                    el('span', { class: 'dashboard-news-attribution-source', text: buildDashboardNewsAttributionText(item) }),
+                    el('span', { class: 'dashboard-news-attribution-link', text: 'Abrir original ↗' }),
+                ]),
             ]),
         ]);
         DOM.dashboardNewsList.appendChild(article);
