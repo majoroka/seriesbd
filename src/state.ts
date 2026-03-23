@@ -150,6 +150,19 @@ export async function updateSeries(series: Series) {
     const normalizedSeries = normalizeSeries(series);
     const inWatchlist = myWatchlist.some(s => s.media_type === normalizedSeries.media_type && s.id === normalizedSeries.id);
     if (inWatchlist) {
+        myWatchlist = myWatchlist.map((item) =>
+            item.media_type === normalizedSeries.media_type && item.id === normalizedSeries.id
+                ? normalizedSeries
+                : item
+        );
+    } else {
+        myArchive = myArchive.map((item) =>
+            item.media_type === normalizedSeries.media_type && item.id === normalizedSeries.id
+                ? normalizedSeries
+                : item
+        );
+    }
+    if (inWatchlist) {
         await db.watchlist.put(normalizedSeries);
     } else {
         await db.archive.put(normalizedSeries);

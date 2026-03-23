@@ -2103,6 +2103,26 @@ async function displayMovieDetails(media: Series): Promise<void> {
     );
 
     const isInLibrary = isMediaInLibrary('movie', movieDetails.id);
+    if (isInLibrary) {
+        const storedMovie = S.getMediaItem('movie', movieDetails.id);
+        const mergedMovie = storedMovie
+            ? {
+                ...storedMovie,
+                ...movieDetails,
+                id: storedMovie.id,
+                media_type: 'movie' as const,
+            }
+            : movieDetails;
+        const storedRuntime = typeof storedMovie?.episode_run_time === 'number' && storedMovie.episode_run_time > 0
+            ? storedMovie.episode_run_time
+            : 0;
+        const freshRuntime = typeof movieDetails.episode_run_time === 'number' && movieDetails.episode_run_time > 0
+            ? movieDetails.episode_run_time
+            : 0;
+        if (!storedMovie || freshRuntime !== storedRuntime) {
+            await S.updateSeries(mergedMovie);
+        }
+    }
     const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
     const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
     UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived });
