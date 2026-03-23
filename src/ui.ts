@@ -3573,7 +3573,12 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
         else pendingUnits += 1;
 
         if (mediaType === 'movie') {
-            const runtime = typeof item.episode_run_time === 'number' && item.episode_run_time > 0 ? item.episode_run_time : 0;
+            const legacyRuntime = (item as Series & { runtime?: number | null }).runtime;
+            const runtime = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
+                ? item.episode_run_time
+                : typeof legacyRuntime === 'number' && legacyRuntime > 0
+                    ? legacyRuntime
+                    : 0;
             totalTimeMinutes += Math.round(runtime * (Math.max(0, Math.min(100, progress)) / 100));
         }
     });
