@@ -716,7 +716,9 @@ function renderNotificationsMenu(): void {
         const date = document.createElement('span');
         date.className = 'notification-item-date';
         const notificationDate = parseDateOnly(notification.dateIso) ?? new Date(notification.timestamp);
-        date.textContent = formatNotificationDateLabel(notificationDate);
+        const formattedDate = formatNotificationDateLabel(notificationDate);
+        date.textContent = formattedDate;
+        item.setAttribute('aria-label', `${notification.title}. ${notification.description}. ${getNotificationMediaLabel(notification.mediaType)}. ${formattedDate}.`);
 
         top.appendChild(title);
         top.appendChild(date);
@@ -815,6 +817,7 @@ function applySubmenuForMainTarget(mainTarget: MainMenuTarget): void {
             parentItem.classList.toggle('is-hidden', shouldHide);
             if (shouldHide) {
                 linkElement.classList.remove('active');
+                linkElement.removeAttribute('aria-current');
             }
         }
     });
