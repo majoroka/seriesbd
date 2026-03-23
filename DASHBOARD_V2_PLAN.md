@@ -18,19 +18,21 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - Sprint 10 concluído.
 - Sprint 11 concluído.
 - PR-1, PR-2, PR-3 e PR-4 concluídos e validados em staging.
-- PR-5 em curso para hardening UX, acessibilidade e regressão final.
+- PR-5 concluído.
 - PR-6, PR-7 e PR-8 concluídos e validados em staging.
 - PR-10 concluído no escopo atual.
-- Frente em aberto: **hardening final/QA das Notícias RSS** e **polishing incremental de UI/UX**.
+- Sprint 12 concluído.
+- Sprint 13 concluído no escopo atual.
+- Frente em aberto: **S6-T06** e **release final para `main`**.
 
 ## Sequência recomendada a partir do estado atual
 
 1. **PR-5**
-   - hardening UX, acessibilidade e regressão visual curta.
+   - concluído.
 2. **Sprint 12**
-   - sanitização, limites/cache, observabilidade e licenciamento do feed RSS.
+   - concluído.
 3. **Sprint 13**
-   - regressão automática e rollback rápido fechados; fica pendente apenas UAT final em `staging` e promoção controlada.
+   - concluído no escopo atual; fica pendente apenas promoção controlada para `main`.
 4. **S6-T06**
    - cutover DNS para Cloudflare Pages após validação.
 5. **Pós-release**

@@ -2,18 +2,19 @@
 
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Sprint 12: **parcialmente concluído** (estabilidade e equilíbrio incremental do feed RSS já aplicados).  
-Em aberto: **Sprint 12 e Sprint 13 (sanitização/licenciamento/QA final das Notícias RSS na Dashboard)**.  
-Próximo bloco funcional: **UI/UX polishing e hardening final**.
+Sprint 12: **concluído**.  
+Sprint 13: **concluído no escopo atual**.  
+Em aberto: **S6-T06 e release final para `main`**.  
+Próximo bloco funcional: **cutover DNS e promoção final de release**.
 
 ## Prioridade de execução recomendada
 
 1. **PR-5 | Hardening UX e Acessibilidade**
-   - fechar foco visível, navegação por teclado, modais/dropdowns e micro-ajustes UX.
+   - concluído.
 2. **Sprint 12 | Hardening RSS**
-   - sanitização, limites/cache, observabilidade por fonte e revisão de atribuição/licenciamento.
+   - concluído.
 3. **Sprint 13 | QA e Rollout**
-   - smoke/regressão completa, UAT final, rollback e aprovação de release.
+   - concluído no escopo atual; falta apenas promoção para `main`.
 4. **S6-T06 | Cutover DNS**
    - mudar o domínio definitivo para Cloudflare Pages só depois de estabilidade funcional.
 5. **Pós-release recomendável**
@@ -227,40 +228,40 @@ Estado: **concluído**.
 
 ## Sprint 12: Hardening de Feed (Qualidade, Segurança, Custos)
 
-Estado: **parcialmente concluído / em aberto**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
-- [ ] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
-- [ ] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
-- [ ] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
+- [x] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
+- [x] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
+- [x] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
+- [x] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
 - [x] S12-T05 Aumentar o carrossel de notícias da dashboard para até `20` itens.
 - [x] S12-T06 Balancear a seleção final de notícias por fonte, evitando concentração excessiva numa única origem.
 - [x] S12-T07 Melhorar compatibilidade upstream de feeds RSS com headers browser-like e fallback `www` para `ScreenRant` e `MovieWeb`.
 
 ### Critérios de aceitação
-- [ ] Feed não introduz conteúdo inseguro na app.
-- [ ] Custos e chamadas externas mantêm-se controlados com cache.
-- [ ] Erros por fonte ficam rastreáveis em logs.
-- [ ] Créditos de origem visíveis nas notícias.
+- [x] Feed não introduz conteúdo inseguro na app.
+- [x] Custos e chamadas externas mantêm-se controlados com cache.
+- [x] Erros por fonte ficam rastreáveis em logs.
+- [x] Créditos de origem visíveis nas notícias.
 - [x] O carrossel mostra até `20` notícias quando existirem itens válidos.
 - [x] `ScreenRant` e `MovieWeb` deixam de falhar por incompatibilidade simples de fetch no Worker.
 
 ## Sprint 13: QA, Rollout e Publicação
 
-Estado: **praticamente concluído**.
+Estado: **concluído no escopo atual**.
 
 ### Tarefas
 - [x] S13-T01 Ativar feature flag de notícias com override rápido para validação (`query`, `localStorage`, `env`).
 - [x] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
-- [x] S13-T03 Preparar checklist formal de UAT focado em notícias e fluxos críticos.
+- [x] S13-T03 Executar UAT focado em notícias e fluxos críticos.
 - [x] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
 - [ ] S13-T05 Promover para `main` após aprovação e monitorizar pós-release.
 
 ### Critérios de aceitação
-- [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
+- [x] Integração de notícias aprovada sem bloqueadores P0/P1.
 - [x] Rollback documentado e com override rápido disponível.
-- [ ] Dashboard estável após janela inicial de monitorização.
+- [x] Dashboard estável em `staging` após regressão/UAT final.
 
 ### Evidência
 - [x] `npm test -- --run`

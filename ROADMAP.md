@@ -34,29 +34,28 @@
 
 ## Em preparação imediata
 
-1. **Hardening final das Notícias RSS (Sprint 12-13)**
-   - Rever sanitização, observabilidade, custos e licenciamento das fontes.
-   - Fechar QA/UAT e rollout final controlado.
-2. **Cutover DNS (S6-T06)**
+1. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
+2. **Release final para `main`**
+   - promoção controlada após aprovação final.
+   - monitorização inicial pós-release.
 3. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
 4. **Evolução futura das Estatísticas Globais**
    - Tempo consumido agregado, top ratings adicionais e refinamentos visuais futuros.
-5. **Hardening final (PR-5)**
-   - Acessibilidade e micro-interações finais.
-   - Regressão manual curta antes de promover para `main`.
+5. **Pós-release recomendável**
+   - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
 
 ## Prioridade operacional recomendada
 
 1. **PR-5 | Hardening UX e Acessibilidade**
-   - primeiro fechar coerência de interação, foco, teclado e pequenos ajustes transversais.
+   - concluído.
 2. **Sprint 12 | Hardening RSS**
-   - estabilizar definitivamente o feed antes de fechar release.
+   - concluído.
 3. **Sprint 13 | QA e Rollout**
-   - regressão automática e rollback rápido já fechados; falta validação manual final em `staging` e promoção para `main`.
+   - concluído no escopo atual; fica pendente apenas promoção para `main`.
 4. **S6-T06 | Cutover DNS**
    - fazer o cutover apenas depois da app estar estabilizada.
 5. **Pós-release recomendado**
@@ -89,14 +88,14 @@
    - Priorizar notícias por preferências da biblioteca.
    - Fallback para feed equilibrado quando não houver histórico suficiente.
 4. **Sprint 12 | Hardening**
-   - Estado: parcialmente concluído / em aberto.
+   - Estado: concluído.
    - Carrossel da dashboard expandido para até `20` itens e balanceado por fonte.
    - Compatibilidade upstream reforçada para `ScreenRant` e `MovieWeb`.
    - Sanitização de conteúdo RSS, limites e métricas por fonte.
    - Revisão de atribuição/licenciamento das fontes usadas.
 5. **Sprint 13 | QA e rollout**
-   - Estado: em aberto.
-   - Feature flag em `staging`, UAT, regressão e plano de rollback.
+   - Estado: concluído no escopo atual.
+   - Feature flag com override rápido, UAT, regressão e plano de rollback fechados.
 
 ## Roadmap futuro: Reviews da Comunidade
 
