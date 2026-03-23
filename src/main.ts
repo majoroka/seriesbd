@@ -3367,6 +3367,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
         scheduleLibrarySnapshotSyncFromLocalMutation();
         UI.renderMediaDashboard();
+        const statsSection = document.getElementById('stats-section');
+        if (statsSection && statsSection.style.display !== 'none') {
+            const stats = UI.updateKeyStats();
+            UI.renderStatistics(stats);
+        }
         void refreshNotificationsCenter();
     });
     setupMobileTopbarControls();
