@@ -30,7 +30,7 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 2. **Sprint 12**
    - sanitização, limites/cache, observabilidade e licenciamento do feed RSS.
 3. **Sprint 13**
-   - QA/UAT final, rollback e preparação de release.
+   - regressão automática e rollback rápido fechados; fica pendente apenas UAT final em `staging` e promoção controlada.
 4. **S6-T06**
    - cutover DNS para Cloudflare Pages após validação.
 5. **Pós-release**

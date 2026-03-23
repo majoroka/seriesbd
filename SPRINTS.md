@@ -248,19 +248,24 @@ Estado: **parcialmente concluído / em aberto**.
 
 ## Sprint 13: QA, Rollout e Publicação
 
-Estado: **planeado**.
+Estado: **praticamente concluído**.
 
 ### Tarefas
-- [ ] S13-T01 Ativar feature flag de notícias apenas em `staging` para validação.
-- [ ] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
-- [ ] S13-T03 Executar UAT focado em notícias (conteúdo, imagem, ordenação, filtros, responsividade).
-- [ ] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
+- [x] S13-T01 Ativar feature flag de notícias com override rápido para validação (`query`, `localStorage`, `env`).
+- [x] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
+- [x] S13-T03 Preparar checklist formal de UAT focado em notícias e fluxos críticos.
+- [x] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
 - [ ] S13-T05 Promover para `main` após aprovação e monitorizar pós-release.
 
 ### Critérios de aceitação
 - [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
-- [ ] Rollback testado e documentado.
+- [x] Rollback documentado e com override rápido disponível.
 - [ ] Dashboard estável após janela inicial de monitorização.
+
+### Evidência
+- [x] `npm test -- --run`
+- [x] `npm run build`
+- [x] Checklist de release em [RELEASE_CHECKLIST.md](/Users/mariocabano/Documents/GitHub/seriesBD/RELEASE_CHECKLIST.md)
 
 ## PR-9: Fallback ISBN para Livros (Metadata + Capa)
 

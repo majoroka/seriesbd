@@ -56,7 +56,7 @@
 2. **Sprint 12 | Hardening RSS**
    - estabilizar definitivamente o feed antes de fechar release.
 3. **Sprint 13 | QA e Rollout**
-   - executar regressão/UAT final e validar rollback.
+   - regressão automática e rollback rápido já fechados; falta validação manual final em `staging` e promoção para `main`.
 4. **S6-T06 | Cutover DNS**
    - fazer o cutover apenas depois da app estar estabilizada.
 5. **Pós-release recomendado**
