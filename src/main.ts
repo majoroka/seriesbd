@@ -545,6 +545,7 @@ function closeNotificationsMenu(): void {
     notificationsMenuOpen = false;
     if (DOM.notificationsMenu) {
         DOM.notificationsMenu.classList.remove('visible');
+        DOM.notificationsMenu.setAttribute('aria-hidden', 'true');
     }
     if (DOM.notificationsBtn) {
         DOM.notificationsBtn.setAttribute('aria-expanded', 'false');
@@ -555,6 +556,7 @@ function openNotificationsMenu(): void {
     notificationsMenuOpen = true;
     if (DOM.notificationsMenu) {
         DOM.notificationsMenu.classList.add('visible');
+        DOM.notificationsMenu.setAttribute('aria-hidden', 'false');
     }
     if (DOM.notificationsBtn) {
         DOM.notificationsBtn.setAttribute('aria-expanded', 'true');
@@ -569,6 +571,16 @@ function toggleNotificationsMenu(): void {
     openNotificationsMenu();
 }
 
+function setSettingsMenuOpen(isOpen: boolean): void {
+    if (DOM.settingsMenu) {
+        DOM.settingsMenu.classList.toggle('visible', isOpen);
+        DOM.settingsMenu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    }
+    if (DOM.settingsBtn) {
+        DOM.settingsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+}
+
 function isMobileViewport(): boolean {
     return window.matchMedia(`(max-width: ${MOBILE_TOPBAR_BREAKPOINT_PX}px)`).matches;
 }
@@ -576,7 +588,7 @@ function isMobileViewport(): boolean {
 function closeMobileTopbarPanel(): void {
     mobileTopbarPanelOpen = false;
     closeNotificationsMenu();
-    DOM.settingsMenu?.classList.remove('visible');
+    setSettingsMenuOpen(false);
     if (DOM.mobileTopbarPanel) {
         DOM.mobileTopbarPanel.classList.remove('visible');
         DOM.mobileTopbarPanel.hidden = true;
@@ -592,7 +604,7 @@ function openMobileTopbarPanel(): void {
         DOM.mobileTopbarPanel.hidden = false;
         DOM.mobileTopbarPanel.classList.add('visible');
     }
-    DOM.settingsMenu?.classList.add('visible');
+    setSettingsMenuOpen(true);
     if (DOM.mobileTopbarToggle) {
         DOM.mobileTopbarToggle.setAttribute('aria-expanded', 'true');
     }
@@ -810,7 +822,13 @@ function applySubmenuForMainTarget(mainTarget: MainMenuTarget): void {
 
 function updateMainMenuActiveState(target: MainMenuTarget): void {
     DOM.mainMenuLinks.forEach((link) => {
-        link.classList.toggle('active', parseMainMenuTarget(link.dataset.mainTarget) === target);
+        const isActive = parseMainMenuTarget(link.dataset.mainTarget) === target;
+        link.classList.toggle('active', isActive);
+        if (isActive) {
+            link.setAttribute('aria-current', 'page');
+        } else {
+            link.removeAttribute('aria-current');
+        }
     });
     DOM.sidebar?.setAttribute('data-main-theme', target);
 
@@ -2441,7 +2459,7 @@ function setupViewToggle(toggleElement: HTMLElement, container: HTMLElement, sto
 }
 
 async function exportData(): Promise<void> {
-    DOM.settingsMenu.classList.remove('visible');
+    setSettingsMenuOpen(false);
     if (!currentAuthenticatedUserId) {
         UI.showNotification('Inicie sessão para exportar a biblioteca.');
         return;
@@ -2502,7 +2520,7 @@ async function exportData(): Promise<void> {
 }
 
 async function importData(): Promise<void> {
-    DOM.settingsMenu.classList.remove('visible');
+    setSettingsMenuOpen(false);
     if (!currentAuthenticatedUserId) {
         UI.showNotification('Inicie sessão para importar a biblioteca.');
         return;
@@ -2750,7 +2768,7 @@ async function importData(): Promise<void> {
 
 async function rescanAllSeries() {
     UI.showNotification('A procurar por novos episódios em todas as séries...');
-    DOM.settingsMenu.classList.remove('visible');
+    setSettingsMenuOpen(false);
     try {
         await updateNextAired(); // Esta função já tem rate-limiting
         UI.showNotification('Verificação concluída. As listas foram atualizadas.');
@@ -2766,7 +2784,7 @@ async function refetchAllMetadata(): Promise<void> {
         return;
     }
     UI.showNotification('A recarregar todos os metadados... Por favor, aguarde.');
-    DOM.settingsMenu.classList.remove('visible');
+    setSettingsMenuOpen(false);
     try {
         const allSeries = [...S.myWatchlist, ...S.myArchive];
         const task = async (localSeries: Series) => {
@@ -4039,12 +4057,13 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.settingsBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         closeNotificationsMenu();
-        DOM.settingsMenu.classList.toggle('visible');
+        const shouldOpen = !DOM.settingsMenu?.classList.contains('visible');
+        setSettingsMenuOpen(shouldOpen);
     });
     document.addEventListener('click', (e: MouseEvent) => {
         const target = e.target as Node;
         if (DOM.settingsMenu && DOM.settingsBtn && !DOM.settingsMenu.contains(target) && !DOM.settingsBtn.contains(target)) {
-            DOM.settingsMenu.classList.remove('visible');
+            setSettingsMenuOpen(false);
         }
         if (DOM.notificationsMenu && DOM.notificationsBtn && !DOM.notificationsMenu.contains(target) && !DOM.notificationsBtn.contains(target)) {
             closeNotificationsMenu();
@@ -4060,10 +4079,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event.key !== 'Escape') return;
         if (DOM.settingsMenu?.classList.contains('visible')) {
-            DOM.settingsMenu.classList.remove('visible');
+            setSettingsMenuOpen(false);
+            DOM.settingsBtn?.focus();
         }
         if (notificationsMenuOpen) {
             closeNotificationsMenu();
+            DOM.notificationsBtn?.focus();
         }
         if (mobileTopbarPanelOpen) {
             closeMobileTopbarPanel();
@@ -4072,21 +4093,21 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.exportDataBtn?.addEventListener('click', exportData);
     DOM.importDataBtn?.addEventListener('click', importData);
     DOM.authLoginBtn?.addEventListener('click', () => {
-        DOM.settingsMenu.classList.remove('visible');
+        setSettingsMenuOpen(false);
         if (isMobileViewport()) {
             closeMobileTopbarPanel();
         }
         openAuthModal('login');
     });
     DOM.authSignupBtn?.addEventListener('click', () => {
-        DOM.settingsMenu.classList.remove('visible');
+        setSettingsMenuOpen(false);
         if (isMobileViewport()) {
             closeMobileTopbarPanel();
         }
         openAuthModal('signup');
     });
     DOM.authLogoutBtn?.addEventListener('click', async () => {
-        DOM.settingsMenu.classList.remove('visible');
+        setSettingsMenuOpen(false);
         if (isMobileViewport()) {
             closeMobileTopbarPanel();
         }

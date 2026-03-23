@@ -197,8 +197,12 @@ export function showSection(targetId: string) {
 
     const activeLink = document.querySelector(`.nav-link[data-target="${targetId}"]`);
     if (activeLink) {
-        DOM.mainNavLinks.forEach(link => link.classList.remove('active'));
+        DOM.mainNavLinks.forEach(link => {
+            link.classList.remove('active');
+            link.removeAttribute('aria-current');
+        });
         activeLink.classList.add('active');
+        activeLink.setAttribute('aria-current', 'page');
     }
 
     if (targetId === 'stats-section') {
@@ -215,8 +219,12 @@ export function showSection(targetId: string) {
 export function updateActiveNavLink(targetId: string) {
     const activeLink = document.querySelector(`.nav-link[data-target="${targetId}"]`);
     if (activeLink) {
-        DOM.mainNavLinks.forEach(link => link.classList.remove('active'));
+        DOM.mainNavLinks.forEach(link => {
+            link.classList.remove('active');
+            link.removeAttribute('aria-current');
+        });
         activeLink.classList.add('active');
+        activeLink.setAttribute('aria-current', 'page');
     }
 }
 
@@ -3267,12 +3275,12 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
                 'episode-still',
                 '/placeholders/still.svg'
             ),
-            el('i', { class: 'far fa-circle status-icon', role: 'button', tabindex: '0' }),
+            el('i', { class: 'far fa-circle status-icon', role: 'button', tabindex: '0', 'aria-label': 'Marcar como visto', title: 'Marcar como visto' }),
             el('span', { class: 'episode-number', text: `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` }),
             el('p', { class: 'episode-title', text: episode.name }),
             el('span', { class: 'episode-runtime', text: runtimeText }),
             el('span', { class: 'episode-air-date', text: new Date(episode.air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) }),
-            el('div', { class: 'episode-actions' }, [el('i', { class: 'fas fa-info-circle action-icon', title: 'Ver Detalhes' })])
+            el('div', { class: 'episode-actions' }, [el('i', { class: 'fas fa-info-circle action-icon', role: 'button', tabindex: '0', 'aria-label': `Ver detalhes de ${episode.name}`, title: 'Ver Detalhes' })])
         ]);
         container.appendChild(episodeElement);
         if (S.watchedState[seriesId] && S.watchedState[seriesId].includes(episode.id)) {
@@ -3286,6 +3294,7 @@ export function markEpisodeAsSeen(element: HTMLElement) {
     const statusIcon = element.querySelector('.status-icon') as HTMLElement;
     statusIcon.className = 'fas fa-check-circle status-icon';
     statusIcon.setAttribute('aria-label', 'Marcar como não visto');
+    statusIcon.setAttribute('title', 'Marcar como não visto');
 }
 
 export function markEpisodeAsUnseen(element: HTMLElement) {
@@ -3293,6 +3302,7 @@ export function markEpisodeAsUnseen(element: HTMLElement) {
     const statusIcon = element.querySelector('.status-icon') as HTMLElement;
     statusIcon.className = 'far fa-circle status-icon';
     statusIcon.setAttribute('aria-label', 'Marcar como visto');
+    statusIcon.setAttribute('title', 'Marcar como visto');
 }
 
 export function updateOverallProgressBar(seriesId: number) {
@@ -3655,6 +3665,11 @@ async function backfillMovieRuntimeForStats(summary: StatsSummary): Promise<void
                     error,
                 });
             }
+        }
+        const statsSection = document.getElementById('stats-section');
+        if (statsSection && statsSection.style.display !== 'none' && getStatsMediaContext() === 'movie') {
+            const refreshedSummary = buildStatsSummaryForContext('movie');
+            renderStatistics(refreshedSummary);
         }
     })().finally(() => {
         movieStatsRuntimeBackfillPromise = null;
