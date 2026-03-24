@@ -18,6 +18,7 @@ import {
     signOutCurrentUser,
     signUpWithPassword,
     subscribeToAuthState,
+    updateCurrentUserProfile,
 } from './auth';
 import {
     LibrarySyncOutcome,
@@ -76,6 +77,7 @@ const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
 let authFormMode: 'login' | 'signup' = 'login';
 let authFormBusy = false;
+let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
@@ -1410,10 +1412,23 @@ function setAuthInlineFeedback(message: string, mode: 'error' | 'info' = 'error'
     DOM.authInlineFeedback.classList.toggle('info', mode === 'info');
 }
 
+function clearProfileInlineFeedback() {
+    DOM.profileInlineFeedback.hidden = true;
+    DOM.profileInlineFeedback.textContent = '';
+    DOM.profileInlineFeedback.classList.remove('info');
+}
+
+function setProfileInlineFeedback(message: string, mode: 'error' | 'info' = 'error') {
+    DOM.profileInlineFeedback.textContent = message;
+    DOM.profileInlineFeedback.hidden = false;
+    DOM.profileInlineFeedback.classList.toggle('info', mode === 'info');
+}
+
 function updateAuthActionButtons(user: User | null) {
     const hasSession = Boolean(user);
     DOM.authLoginBtn.hidden = hasSession;
     DOM.authSignupBtn.hidden = hasSession;
+    DOM.accountProfileBtn.hidden = !hasSession;
     DOM.authLogoutBtn.hidden = !hasSession;
     DOM.exportDataBtn.disabled = !hasSession;
     DOM.importDataBtn.disabled = !hasSession;
@@ -1425,6 +1440,15 @@ function updateAuthActionButtons(user: User | null) {
     DOM.importDataBtn.title = hasSession
         ? 'Importar media'
         : 'Disponível apenas com sessão ativa.';
+}
+
+function setProfileFormLoadingState(isBusy: boolean) {
+    profileFormBusy = isBusy;
+    DOM.profileSubmitBtn.disabled = isBusy;
+    DOM.profileSubmitBtn.textContent = isBusy ? 'A guardar...' : 'Guardar perfil';
+    DOM.profileDisplayNameInput.disabled = isBusy;
+    DOM.profilePasswordInput.disabled = isBusy;
+    DOM.profilePasswordConfirmInput.disabled = isBusy;
 }
 
 function setAuthFormLoadingState(isBusy: boolean) {
@@ -1476,6 +1500,42 @@ function closeAuthModal() {
     UI.closeNotificationModal();
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
+}
+
+function resetProfileForm() {
+    DOM.profileForm.reset();
+    clearProfileInlineFeedback();
+    setProfileFormLoadingState(false);
+}
+
+async function openProfileModal() {
+    if (!isSupabaseConfigured()) {
+        UI.showNotification('Perfil disponível apenas com sessão ativa.');
+        return;
+    }
+
+    const session = await getCurrentSession();
+    const user = session?.user ?? null;
+    if (!user) {
+        UI.showNotification('Inicie sessão para editar o perfil.');
+        return;
+    }
+
+    setSettingsMenuOpen(false);
+    if (isMobileViewport()) {
+        closeMobileTopbarPanel();
+    }
+
+    resetProfileForm();
+    DOM.profileEmailInput.value = user.email || '';
+    DOM.profileDisplayNameInput.value = DOM.accountMenuName?.textContent?.trim() || getBestUserDisplayName(user);
+    UI.openProfileModal();
+}
+
+function closeProfileModal() {
+    UI.closeProfileModal();
+    clearProfileInlineFeedback();
+    setProfileFormLoadingState(false);
 }
 
 function clearInMemoryLibraryState() {
@@ -1560,12 +1620,14 @@ async function initializeAuthState() {
         setAuthenticatedUi(null);
         DOM.authLoginBtn.disabled = true;
         DOM.authSignupBtn.disabled = true;
+        DOM.accountProfileBtn.disabled = true;
         DOM.authLogoutBtn.disabled = true;
         return;
     }
 
     DOM.authLoginBtn.disabled = false;
     DOM.authSignupBtn.disabled = false;
+    DOM.accountProfileBtn.disabled = false;
     DOM.authLogoutBtn.disabled = false;
     setAuthStatusLabel('A validar sessão...', 'default');
 
@@ -4109,6 +4171,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         openAuthModal('signup');
     });
+    DOM.accountProfileBtn?.addEventListener('click', () => {
+        void openProfileModal();
+    });
     DOM.authLogoutBtn?.addEventListener('click', async () => {
         setSettingsMenuOpen(false);
         if (isMobileViewport()) {
@@ -4221,6 +4286,62 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.authModalCloseBtn?.addEventListener('click', closeAuthModal);
     DOM.authModal?.addEventListener('click', (e: MouseEvent) => {
         if (e.target === DOM.authModal) closeAuthModal();
+    });
+    DOM.profileForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (profileFormBusy || !isSupabaseConfigured()) return;
+
+        const displayName = DOM.profileDisplayNameInput.value.trim();
+        const password = DOM.profilePasswordInput.value;
+        const passwordConfirm = DOM.profilePasswordConfirmInput.value;
+        clearProfileInlineFeedback();
+
+        if (!displayName) {
+            setProfileInlineFeedback('Defina um nome a apresentar.');
+            return;
+        }
+
+        if (displayName.length < 3) {
+            setProfileInlineFeedback('O nome a apresentar deve ter pelo menos 3 caracteres.');
+            return;
+        }
+
+        if (password && password.length < 8) {
+            setProfileInlineFeedback('A nova password deve ter pelo menos 8 caracteres.');
+            return;
+        }
+
+        if (password !== passwordConfirm) {
+            setProfileInlineFeedback('A confirmação da password não coincide.');
+            return;
+        }
+
+        setProfileFormLoadingState(true);
+        try {
+            if (!currentAuthenticatedUserId) {
+                throw new Error('Sessão inválida. Volte a entrar.');
+            }
+
+            await updateCurrentUserProfile({
+                displayName,
+                password: password || undefined,
+            });
+
+            const session = await getCurrentSession();
+            const updatedUser = session?.user ?? null;
+            setAuthenticatedUi(updatedUser);
+            closeProfileModal();
+            UI.showNotification(password ? 'Perfil e password atualizados.' : 'Perfil atualizado.');
+        } catch (error) {
+            const message = getErrorMessage(error);
+            console.error('[auth] Erro ao atualizar perfil.', error);
+            setProfileInlineFeedback(`Não foi possível atualizar o perfil: ${message}`);
+            setProfileFormLoadingState(false);
+        }
+    });
+    DOM.profileModalCloseBtn?.addEventListener('click', closeProfileModal);
+    DOM.profileModal?.addEventListener('click', (event: MouseEvent) => {
+        if (event.target === DOM.profileModal) closeProfileModal();
     });
     DOM.toggleAsianAnimationFilterBtn?.addEventListener('click', async () => {
         excludeAsianAnimationFromTopRated = !excludeAsianAnimationFromTopRated;

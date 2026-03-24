@@ -2630,6 +2630,15 @@ details[open] > .season-summary::before {
     font-size: 1rem;
 }
 
+.auth-field input[readonly] {
+    opacity: 0.78;
+    cursor: default;
+}
+
+.profile-modal-content {
+    max-width: 500px;
+}
+
 .auth-toggle-mode {
     margin-top: 0.9rem;
     border: none;
