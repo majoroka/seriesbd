@@ -2750,6 +2750,13 @@ export function renderMediaDetails(
     const currentUserNotes = currentUserData.notes || '';
     const runtimeMinutes = typeof media.episode_run_time === 'number' ? media.episode_run_time : 0;
     const runtimeText = runtimeMinutes > 0 ? formatHoursMinutes(runtimeMinutes) : 'N/A';
+    const studiosText = media.production_companies?.length
+        ? media.production_companies.map((company) => company.name).filter(Boolean).join(', ')
+        : 'N/A';
+    const countriesText = media.production_countries?.length
+        ? media.production_countries.map((country) => country.name).filter(Boolean).join(', ')
+        : 'N/A';
+    const isbnText = String(media.isbn || media.isbn_13 || media.isbn_10 || '').trim() || 'N/A';
     const sourceProviderLabel = (() => {
         if (media.source_provider === 'tmdb_movie') return 'TMDb';
         if (media.source_provider === 'google_books') return 'Google Books';
@@ -2833,15 +2840,15 @@ export function renderMediaDetails(
             { label: 'Géneros', value: genres },
             { label: 'Duração', value: runtimeText },
             { label: 'Fonte', value: sourceProviderLabel },
-            { label: 'ID Fonte', value: media.source_id || String(media.id) },
-            { label: 'Avaliação Pública', value: publicRating === 'N/A' ? 'N/A' : `${publicRating}/10` },
+            { label: 'Estúdio', value: studiosText },
+            { label: 'País', value: countriesText },
         ]
         : [
             { label: 'Estado Leitura', value: progressLabel },
             { label: 'Géneros', value: genres },
             { label: 'Publicado', value: releaseDate },
             { label: 'Fonte', value: sourceProviderLabel },
-            { label: 'ID Fonte', value: media.source_id || String(media.id) },
+            { label: 'ISBN', value: isbnText },
             { label: 'Progresso', value: `${progressPercent}%` },
         ];
 
