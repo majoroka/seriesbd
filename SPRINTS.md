@@ -278,6 +278,7 @@ Estado: **concluído**.
 - [x] P9-T03 Testar fornecedores editoriais iniciais `Bertrand` e `Wook` com validação exata por ISBN.
 - [x] P9-T04 Rejeitar `Bertrand` e `Wook` por inviabilidade técnica em automação backend.
 - [x] P9-T05 Validar `Presença` como fornecedor viável com pesquisa/lookup por JSON do Shopify.
+- [x] P9-T05b Testar `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` e rejeitá-los por bloqueio, pesquisa não resolvida por ISBN ou automação demasiado frágil.
 - [x] P9-T06 Extrair metadata mínima necessária:
   - [x] sinopse
   - [x] imagem de capa
@@ -293,6 +294,7 @@ Estado: **concluído**.
 - [x] Capas externas de fallback são servidas pela app via proxy same-origin.
 - [x] Livros sem capa/sinopse nas APIs oficiais podem ser enriquecidos sem quebrar a app.
 - [x] `Bertrand` e `Wook` ficam explicitamente fora da integração ativa por inviabilidade técnica.
+- [x] `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` ficam explicitamente fora da integração ativa por inviabilidade técnica ou baixa fiabilidade para fallback automático por ISBN.
 - [ ] P9-T10 Adicionar logs mínimos e testes unitários para match por ISBN, cache e rejeição de resultados ambíguos.
 
 ### Critérios de aceitação

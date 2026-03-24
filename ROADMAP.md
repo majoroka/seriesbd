@@ -137,8 +137,9 @@
    - Prioridade continua a ser Google Books -> Open Library -> fallback editorial (`Presença`).
    - Nunca substituir dados já válidos das APIs principais por dados menos confiáveis.
  5. **F5 | Fornecedores rejeitados**
-   - `Bertrand` e `Wook` testados e descartados para integração automática.
-   - Motivo: baixa viabilidade técnica em automação backend (`search_failed` / `no_product_link`).
+   - `Bertrand`, `Wook`, `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` testados e descartados para integração automática.
+   - Motivo: bloqueio (`403` / erros de transporte), pesquisa não resolvida por ISBN ou automação demasiado frágil.
+   - `Presença` mantém-se como única fonte editorial adicional viável neste momento.
 
 ## Backlog técnico (pronto para issues)
 
