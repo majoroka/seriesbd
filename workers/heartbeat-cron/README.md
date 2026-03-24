@@ -10,7 +10,7 @@ Este worker chama o endpoint da app `POST /api/heartbeat` de 3 em 3 dias.
 
 - `HEARTBEAT_URL`
   - Exemplo staging: `https://staging.seriesbd.pages.dev/api/heartbeat`
-  - Exemplo produção: `https://seriesbd.pages.dev/api/heartbeat`
+  - Exemplo produção: `https://mediadex.app/api/heartbeat`
 - `HEARTBEAT_TOKEN` (opcional, mas recomendado)
   - Deve ser igual à variável `HEARTBEAT_TOKEN` no projeto Pages.
 

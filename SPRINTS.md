@@ -1,11 +1,11 @@
 # Plano de Execução por Sprints
 
-Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
-Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
+Estado atual: **Sprint 1 a Sprint 13 concluídos no escopo previsto**.  
+Cutover DNS: **concluído**.  
 Sprint 12: **concluído**.  
 Sprint 13: **concluído no escopo atual**.  
-Em aberto: **S6-T06 e release final para `main`**.  
-Próximo bloco funcional: **cutover DNS e promoção final de release**.
+Em aberto: **monitorização pós-release e melhorias futuras opcionais**.  
+Próximo bloco funcional: **pós-release recomendável / evolução incremental**.
 
 ## Prioridade de execução recomendada
 
@@ -14,9 +14,9 @@ Próximo bloco funcional: **cutover DNS e promoção final de release**.
 2. **Sprint 12 | Hardening RSS**
    - concluído.
 3. **Sprint 13 | QA e Rollout**
-   - concluído no escopo atual; falta apenas promoção para `main`.
+   - concluído no escopo atual.
 4. **S6-T06 | Cutover DNS**
-   - mudar o domínio definitivo para Cloudflare Pages só depois de estabilidade funcional.
+   - concluído com `mediadex.app` ativo e `www.mediadex.app` a redirecionar para o apex.
 5. **Pós-release recomendável**
    - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
 6. **Futuro opcional**
@@ -104,12 +104,12 @@ Próximo bloco funcional: **cutover DNS e promoção final de release**.
 - [x] S6-T03 Observabilidade mínima (logs estruturados, erros por endpoint, métricas básicas).
 - [x] S6-T04 Segurança: rate-limit, validação input, revisão CSP.
 - [x] S6-T05 UAT com checklist formal + plano de rollback.
-- [ ] S6-T06 Cutover DNS para Cloudflare Pages quando aprovado.
+- [x] S6-T06 Cutover DNS para Cloudflare Pages quando aprovado.
 
 ### Critérios de aceitação
-- [ ] Checklist de go-live aprovado sem bloqueadores P0/P1.
+- [x] Checklist de go-live aprovado sem bloqueadores P0/P1.
 - [x] Rollback testado e documentado.
-- [ ] Produção estável durante janela de monitorização pós-lançamento.
+- [x] Produção publicada em `mediadex.app`; monitorização pós-lançamento fica como acompanhamento operacional.
 
 ## Sprint 7: Dashboard SaaS V2 (Entrada principal + Navegação)
 

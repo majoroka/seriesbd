@@ -248,11 +248,11 @@ const dedupeNewsItems = (items) => {
 };
 
 const buildFeedRequestHeaders = (feedConfig) => {
-  let referer = 'https://seriesbd.pages.dev/';
+  let referer = 'https://mediadex.app/';
   try {
     referer = `${new URL(feedConfig.url).origin}/`;
   } catch {
-    referer = 'https://seriesbd.pages.dev/';
+    referer = 'https://mediadex.app/';
   }
 
   return {
@@ -261,7 +261,7 @@ const buildFeedRequestHeaders = (feedConfig) => {
     'Cache-Control': 'no-cache',
     Pragma: 'no-cache',
     Referer: referer,
-    'User-Agent': 'Mozilla/5.0 (compatible; MediaDexRSS/1.0; +https://seriesbd.pages.dev)',
+    'User-Agent': 'Mozilla/5.0 (compatible; MediaDexRSS/1.0; +https://mediadex.app)',
   };
 };
 

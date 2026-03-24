@@ -140,7 +140,7 @@ npm run test
 ## Deploy
 
 - Cloudflare Pages é o alvo principal.
-- `main` publica em `Production` (`seriesbd.pages.dev`).
+- `main` publica em `Production` (`mediadex.app`).
 - `staging` publica em `Preview` (`staging.seriesbd.pages.dev` e URLs por hash).
 - Certifique-se de que as chaves `TMDB_API_KEY`, `TRAKT_API_KEY`, `TVMAZE_API_KEY`, `GOOGLE_BOOKS_API_KEY` e `HEARTBEAT_TOKEN` estão configuradas em `Settings -> Variables and Secrets` para `Preview` e `Production`.
 - Para o cron de heartbeat:
