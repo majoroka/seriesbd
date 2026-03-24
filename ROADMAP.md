@@ -34,18 +34,12 @@
 
 ## Em preparação imediata
 
-1. **Cutover DNS (S6-T06)**
-   - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
-   - Janela controlada de monitorização pós-cutover.
-2. **Release final para `main`**
-   - promoção controlada após aprovação final.
-   - monitorização inicial pós-release.
-3. **UI/UX polishing**
+1. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-4. **Evolução futura das Estatísticas Globais**
+2. **Evolução futura das Estatísticas Globais**
    - Tempo consumido agregado, top ratings adicionais e refinamentos visuais futuros.
-5. **Pós-release recomendável**
+3. **Pós-release recomendável**
    - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
 
 ## Prioridade operacional recomendada
@@ -55,9 +49,9 @@
 2. **Sprint 12 | Hardening RSS**
    - concluído.
 3. **Sprint 13 | QA e Rollout**
-   - concluído no escopo atual; fica pendente apenas promoção para `main`.
+   - concluído no escopo atual.
 4. **S6-T06 | Cutover DNS**
-   - fazer o cutover apenas depois da app estar estabilizada.
+   - concluído com `mediadex.app` em produção e `www` redirecionado para o apex.
 5. **Pós-release recomendado**
    - reforçar `PR-9` com logs/testes extra e continuar polishing visual incremental.
 6. **Futuro opcional**

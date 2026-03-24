@@ -38,10 +38,10 @@
 
 ## 4) Testes rápidos com curl
 ```bash
-curl -i "https://seriesbd.pages.dev/api/tmdb/trending/tv/week"
-curl -i "https://seriesbd.pages.dev/api/trakt/search/show?query=dexter"
-curl -i "https://seriesbd.pages.dev/api/tvmaze/resolve/show?query=dexter"
-curl -i "https://seriesbd.pages.dev/api/books/search?query=cosmos"
+curl -i "https://mediadex.app/api/tmdb/trending/tv/week"
+curl -i "https://mediadex.app/api/trakt/search/show?query=dexter"
+curl -i "https://mediadex.app/api/tvmaze/resolve/show?query=dexter"
+curl -i "https://mediadex.app/api/books/search?query=cosmos"
 ```
 
 ## 5) Plano de rollback (Cloudflare + Git)
@@ -54,4 +54,3 @@ curl -i "https://seriesbd.pages.dev/api/books/search?query=cosmos"
    - Auth a funcionar.
    - APIs (`/api/tmdb`, `/api/trakt`, `/api/tvmaze`, `/api/books`) a responder 200/4xx esperados.
    - Heartbeat mantém inserções em `system_heartbeat`.
-

@@ -56,7 +56,7 @@ export async function onRequest(context) {
       throw new Error('A chave da API do Trakt não está configurada no ambiente da Cloudflare.');
     }
 
-    const userAgent = env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://seriesbd.pages.dev)';
+    const userAgent = env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://mediadex.app)';
     const url = new URL(request.url);
     const endpointPath = resolveEndpointPath(request.url, '/api/trakt');
     if (!isPathSafe(endpointPath)) {

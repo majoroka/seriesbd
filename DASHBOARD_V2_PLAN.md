@@ -23,7 +23,8 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 - PR-10 concluído no escopo atual.
 - Sprint 12 concluído.
 - Sprint 13 concluído no escopo atual.
-- Frente em aberto: **S6-T06** e **release final para `main`**.
+- Cutover DNS concluído com `mediadex.app` ativo.
+- Frente em aberto: **pós-release recomendável** e **evolução incremental**.
 
 ## Sequência recomendada a partir do estado atual
 
@@ -32,9 +33,9 @@ Transformar o ecrã inicial numa dashboard moderna e modular para consumo de med
 2. **Sprint 12**
    - concluído.
 3. **Sprint 13**
-   - concluído no escopo atual; fica pendente apenas promoção controlada para `main`.
+   - concluído no escopo atual.
 4. **S6-T06**
-   - cutover DNS para Cloudflare Pages após validação.
+   - concluído com `mediadex.app` em produção.
 5. **Pós-release**
    - logs/testes extra do fallback editorial e refinamentos incrementais da dashboard/estatísticas.
 

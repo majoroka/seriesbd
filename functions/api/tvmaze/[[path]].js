@@ -32,7 +32,7 @@ const normalizeString = (value) =>
 const buildTvMazeHeaders = (apiKey) => {
   const headers = {
     Accept: 'application/json',
-    'User-Agent': 'seriesBD/1.0 (+https://seriesbd.pages.dev)',
+    'User-Agent': 'seriesBD/1.0 (+https://mediadex.app)',
   };
   if (apiKey) headers['x-api-key'] = apiKey;
   return headers;
