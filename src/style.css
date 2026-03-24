@@ -4783,6 +4783,29 @@ body.light-theme .network-logo {
     }
 }
 
+/* Tablet portrait header: let account controls wrap below the search bar when needed */
+@media (min-width: 769px) and (max-width: 992px) {
+    .main-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .main-header-left {
+        width: 100%;
+    }
+
+    .main-header-right {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .search-bar {
+        width: 100%;
+    }
+}
+
 /* Tablet touch devices: force app arrows and hide iOS native disclosure markers */
 @media (min-width: 768px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
     details > summary {
