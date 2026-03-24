@@ -56,6 +56,19 @@ const RSS_BOOK = `<?xml version="1.0" encoding="UTF-8" ?>
   </channel>
 </rss>`;
 
+const RSS_WITH_UNSAFE_TEXT = `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title><![CDATA[Unsafe\u0007 Title <script>alert('x')</script>]]></title>
+      <link>https://example.com/news/unsafe</link>
+      <guid>unsafe-1</guid>
+      <pubDate>Tue, 18 Mar 2026 21:00:00 GMT</pubDate>
+      <description><![CDATA[<p>Hello\u0000 world</p><script>alert('x')</script><style>body{}</style>]]></description>
+    </item>
+  </channel>
+</rss>`;
+
 describe('news function', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -90,6 +103,33 @@ describe('news function', () => {
     expect(body.items[2].imageUrl).toBe('https://cdn.example.com/posters/tv.jpg');
     expect(body.items[2].summary).toBe('The new series trailer is finally here.');
     expect(body.meta.partialFailure).toBe(true);
+    expect(body.meta.successfulSources).toBe(3);
+    expect(body.meta.failedSources).toBe(2);
+    expect(body.meta.totalFetchedItems).toBe(5);
+    expect(body.meta.sourceHealth).toEqual({ healthy: 3, stale: 0, error: 2 });
+    expect(body.meta.sources.find((source) => source.source === 'Book Riot')?.health).toBe('healthy');
+  });
+
+  it('sanitizes unsafe HTML and control characters from RSS text', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('screenrant.com/feed')) return new Response(RSS_WITH_UNSAFE_TEXT, { status: 200 });
+      return new Response('failure', { status: 500 });
+    });
+
+    const response = await onRequest({
+      request: new Request('https://example.com/api/news?type=invalid-value', {
+        method: 'GET',
+        headers: { 'cf-connecting-ip': '10.0.0.14' },
+      }),
+    });
+
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.meta.requestedType).toBe('all');
+    expect(body.items[0].title).toBe('Unsafe Title');
+    expect(body.items[0].summary).toBe('Hello world');
   });
 
   it('returns 502 when every feed fails and there is no cache', async () => {
@@ -145,5 +185,6 @@ describe('news function', () => {
     expect(body.ok).toBe(true);
     expect(body.items).toHaveLength(2);
     expect(body.meta.sources.some((source) => source.source === 'ScreenRant' && source.fromCache)).toBe(true);
+    expect(body.meta.sources.some((source) => source.source === 'ScreenRant' && source.health === 'stale')).toBe(true);
   });
 });

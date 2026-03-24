@@ -2,7 +2,7 @@ import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertif
 import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
-import { DASHBOARD_NEWS_ENHANCED_ENABLED } from './constants';
+import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
 import { createMediaKey } from './media';
@@ -22,6 +22,7 @@ const modalStack: { overlay: HTMLDivElement; returnFocus: HTMLElement | null }[]
 let modalA11yInitialized = false;
 let scopedLibraryMediaType: 'all' | MediaType = 'all';
 let scopedStatsMediaType: 'all' | MediaType = 'all';
+let movieStatsRuntimeBackfillPromise: Promise<void> | null = null;
 
 export function setScopedLibraryMediaType(mediaType: 'all' | MediaType): void {
     if (mediaType === 'series' || mediaType === 'movie' || mediaType === 'book' || mediaType === 'all') {
@@ -153,6 +154,24 @@ function getMediaProgressPercent(series: Series): number {
     return Math.max(0, Math.min(100, progress));
 }
 
+function parsePositiveRuntimeMinutes(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        return Math.round(value);
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value.trim());
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return Math.round(parsed);
+        }
+    }
+    return 0;
+}
+
+function getMovieRuntimeMinutes(item: Series): number {
+    const legacyRuntime = (item as Series & { runtime?: number | string | null }).runtime;
+    return parsePositiveRuntimeMinutes(item.episode_run_time) || parsePositiveRuntimeMinutes(legacyRuntime);
+}
+
 function getMediaRating(series: Series): number {
     const rating = S.userData[getMediaStateKey(series)]?.rating;
     return typeof rating === 'number' ? rating : 0;
@@ -178,8 +197,12 @@ export function showSection(targetId: string) {
 
     const activeLink = document.querySelector(`.nav-link[data-target="${targetId}"]`);
     if (activeLink) {
-        DOM.mainNavLinks.forEach(link => link.classList.remove('active'));
+        DOM.mainNavLinks.forEach(link => {
+            link.classList.remove('active');
+            link.removeAttribute('aria-current');
+        });
         activeLink.classList.add('active');
+        activeLink.setAttribute('aria-current', 'page');
     }
 
     if (targetId === 'stats-section') {
@@ -196,8 +219,12 @@ export function showSection(targetId: string) {
 export function updateActiveNavLink(targetId: string) {
     const activeLink = document.querySelector(`.nav-link[data-target="${targetId}"]`);
     if (activeLink) {
-        DOM.mainNavLinks.forEach(link => link.classList.remove('active'));
+        DOM.mainNavLinks.forEach(link => {
+            link.classList.remove('active');
+            link.removeAttribute('aria-current');
+        });
         activeLink.classList.add('active');
+        activeLink.setAttribute('aria-current', 'page');
     }
 }
 
@@ -755,6 +782,8 @@ const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
+const DASHBOARD_NEWS_BOOK_MIN_VISIBLE = 1;
+const DASHBOARD_NEWS_BOOK_MAX_VISIBLE = 2;
 const DASHBOARD_NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 let dashboardSuggestedUpcomingEntries: DashboardUpcomingEntry[] = [];
 let dashboardUpcomingCacheSignature = '';
@@ -892,9 +921,7 @@ function getItemConsumedHours(item: Series): number {
     const baseProgress = resolveDashboardProgress(item);
     const progressPercent = isItemArchived(item) && baseProgress <= 0 ? 100 : baseProgress;
     if (mediaType === 'movie') {
-        const runtimeMinutes = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
-            ? item.episode_run_time
-            : 110;
+        const runtimeMinutes = getMovieRuntimeMinutes(item) || 110;
         return (runtimeMinutes * Math.max(0, Math.min(100, progressPercent))) / 100 / 60;
     }
 
@@ -1191,6 +1218,35 @@ function getDashboardPanelFiltersRoot(panel: DashboardPanelKey): HTMLDivElement 
     return null;
 }
 
+function getDashboardNewsPanel(): HTMLElement | null {
+    return DOM.dashboardNewsList?.closest('.dashboard-panel-news') as HTMLElement | null;
+}
+
+function syncDashboardNewsPanelVisibility(): boolean {
+    const panel = getDashboardNewsPanel();
+    const filters = DOM.dashboardNewsFilters;
+    const list = DOM.dashboardNewsList;
+    const isEnabled = isDashboardNewsRolloutEnabled();
+
+    if (panel) {
+        panel.hidden = !isEnabled;
+        panel.style.display = isEnabled ? '' : 'none';
+        panel.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    if (filters) {
+        filters.hidden = !isEnabled;
+        filters.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    if (list) {
+        list.hidden = !isEnabled;
+        list.setAttribute('aria-hidden', isEnabled ? 'false' : 'true');
+    }
+
+    return isEnabled;
+}
+
 function renderDashboardPanelFilters(panel: DashboardPanelKey): void {
     const root = getDashboardPanelFiltersRoot(panel);
     if (!root) return;
@@ -1355,7 +1411,31 @@ function getVisibleDashboardNewsEntries(): DashboardNewsItem[] {
         return bTs - aTs;
     });
 
-    return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    if (dashboardPanelFilters.news !== 'all') {
+        return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    }
+
+    const rankedBooks = ranked.filter((item) => item.mediaTypeHint === 'book');
+    if (rankedBooks.length === 0) {
+        return balanceDashboardNewsBySource(ranked, DASHBOARD_NEWS_VISIBLE_LIMIT);
+    }
+
+    const reservedBookCount = Math.max(
+        Math.min(rankedBooks.length, DASHBOARD_NEWS_BOOK_MAX_VISIBLE),
+        Math.min(rankedBooks.length, DASHBOARD_NEWS_BOOK_MIN_VISIBLE)
+    );
+    const selectedBooks = balanceDashboardNewsBySource(rankedBooks, reservedBookCount);
+    const selectedBookIds = new Set(selectedBooks.map((item) => item.id));
+    const rankedNonBooks = ranked.filter((item) => !selectedBookIds.has(item.id));
+    const selectedOthers = balanceDashboardNewsBySource(
+        rankedNonBooks,
+        Math.max(0, DASHBOARD_NEWS_VISIBLE_LIMIT - selectedBooks.length)
+    );
+    const selectedIds = new Set([...selectedBooks, ...selectedOthers].map((item) => item.id));
+
+    return ranked
+        .filter((item) => selectedIds.has(item.id))
+        .slice(0, DASHBOARD_NEWS_VISIBLE_LIMIT);
 }
 
 function getDashboardNewsImageSrc(item: DashboardNewsItem): string | null {
@@ -1394,8 +1474,14 @@ function buildDashboardNewsMetaText(item: DashboardNewsItem): string {
     return `${source} • ${date}`;
 }
 
+function buildDashboardNewsAttributionText(item: DashboardNewsItem): string {
+    const source = sanitizePlainText(item.source) || 'Fonte';
+    return `Fonte original: ${source}`;
+}
+
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
+    if (!syncDashboardNewsPanelVisibility()) return;
     renderDashboardPanelFilters('news');
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
@@ -1445,7 +1531,7 @@ function renderDashboardNewsPanel(): void {
             rel: 'noopener noreferrer',
             role: 'listitem',
             title: `${item.title} • ${item.source}`,
-            'aria-label': `Abrir notícia: ${item.title}`,
+            'aria-label': `Abrir notícia original de ${item.source}: ${item.title}`,
         }, [
             createDashboardNewsMedia(item),
             el('div', { class: 'dashboard-recent-content dashboard-news-content' }, [
@@ -1453,6 +1539,10 @@ function renderDashboardNewsPanel(): void {
                 el('h4', { text: item.title }),
                 el('span', { class: `dashboard-status-badge dashboard-news-badge ${badgeClass}`, text: getDashboardNewsBadgeLabel(item.mediaTypeHint) }),
                 el('p', { class: 'dashboard-news-summary', text: sanitizePlainText(item.summary) || 'Sem resumo disponível.' }),
+                el('div', { class: 'dashboard-news-attribution' }, [
+                    el('span', { class: 'dashboard-news-attribution-source', text: buildDashboardNewsAttributionText(item) }),
+                    el('span', { class: 'dashboard-news-attribution-link', text: 'Abrir original ↗' }),
+                ]),
             ]),
         ]);
         DOM.dashboardNewsList.appendChild(article);
@@ -1460,6 +1550,10 @@ function renderDashboardNewsPanel(): void {
 }
 
 async function ensureDashboardNews(force = false): Promise<void> {
+    if (!syncDashboardNewsPanelVisibility()) {
+        dashboardNewsInFlight = null;
+        return;
+    }
     const now = Date.now();
     if (!force && dashboardNewsEntries.length > 0 && now < dashboardNewsCacheExpiresAt) {
         dashboardNewsState = 'ready';
@@ -2378,9 +2472,12 @@ export function renderMediaDashboard() {
     const isDashboardVisible = DOM.mediaDashboardSection && DOM.mediaDashboardSection.style.display !== 'none';
     if (!isDashboardVisible) return;
 
+    syncDashboardNewsPanelVisibility();
     renderAllDashboardPanelFilters();
     renderDashboardNewsPanel();
-    void ensureDashboardNews();
+    if (isDashboardNewsRolloutEnabled()) {
+        void ensureDashboardNews();
+    }
     renderDashboardRecentCarousel();
     renderDashboardSuggestionsCarousel();
     renderDashboardUpcomingReleases();
@@ -2653,6 +2750,13 @@ export function renderMediaDetails(
     const currentUserNotes = currentUserData.notes || '';
     const runtimeMinutes = typeof media.episode_run_time === 'number' ? media.episode_run_time : 0;
     const runtimeText = runtimeMinutes > 0 ? formatHoursMinutes(runtimeMinutes) : 'N/A';
+    const studiosText = media.production_companies?.length
+        ? media.production_companies.map((company) => company.name).filter(Boolean).join(', ')
+        : 'N/A';
+    const countriesText = media.production_countries?.length
+        ? media.production_countries.map((country) => country.name).filter(Boolean).join(', ')
+        : 'N/A';
+    const isbnText = String(media.isbn || media.isbn_13 || media.isbn_10 || '').trim() || 'N/A';
     const sourceProviderLabel = (() => {
         if (media.source_provider === 'tmdb_movie') return 'TMDb';
         if (media.source_provider === 'google_books') return 'Google Books';
@@ -2736,15 +2840,15 @@ export function renderMediaDetails(
             { label: 'Géneros', value: genres },
             { label: 'Duração', value: runtimeText },
             { label: 'Fonte', value: sourceProviderLabel },
-            { label: 'ID Fonte', value: media.source_id || String(media.id) },
-            { label: 'Avaliação Pública', value: publicRating === 'N/A' ? 'N/A' : `${publicRating}/10` },
+            { label: 'Estúdio', value: studiosText },
+            { label: 'País', value: countriesText },
         ]
         : [
             { label: 'Estado Leitura', value: progressLabel },
             { label: 'Géneros', value: genres },
             { label: 'Publicado', value: releaseDate },
             { label: 'Fonte', value: sourceProviderLabel },
-            { label: 'ID Fonte', value: media.source_id || String(media.id) },
+            { label: 'ISBN', value: isbnText },
             { label: 'Progresso', value: `${progressPercent}%` },
         ];
 
@@ -3250,12 +3354,12 @@ function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId
                 'episode-still',
                 '/placeholders/still.svg'
             ),
-            el('i', { class: 'far fa-circle status-icon', role: 'button', tabindex: '0' }),
+            el('i', { class: 'far fa-circle status-icon', role: 'button', tabindex: '0', 'aria-label': 'Marcar como visto', title: 'Marcar como visto' }),
             el('span', { class: 'episode-number', text: `S${String(episode.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}` }),
             el('p', { class: 'episode-title', text: episode.name }),
             el('span', { class: 'episode-runtime', text: runtimeText }),
             el('span', { class: 'episode-air-date', text: new Date(episode.air_date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) }),
-            el('div', { class: 'episode-actions' }, [el('i', { class: 'fas fa-info-circle action-icon', title: 'Ver Detalhes' })])
+            el('div', { class: 'episode-actions' }, [el('i', { class: 'fas fa-info-circle action-icon', role: 'button', tabindex: '0', 'aria-label': `Ver detalhes de ${episode.name}`, title: 'Ver Detalhes' })])
         ]);
         container.appendChild(episodeElement);
         if (S.watchedState[seriesId] && S.watchedState[seriesId].includes(episode.id)) {
@@ -3269,6 +3373,7 @@ export function markEpisodeAsSeen(element: HTMLElement) {
     const statusIcon = element.querySelector('.status-icon') as HTMLElement;
     statusIcon.className = 'fas fa-check-circle status-icon';
     statusIcon.setAttribute('aria-label', 'Marcar como não visto');
+    statusIcon.setAttribute('title', 'Marcar como não visto');
 }
 
 export function markEpisodeAsUnseen(element: HTMLElement) {
@@ -3276,6 +3381,7 @@ export function markEpisodeAsUnseen(element: HTMLElement) {
     const statusIcon = element.querySelector('.status-icon') as HTMLElement;
     statusIcon.className = 'far fa-circle status-icon';
     statusIcon.setAttribute('aria-label', 'Marcar como visto');
+    statusIcon.setAttribute('title', 'Marcar como visto');
 }
 
 export function updateOverallProgressBar(seriesId: number) {
@@ -3573,7 +3679,7 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
         else pendingUnits += 1;
 
         if (mediaType === 'movie') {
-            const runtime = typeof item.episode_run_time === 'number' && item.episode_run_time > 0 ? item.episode_run_time : 0;
+            const runtime = getMovieRuntimeMinutes(item);
             totalTimeMinutes += Math.round(runtime * (Math.max(0, Math.min(100, progress)) / 100));
         }
     });
@@ -3605,6 +3711,48 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
 
 function buildStatsSummary(): StatsSummary {
     return buildStatsSummaryForContext(getStatsMediaContext());
+}
+
+async function backfillMovieRuntimeForStats(summary: StatsSummary): Promise<void> {
+    if (summary.context !== 'movie') return;
+    if (summary.completedItems <= 0) return;
+    if (summary.totalTimeMinutes > 0) return;
+    if (movieStatsRuntimeBackfillPromise) return;
+
+    const candidates = getContextItems('movie')
+        .filter((item) => (isItemArchived(item) || getMediaProgressPercent(item) >= 100))
+        .filter((item) => item.source_provider === 'tmdb_movie' && String(item.source_id || '').trim().length > 0)
+        .filter((item) => getMovieRuntimeMinutes(item) <= 0);
+
+    if (candidates.length === 0) return;
+
+    movieStatsRuntimeBackfillPromise = (async () => {
+        for (const item of candidates) {
+            try {
+                const details = await API.fetchMovieDetails(item.id, null, item.source_id);
+                if (getMovieRuntimeMinutes(details) <= 0) continue;
+                await S.updateSeries({
+                    ...item,
+                    ...details,
+                    id: item.id,
+                    media_type: 'movie',
+                });
+            } catch (error) {
+                console.warn('[stats] Falha ao preencher duração de filme em falta.', {
+                    movieId: item.id,
+                    sourceId: item.source_id,
+                    error,
+                });
+            }
+        }
+        const statsSection = document.getElementById('stats-section');
+        if (statsSection && statsSection.style.display !== 'none' && getStatsMediaContext() === 'movie') {
+            const refreshedSummary = buildStatsSummaryForContext('movie');
+            renderStatistics(refreshedSummary);
+        }
+    })().finally(() => {
+        movieStatsRuntimeBackfillPromise = null;
+    });
 }
 
 function applyStatsLabels(summary: StatsSummary): void {
@@ -4489,6 +4637,7 @@ function renderRatedSeriesByRating(rating: number) {
 }
 
 export function renderStatistics(stats: StatsSummary) {
+    void backfillMovieRuntimeForStats(stats);
     Object.values(S.charts).forEach(chart => {
         if (chart instanceof Chart) chart.destroy();
     });

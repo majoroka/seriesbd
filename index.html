@@ -56,7 +56,7 @@
 
             <nav class="primary-nav" aria-label="Navegação principal">
                 <ul>
-                    <li><a href="#" class="main-menu-link active" data-main-target="dashboard"><i class="fas fa-table-cells-large"></i> Dashboard</a></li>
+                    <li><a href="#" class="main-menu-link active" data-main-target="dashboard" aria-current="page"><i class="fas fa-table-cells-large"></i> Dashboard</a></li>
                     <li><a href="#" class="main-menu-link" data-main-target="series"><i class="fas fa-tv"></i> Séries</a></li>
                     <li><a href="#" class="main-menu-link" data-main-target="movie"><i class="fas fa-film"></i> Filmes</a></li>
                     <li><a href="#" class="main-menu-link" data-main-target="book"><i class="fas fa-book"></i> Livros</a></li>
@@ -105,7 +105,7 @@
                             <i class="fas fa-bell"></i>
                             <span id="notifications-badge" class="notifications-badge" hidden>0</span>
                         </button>
-                        <div id="notifications-menu" class="notifications-menu" role="menu" aria-label="Centro de notificações">
+                        <div id="notifications-menu" class="notifications-menu" role="menu" aria-label="Centro de notificações" aria-hidden="true">
                             <div class="notifications-menu-header">
                                 <h4>Notificações</h4>
                                 <div class="notifications-menu-header-actions">
@@ -117,12 +117,12 @@
                         </div>
                     </div>
                     <div class="settings-menu-wrapper account-menu-wrapper">
-                        <button id="settings-btn" class="account-menu-trigger" aria-label="Menu da conta" type="button">
+                        <button id="settings-btn" class="account-menu-trigger" aria-label="Menu da conta" type="button" aria-expanded="false" aria-controls="settings-menu">
                             <span id="topbar-account-avatar" class="account-avatar">U</span>
                             <span id="topbar-account-name" class="account-name">Utilizador</span>
                             <i class="fas fa-chevron-down"></i>
                         </button>
-                        <div class="settings-menu settings-menu-account" id="settings-menu">
+                        <div class="settings-menu settings-menu-account" id="settings-menu" role="menu" aria-label="Menu da conta" aria-hidden="true">
                             <ul>
                                 <li class="account-menu-summary">
                                     <div class="account-menu-summary-content">

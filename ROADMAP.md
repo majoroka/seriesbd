@@ -28,42 +28,50 @@
 - **Sprint 10 concluído**: substituição do bloco de gráficos da dashboard por um card `NOTÍCIAS`.
 - **Sprint 11 concluído**: filtros rápidos por domínio e relevância personalizada por biblioteca/histórico.
 - **PR-9 concluído**: pesquisa e detalhe de livros reforçados por ISBN com `Google Books` + `Open Library`, e fallback editorial controlado via `Presença` como último recurso para capa/sinopse.
+- **PR-10 concluído no escopo atual**: o card `Estatísticas` abre a vista global consolidada, com resumo, gráficos globais e favoritos separados por tipo.
+- **Uniformização de paleta concluída**: `Séries` `#63a9ce`, `Filmes` `#c25066` e `Livros` `#c3d88e` aplicados transversalmente em menus, submenus, badges, dashboard e estatísticas.
+- **Feed RSS estabilizado**: card `Notícias` suporta até `20` itens, seleção balanceada por fonte e compatibilidade reforçada para `ScreenRant` e `MovieWeb`.
 
 ## Em preparação imediata
 
-1. **PR-10 | Estatísticas Globais acionadas pelo card**
-   - Tornar o card `Estatísticas` clicável e reutilizar a secção de estatísticas em modo global.
-   - Consolidar métricas, distribuição por tipo, progresso, géneros, top ratings e tendência temporal.
-2. **Hardening final das Notícias RSS (Sprint 12-13)**
-   - Rever sanitização, observabilidade, custos e licenciamento das fontes.
-   - Fechar QA/UAT e rollout final controlado.
-3. **Cutover DNS (S6-T06)**
+1. **Cutover DNS (S6-T06)**
    - Ligar domínio definitivo ao projeto Cloudflare Pages quando aprovado.
    - Janela controlada de monitorização pós-cutover.
-4. **UI/UX polishing**
+2. **Release final para `main`**
+   - promoção controlada após aprovação final.
+   - monitorização inicial pós-release.
+3. **UI/UX polishing**
    - Ajustes finos visuais e de responsividade sem regressões funcionais.
    - Harmonização final de detalhes na dashboard e secções de detalhe.
-5. **Hardening final (PR-5)**
-   - Acessibilidade e micro-interações finais.
-   - Regressão manual curta antes de promover para `main`.
+4. **Evolução futura das Estatísticas Globais**
+   - Tempo consumido agregado, top ratings adicionais e refinamentos visuais futuros.
+5. **Pós-release recomendável**
+   - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
 
-## Roadmap futuro: Estatísticas Globais
+## Prioridade operacional recomendada
 
-1. **G1 | Entrada pela dashboard**
-   - O card `Estatísticas` passa a abrir uma vista global, sem modal.
-   - A navegação reutiliza a secção de estatísticas já existente, com modo `global`.
-2. **G2 | Resumo consolidado**
-   - Total global da biblioteca.
-   - `Quero Ver / Ler`, `A Ver / Ler`, `Concluídos` e percentagem global de conclusão.
-3. **G3 | Distribuição e progresso**
-   - Distribuição por tipo (`Séries`, `Filmes`, `Livros`).
-   - Progresso global agregado (`por iniciar`, `em progresso`, `concluídos`).
-4. **G4 | Métricas avançadas**
+1. **PR-5 | Hardening UX e Acessibilidade**
+   - concluído.
+2. **Sprint 12 | Hardening RSS**
+   - concluído.
+3. **Sprint 13 | QA e Rollout**
+   - concluído no escopo atual; fica pendente apenas promoção para `main`.
+4. **S6-T06 | Cutover DNS**
+   - fazer o cutover apenas depois da app estar estabilizada.
+5. **Pós-release recomendado**
+   - reforçar `PR-9` com logs/testes extra e continuar polishing visual incremental.
+6. **Futuro opcional**
+   - evolução das estatísticas globais e reviews da comunidade.
+
+## Evolução futura: Estatísticas Globais
+
+1. **G1 | Métricas avançadas**
    - Horas de séries, horas de filmes, estimativa de leitura e total agregado.
-   - Top géneros globais e top ratings globais com badge do tipo.
-5. **G5 | Tendência temporal e filtros**
-   - Tendência mensal de consumo/conclusões.
-   - Filtros rápidos no topo: `Tudo`, `Séries`, `Filmes`, `Livros`.
+2. **G2 | Curadoria global**
+   - Top ratings globais adicionais distintos dos favoritos.
+   - Possível drill-down por tipo dentro da vista global.
+3. **G3 | Polishing visual**
+   - Refinamento de gráficos globais e consistência visual final com as secções.
 
 ## Notícias RSS na Dashboard
 
@@ -80,12 +88,14 @@
    - Priorizar notícias por preferências da biblioteca.
    - Fallback para feed equilibrado quando não houver histórico suficiente.
 4. **Sprint 12 | Hardening**
-   - Estado: em aberto.
+   - Estado: concluído.
+   - Carrossel da dashboard expandido para até `20` itens e balanceado por fonte.
+   - Compatibilidade upstream reforçada para `ScreenRant` e `MovieWeb`.
    - Sanitização de conteúdo RSS, limites e métricas por fonte.
    - Revisão de atribuição/licenciamento das fontes usadas.
 5. **Sprint 13 | QA e rollout**
-   - Estado: em aberto.
-   - Feature flag em `staging`, UAT, regressão e plano de rollback.
+   - Estado: concluído no escopo atual.
+   - Feature flag com override rápido, UAT, regressão e plano de rollback fechados.
 
 ## Roadmap futuro: Reviews da Comunidade
 
@@ -127,8 +137,9 @@
    - Prioridade continua a ser Google Books -> Open Library -> fallback editorial (`Presença`).
    - Nunca substituir dados já válidos das APIs principais por dados menos confiáveis.
  5. **F5 | Fornecedores rejeitados**
-   - `Bertrand` e `Wook` testados e descartados para integração automática.
-   - Motivo: baixa viabilidade técnica em automação backend (`search_failed` / `no_product_link`).
+   - `Bertrand`, `Wook`, `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` testados e descartados para integração automática.
+   - Motivo: bloqueio (`403` / erros de transporte), pesquisa não resolvida por ISBN ou automação demasiado frágil.
+   - `Presença` mantém-se como única fonte editorial adicional viável neste momento.
 
 ## Backlog técnico (pronto para issues)
 

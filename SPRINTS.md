@@ -2,8 +2,25 @@
 
 Estado atual: **Sprint 1 a Sprint 11 concluídos**.  
 Pendente transversal: **S6-T06 (Cutover DNS para Cloudflare Pages)**.  
-Em aberto: **Sprint 12 e Sprint 13 (hardening/QA final das Notícias RSS na Dashboard)**.  
-Próximo bloco funcional: **PR-10 Estatísticas Globais acionadas pelo card da dashboard**.
+Sprint 12: **concluído**.  
+Sprint 13: **concluído no escopo atual**.  
+Em aberto: **S6-T06 e release final para `main`**.  
+Próximo bloco funcional: **cutover DNS e promoção final de release**.
+
+## Prioridade de execução recomendada
+
+1. **PR-5 | Hardening UX e Acessibilidade**
+   - concluído.
+2. **Sprint 12 | Hardening RSS**
+   - concluído.
+3. **Sprint 13 | QA e Rollout**
+   - concluído no escopo atual; falta apenas promoção para `main`.
+4. **S6-T06 | Cutover DNS**
+   - mudar o domínio definitivo para Cloudflare Pages só depois de estabilidade funcional.
+5. **Pós-release recomendável**
+   - logs/testes adicionais do fallback editorial (`PR-9`) e polishing incremental.
+6. **Futuro opcional**
+   - expansão de estatísticas globais e reviews da comunidade.
 
 ## Sprint 1: Infra Cloudflare + Paridade Série (MVP técnico)
 
@@ -211,35 +228,45 @@ Estado: **concluído**.
 
 ## Sprint 12: Hardening de Feed (Qualidade, Segurança, Custos)
 
-Estado: **parcialmente concluído / em aberto**.
+Estado: **concluído**.
 
 ### Tarefas
-- [ ] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
-- [ ] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
-- [ ] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
-- [ ] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
+- [x] S12-T01 Sanitizar conteúdos RSS (remoção de HTML inseguro e texto inválido).
+- [x] S12-T02 Definir política de limites (rate limit interno e janelas de atualização).
+- [x] S12-T03 Adicionar observabilidade por fonte (latência, erro, volume, taxa sem imagem).
+- [x] S12-T04 Revisão de termos/licenciamento das fontes RSS e atribuição de fonte na UI.
+- [x] S12-T05 Aumentar o carrossel de notícias da dashboard para até `20` itens.
+- [x] S12-T06 Balancear a seleção final de notícias por fonte, evitando concentração excessiva numa única origem.
+- [x] S12-T07 Melhorar compatibilidade upstream de feeds RSS com headers browser-like e fallback `www` para `ScreenRant` e `MovieWeb`.
 
 ### Critérios de aceitação
-- [ ] Feed não introduz conteúdo inseguro na app.
-- [ ] Custos e chamadas externas mantêm-se controlados com cache.
-- [ ] Erros por fonte ficam rastreáveis em logs.
-- [ ] Créditos de origem visíveis nas notícias.
+- [x] Feed não introduz conteúdo inseguro na app.
+- [x] Custos e chamadas externas mantêm-se controlados com cache.
+- [x] Erros por fonte ficam rastreáveis em logs.
+- [x] Créditos de origem visíveis nas notícias.
+- [x] O carrossel mostra até `20` notícias quando existirem itens válidos.
+- [x] `ScreenRant` e `MovieWeb` deixam de falhar por incompatibilidade simples de fetch no Worker.
 
 ## Sprint 13: QA, Rollout e Publicação
 
-Estado: **planeado**.
+Estado: **concluído no escopo atual**.
 
 ### Tarefas
-- [ ] S13-T01 Ativar feature flag de notícias apenas em `staging` para validação.
-- [ ] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
-- [ ] S13-T03 Executar UAT focado em notícias (conteúdo, imagem, ordenação, filtros, responsividade).
-- [ ] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
+- [x] S13-T01 Ativar feature flag de notícias com override rápido para validação (`query`, `localStorage`, `env`).
+- [x] S13-T02 Executar smoke/regressão completa dos fluxos críticos já existentes.
+- [x] S13-T03 Executar UAT focado em notícias e fluxos críticos.
+- [x] S13-T04 Definir plano de rollback rápido para reverter ao estado anterior do dashboard.
 - [ ] S13-T05 Promover para `main` após aprovação e monitorizar pós-release.
 
 ### Critérios de aceitação
-- [ ] Integração de notícias aprovada sem bloqueadores P0/P1.
-- [ ] Rollback testado e documentado.
-- [ ] Dashboard estável após janela inicial de monitorização.
+- [x] Integração de notícias aprovada sem bloqueadores P0/P1.
+- [x] Rollback documentado e com override rápido disponível.
+- [x] Dashboard estável em `staging` após regressão/UAT final.
+
+### Evidência
+- [x] `npm test -- --run`
+- [x] `npm run build`
+- [x] Checklist de release em [RELEASE_CHECKLIST.md](/Users/mariocabano/Documents/GitHub/seriesBD/RELEASE_CHECKLIST.md)
 
 ## PR-9: Fallback ISBN para Livros (Metadata + Capa)
 
@@ -251,6 +278,7 @@ Estado: **concluído**.
 - [x] P9-T03 Testar fornecedores editoriais iniciais `Bertrand` e `Wook` com validação exata por ISBN.
 - [x] P9-T04 Rejeitar `Bertrand` e `Wook` por inviabilidade técnica em automação backend.
 - [x] P9-T05 Validar `Presença` como fornecedor viável com pesquisa/lookup por JSON do Shopify.
+- [x] P9-T05b Testar `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` e rejeitá-los por bloqueio, pesquisa não resolvida por ISBN ou automação demasiado frágil.
 - [x] P9-T06 Extrair metadata mínima necessária:
   - [x] sinopse
   - [x] imagem de capa
@@ -266,6 +294,7 @@ Estado: **concluído**.
 - [x] Capas externas de fallback são servidas pela app via proxy same-origin.
 - [x] Livros sem capa/sinopse nas APIs oficiais podem ser enriquecidos sem quebrar a app.
 - [x] `Bertrand` e `Wook` ficam explicitamente fora da integração ativa por inviabilidade técnica.
+- [x] `Porto Editora`, `Almedina`, `Penguin Livros`, `VASP` e `El Corte Inglés` ficam explicitamente fora da integração ativa por inviabilidade técnica ou baixa fiabilidade para fallback automático por ISBN.
 - [ ] P9-T10 Adicionar logs mínimos e testes unitários para match por ISBN, cache e rejeição de resultados ambíguos.
 
 ### Critérios de aceitação
@@ -277,7 +306,7 @@ Estado: **concluído**.
 
 ## PR-10: Estatísticas Globais (ação do card `Estatísticas`)
 
-Estado: **planeado**.
+Estado: **concluído no escopo atual**.
 
 ### Objetivo
 - Tornar o card `Estatísticas` da dashboard acionável.
@@ -285,40 +314,33 @@ Estado: **planeado**.
 - Manter coerência de navegação com `Séries`, `Filmes`, `Livros` e `Biblioteca`, evitando modais ou fluxos paralelos.
 
 ### Tarefas
-- [ ] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
-- [ ] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
-- [ ] P10-T03 Implementar bloco `Resumo Geral`:
-  - [ ] total global
-  - [ ] quero ver / ler
-  - [ ] a ver / ler
-  - [ ] concluídos
-  - [ ] percentagem global de conclusão
-- [ ] P10-T04 Implementar bloco `Distribuição por Tipo`:
-  - [ ] séries
-  - [ ] filmes
-  - [ ] livros
-- [ ] P10-T05 Implementar bloco `Progresso Global` consolidado (`por iniciar`, `em progresso`, `concluídos`).
-- [ ] P10-T06 Implementar bloco `Tempo Consumido`:
-  - [ ] horas de séries
-  - [ ] horas de filmes
-  - [ ] estimativa de leitura para livros
-  - [ ] total agregado
-- [ ] P10-T07 Implementar bloco `Top Géneros Globais`.
-- [ ] P10-T08 Implementar bloco `Top Ratings Globais` misturando séries, filmes e livros com badge de tipo.
-- [ ] P10-T09 Implementar bloco `Tendência Temporal` (conclusões ou horas por mês).
-- [ ] P10-T10 Adicionar filtros rápidos no topo da vista global:
-  - [ ] Tudo
-  - [ ] Séries
-  - [ ] Filmes
-  - [ ] Livros
-- [ ] P10-T11 Garantir navegação consistente:
-  - [ ] clique no card abre a vista
-  - [ ] botão claro para voltar à dashboard
-  - [ ] foco e scroll corretos ao navegar
+- [x] P10-T01 Tornar o card `Estatísticas` clicável e ligá-lo a uma vista global dedicada.
+- [x] P10-T02 Reaproveitar `stats-section` com um modo `global`, em vez de criar modal ou página nova.
+- [x] P10-T03 Implementar `Resumo Global` no topo da vista com métricas consolidadas.
+- [x] P10-T04 Redesenhar o resumo em 3 cartões globais:
+  - [x] `Itens Concluídos`
+  - [x] `Itens por Concluir`
+  - [x] `Progresso Médio`
+- [x] P10-T05 Implementar donuts por secção (`Séries`, `Filmes`, `Livros`) no resumo global.
+- [x] P10-T06 Implementar `Top Géneros na Biblioteca` no modo global com `Chart.js`.
+- [x] P10-T07 Implementar `Conteúdos por Ano de Lançamento` no modo global.
+- [x] P10-T08 Implementar `Os Meus Favoritos` separados por:
+  - [x] séries
+  - [x] filmes
+  - [x] livros
+- [x] P10-T09 Manter as estatísticas por domínio (`Séries`, `Filmes`, `Livros`) sem regressões.
+- [x] P10-T10 Garantir navegação consistente:
+  - [x] clique no card abre a vista
+  - [x] foco e scroll corretos ao navegar
+  - [x] convivência correta com filtros existentes `Tudo / Séries / Filmes / Livros`
 
 ### Critérios de aceitação
-- [ ] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
-- [ ] A vista global mostra métricas consolidadas reais da biblioteca inteira.
-- [ ] Os filtros `Tudo / Séries / Filmes / Livros` funcionam sobre a mesma vista.
-- [ ] O layout mantém coerência visual com a dashboard e com as secções já existentes.
-- [ ] Não há regressões nas estatísticas atuais por domínio.
+- [x] Clicar no card `Estatísticas` abre a vista global sem recorrer a modal.
+- [x] A vista global mostra métricas consolidadas reais da biblioteca inteira.
+- [x] O layout mantém coerência visual com a dashboard e com as secções já existentes.
+- [x] Não há regressões nas estatísticas atuais por domínio.
+
+### Expansão futura opcional
+- [ ] P10-F01 Tempo consumido consolidado (séries, filmes, livros e total).
+- [ ] P10-F02 Top ratings globais adicionais, distintos dos favoritos.
+- [ ] P10-F03 Polishing visual adicional dos gráficos globais conforme futura revisão UX.
