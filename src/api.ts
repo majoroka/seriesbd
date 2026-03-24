@@ -137,6 +137,8 @@ export async function fetchMovieDetails(
         genres: Array.isArray(payload?.genres) ? payload.genres : [],
         vote_average: typeof payload?.vote_average === 'number' ? payload.vote_average : undefined,
         episode_run_time: typeof payload?.runtime === 'number' ? payload.runtime : undefined,
+        production_companies: Array.isArray(payload?.production_companies) ? payload.production_companies : [],
+        production_countries: Array.isArray(payload?.production_countries) ? payload.production_countries : [],
         videos: { results: mergedVideos },
     } as Series);
 }
