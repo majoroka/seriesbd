@@ -1348,6 +1348,11 @@ function renderDashboardPanelFilters(panel: DashboardPanelKey): void {
     });
 }
 
+function setCanvasA11yLabel(canvas: HTMLCanvasElement, label: string): void {
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', label);
+}
+
 function renderAllDashboardPanelFilters(): void {
     renderDashboardPanelFilters('news');
     renderDashboardPanelFilters('upcoming');
@@ -3956,7 +3961,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
                 <h4 class="stats-global-summary-card-title">${metric.title}</h4>
                 <div class="stats-global-summary-donut-wrap">
                     <div class="stats-global-summary-donut-figure">
-                        <canvas id="stats-global-summary-donut-${metricIndex}" class="stats-global-summary-donut-canvas" aria-label="${metric.title}"></canvas>
+                        <canvas id="stats-global-summary-donut-${metricIndex}" class="stats-global-summary-donut-canvas" role="img" aria-label="${metric.title}"></canvas>
                     </div>
                 </div>
             `;
@@ -3973,6 +3978,10 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
         const colors = mediaSummaries.map(({ visual }) => visual.accent);
         const labels = mediaSummaries.map(({ visual }) => visual.label);
         const centerText = `${metric.total}${metric.suffix}`;
+        setCanvasA11yLabel(
+            canvas,
+            `${metric.title}: ${centerText}. ${labels.map((label, index) => `${label}: ${values[index]}`).join('. ')}.`,
+        );
 
         const chart = new Chart(ctx, {
             type: 'doughnut',
@@ -4218,6 +4227,10 @@ function renderWatchedUnwatchedChart(stats: StatsSummary) {
     const ctx = canvas.getContext('2d');
     const watchedCount = stats.consumedUnits;
     const unwatchedCount = stats.pendingUnits;
+    setCanvasA11yLabel(
+        canvas,
+        `${stats.meta.doughnutConsumedLabel}: ${watchedCount}. ${stats.meta.doughnutPendingLabel}: ${unwatchedCount}.`,
+    );
     const colors = getChartColors();
     const isMobile = window.innerWidth <= 768;
     
@@ -4345,6 +4358,12 @@ function renderGenresChart(stats: StatsSummary) {
             .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
             .slice(0, 10);
         const labels = topGenres.map((entry) => entry.name);
+        setCanvasA11yLabel(
+            canvas,
+            labels.length > 0
+                ? `Top géneros na biblioteca. ${labels.slice(0, 5).join(', ')}.`
+                : 'Top géneros na biblioteca sem dados disponíveis.',
+        );
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
@@ -4428,6 +4447,12 @@ function renderGenresChart(stats: StatsSummary) {
     const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a);
     const labels = sortedGenres.map(([name]) => name);
     const data = sortedGenres.map(([, count]) => count);
+    setCanvasA11yLabel(
+        canvas,
+        labels.length > 0
+            ? `${stats.meta.genreDatasetLabel}. ${labels.slice(0, 5).map((label, index) => `${label}: ${data[index]}`).join('. ')}.`
+            : `${stats.meta.genreDatasetLabel} sem dados disponíveis.`,
+    );
     const isMobile = window.innerWidth <= 768;
 
     if (isMobile) {
@@ -4526,6 +4551,12 @@ function renderAiredYearsChart(stats: StatsSummary) {
             (['series', 'movie', 'book'] as MediaType[]).flatMap((mediaType) => Object.keys(countsByMedia[mediaType]).map(Number)),
         )).sort((a, b) => a - b);
         const labels = allYears.map(String);
+        setCanvasA11yLabel(
+            canvas,
+            labels.length > 0
+                ? `Conteúdos por ano de lançamento. Intervalo de ${labels[0]} até ${labels[labels.length - 1]}.`
+                : 'Conteúdos por ano de lançamento sem dados disponíveis.',
+        );
         const datasets = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
             label: getStatsMediaVisual(mediaType).label,
             data: allYears.map((year) => countsByMedia[mediaType][year] || 0),
@@ -4579,6 +4610,12 @@ function renderAiredYearsChart(stats: StatsSummary) {
     const sortedYears = Object.entries(yearCounts).sort((a, b) => Number(a[0]) - Number(b[0]));
     const labels = sortedYears.map(entry => entry[0]);
     const data = sortedYears.map(entry => entry[1]);
+    setCanvasA11yLabel(
+        canvas,
+        labels.length > 0
+            ? `${stats.meta.yearDatasetLabel}. Intervalo de ${labels[0]} até ${labels[labels.length - 1]}.`
+            : `${stats.meta.yearDatasetLabel} sem dados disponíveis.`,
+    );
 
     if (ctx) {
         S.charts.airedYears = new Chart(ctx, {

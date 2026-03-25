@@ -97,7 +97,8 @@
                             <option value="movie">Filmes</option>
                             <option value="book">Livros</option>
                         </select>
-                        <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série...">
+                        <label for="add-series-header-input" class="visually-hidden">Pesquisar conteúdo para adicionar à biblioteca</label>
+                        <input type="text" id="add-series-header-input" name="addSeriesSearch" placeholder="Pesquisar para adicionar série..." aria-label="Pesquisar conteúdo para adicionar à biblioteca">
                         <button id="add-series-header-button" class="search-bar-button">Pesquisar</button>
                     </div>
                     <div class="notifications-menu-wrapper">
@@ -105,9 +106,9 @@
                             <i class="fas fa-bell"></i>
                             <span id="notifications-badge" class="notifications-badge" hidden>0</span>
                         </button>
-                        <div id="notifications-menu" class="notifications-menu" role="menu" aria-label="Centro de notificações" aria-hidden="true">
+                        <div id="notifications-menu" class="notifications-menu" role="menu" aria-label="Centro de notificações" aria-describedby="notifications-menu-title" aria-hidden="true">
                             <div class="notifications-menu-header">
-                                <h4>Notificações</h4>
+                                <h4 id="notifications-menu-title">Notificações</h4>
                                 <div class="notifications-menu-header-actions">
                                     <button id="notifications-mark-all-read-btn" class="notifications-menu-action-btn" type="button" hidden>Marcar lidas</button>
                                     <button id="notifications-clear-btn" class="notifications-menu-action-btn notifications-clear-btn" type="button" hidden>Limpar</button>
@@ -134,17 +135,17 @@
                                     </div>
                                 </li>
                                 <li class="separator"></li>
-                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
-                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
-                                <li><button id="account-profile-btn" hidden><i class="fas fa-user-gear"></i> Perfil</button></li>
-                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
+                                <li><button id="auth-login-btn" role="menuitem"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
+                                <li><button id="auth-signup-btn" role="menuitem"><i class="fas fa-user-plus"></i> Registar</button></li>
+                                <li><button id="account-profile-btn" role="menuitem" hidden><i class="fas fa-user-gear"></i> Perfil</button></li>
+                                <li><button id="auth-logout-btn" role="menuitem" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
                                 <li class="separator"></li>
-                                <li><button id="theme-toggle-btn"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
-                                <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Media</button></li>
-                                <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Media</button></li>
+                                <li><button id="theme-toggle-btn" role="menuitem"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
+                                <li><button id="export-data-btn" role="menuitem"><i class="fas fa-file-export"></i> Exportar Media</button></li>
+                                <li><button id="import-data-btn" role="menuitem"><i class="fas fa-file-import"></i> Importar Media</button></li>
                                 <li class="separator"></li>
-                                <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
-                                <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
+                                <li><button id="rescan-series-btn" role="menuitem"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
+                                <li><button id="refetch-data-btn" role="menuitem"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
                             </ul>
                         </div>
                     </div>
@@ -357,7 +358,7 @@
                 <section class="card" id="stats-section" style="display: none;">
                     <div class="section-header">
                         <h2 id="stats-section-title"><i class="fas fa-chart-pie"></i> Estatísticas</h2>
-                        <button id="export-stats-btn" class="search-bar-button" style="align-self: center;">Exportar Estatísticas</button>
+                        <button id="export-stats-btn" class="search-bar-button" style="align-self: center;" aria-label="Exportar estatísticas da biblioteca">Exportar Estatísticas</button>
                     </div>
                     <section id="stats-global-overview" class="stats-global-overview" hidden aria-label="Resumo global da biblioteca">
                         <div class="stats-global-overview-header">
@@ -383,7 +384,7 @@
                     <div class="charts-grid">
                         <div class="chart-card">
                             <h3 id="stats-doughnut-title">Episódios Vistos vs. Por Ver</h3>
-                            <canvas id="watched-unwatched-chart"></canvas>
+                            <canvas id="watched-unwatched-chart" role="img" aria-label="Gráfico de episódios vistos versus por ver"></canvas>
                             <div id="stats-global-completion-panel" class="stats-global-completion-panel" hidden>
                                 <div id="stats-global-completion-ring" class="stats-global-completion-ring" aria-label="Concluídos vs. por concluir por secção"></div>
                                 <div id="stats-global-completion-legend" class="stats-global-completion-legend"></div>
@@ -391,14 +392,14 @@
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-genres-title">Top Géneros na Biblioteca</h3>
-                            <canvas id="genres-chart"></canvas>
+                            <canvas id="genres-chart" role="img" aria-label="Gráfico de géneros da biblioteca"></canvas>
                             <div id="stats-global-genres-panel" class="stats-global-genres-panel" hidden>
                                 <div id="stats-global-genres-list" class="stats-global-genres-list"></div>
                             </div>
                         </div>
                         <div class="chart-card">
                             <h3 id="stats-years-title">Séries por Ano de Lançamento</h3>
-                            <canvas id="aired-years-chart"></canvas>
+                            <canvas id="aired-years-chart" role="img" aria-label="Gráfico de conteúdos por ano de lançamento"></canvas>
                         </div>
                         <div class="chart-card" id="top-rated-series-card">
                             <h3 id="stats-top-rated-title">As Minhas Séries Favoritas</h3>
@@ -520,7 +521,7 @@
     <div id="notification-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Notificação" aria-describedby="notification-message" aria-hidden="true">
         <div class="modal-content notification-modal-content" tabindex="-1">
             <p id="notification-message"></p>
-            <button id="notification-ok-btn">OK</button>
+            <button id="notification-ok-btn" type="button">OK</button>
         </div>
     </div>
 
@@ -536,15 +537,16 @@
     </div>
 
     <!-- ========== LIBRARY SEARCH MODAL ========== -->
-    <div id="library-search-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="library-search-modal-title" aria-hidden="true">
+    <div id="library-search-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="library-search-modal-title" aria-describedby="library-search-modal-results" aria-hidden="true">
         <div class="modal-content library-search-modal-content" tabindex="-1">
             <button class="modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="library-search-modal-title">Pesquisar na Biblioteca</h2>
             <div class="search-bar" style="width: 100%; margin-bottom: 1.5rem;">
                 <i class="fas fa-search"></i>
-                <input type="text" id="library-search-modal-input" name="librarySearch" placeholder="Escreva o nome da série...">
+                <label for="library-search-modal-input" class="visually-hidden">Pesquisar nome na biblioteca</label>
+                <input type="text" id="library-search-modal-input" name="librarySearch" placeholder="Escreva o nome da série..." aria-label="Pesquisar nome na biblioteca">
             </div>
-            <div id="library-search-modal-results">
+            <div id="library-search-modal-results" aria-live="polite">
                 <!-- Search results will be injected here -->
             </div>
         </div>
@@ -584,7 +586,7 @@
     </div>
 
     <!-- ========== AUTH MODAL ========== -->
-    <div id="auth-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" aria-hidden="true">
+    <div id="auth-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" aria-describedby="auth-modal-description auth-inline-feedback" aria-hidden="true">
         <div class="modal-content auth-modal-content" tabindex="-1">
             <button class="modal-close-btn" id="auth-modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="auth-modal-title">Entrar</h2>
@@ -612,11 +614,11 @@
     </div>
 
     <!-- ========== PROFILE MODAL ========== -->
-    <div id="profile-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" aria-hidden="true">
+    <div id="profile-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" aria-describedby="profile-modal-description profile-inline-feedback" aria-hidden="true">
         <div class="modal-content auth-modal-content profile-modal-content" tabindex="-1">
             <button class="modal-close-btn" id="profile-modal-close-btn" aria-label="Fechar modal">&times;</button>
             <h2 id="profile-modal-title">Perfil</h2>
-            <p class="auth-modal-description">Atualize o nome apresentado e, se quiser, defina uma nova password.</p>
+            <p id="profile-modal-description" class="auth-modal-description">Atualize o nome apresentado e, se quiser, defina uma nova password.</p>
             <p id="profile-inline-feedback" class="auth-inline-feedback" role="status" aria-live="polite" hidden></p>
             <form id="profile-form" class="auth-form">
                 <div class="auth-field">
