@@ -1056,9 +1056,8 @@ export async function onRequest(context) {
     });
     return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    const message = getErrorMessage(error);
     const response = addCorsHeaders(
-      new Response(JSON.stringify({ error: 'Falha ao processar o pedido na função books', details: message }), {
+      new Response(JSON.stringify({ error: 'Falha ao processar o pedido na função books' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       }),

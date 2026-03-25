@@ -1,4 +1,5 @@
 const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms, x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset, retry-after';
+const HSTS_HEADER_VALUE = 'max-age=63072000; includeSubDomains; preload';
 
 const getRateLimitStore = () => {
   if (!globalThis.__seriesbdRateLimitStore) {
@@ -23,7 +24,16 @@ export const sanitizeOriginHeaders = (sourceHeaders) => {
   return headers;
 };
 
+export const applySecurityHeaders = (response) => {
+  response.headers.set('Strict-Transport-Security', HSTS_HEADER_VALUE);
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return response;
+};
+
 export const addProxyHeaders = (response, { requestId, upstreamStatus, durationMs }) => {
+  applySecurityHeaders(response);
   response.headers.set('x-request-id', requestId);
   response.headers.set('x-upstream-status', String(upstreamStatus));
   response.headers.set('x-upstream-latency-ms', String(durationMs));
@@ -38,6 +48,7 @@ export const addCorsHeaders = (response, corsConfig = {}) => {
     headers = 'Content-Type',
     maxAge = '86400',
   } = corsConfig;
+  applySecurityHeaders(response);
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', methods);
   response.headers.set('Access-Control-Allow-Headers', headers);

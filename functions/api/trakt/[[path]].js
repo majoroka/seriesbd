@@ -202,7 +202,7 @@ export async function onRequest(context) {
     });
 
     const errorResponse = addCorsHeaders(
-      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função trakt', details: message }, 500),
+      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função trakt' }, 500),
       corsConfig
     );
     addProxyHeaders(errorResponse, {

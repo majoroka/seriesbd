@@ -124,7 +124,7 @@ export async function onRequest(context) {
     });
 
     const response = addCorsHeaders(
-      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função tmdb', details: message }, 500),
+      jsonResponse({ ok: false, error: 'Falha ao processar o pedido na função tmdb' }, 500),
       corsConfig
     );
 

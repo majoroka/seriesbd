@@ -154,7 +154,6 @@ export async function onRequest(context) {
         ok: false,
         source: 'cloudflare-pages-function',
         error: 'Failed to persist heartbeat',
-        details,
       },
       500
     ), corsConfig);

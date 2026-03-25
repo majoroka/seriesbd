@@ -138,7 +138,6 @@ export async function onRequest(context) {
       {
         ok: false,
         error: 'Failed to validate display name',
-        details,
       },
       500
     ), corsConfig);
