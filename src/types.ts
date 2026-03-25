@@ -66,6 +66,20 @@ export interface DashboardNewsResponse {
     };
 }
 
+export interface ExternalReview {
+    id: string;
+    source: string;
+    sourceKey: string;
+    author: string;
+    authorUrl?: string | null;
+    rating?: number | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    content: string;
+    url?: string | null;
+    language?: string | null;
+}
+
 export interface Series {
     id: number;
     media_type: MediaType;

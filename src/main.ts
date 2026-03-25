@@ -2104,11 +2104,17 @@ async function displaySeriesDetails(seriesId: number) {
         const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
         const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
         const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
+        const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar reviews externas da série.', error);
+            return [];
+        });
 
-        const [seasonResults, traktSeasonsData, aggregatedSeriesData] = await Promise.all([
+        const [seasonResults, traktSeasonsData, aggregatedSeriesData, externalReviews] = await Promise.all([
             Promise.allSettled(seasonPromises),
             traktSeasonPromise,
             aggregatedMetadataPromise,
+            externalReviewsPromise,
         ]);
         if (aggregatedSeriesData?.tvmazeData?.show?.id) {
             console.info('[match][details] TVMaze match resolvido.', {
@@ -2143,7 +2149,7 @@ async function displaySeriesDetails(seriesId: number) {
             seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
         });
 
-        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData);
+        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
 
         await setupDetailViewActions(seriesData);
 
@@ -2184,6 +2190,11 @@ async function displayMovieDetails(media: Series): Promise<void> {
         () => API.fetchMovieDetails(media.id, signal, media.source_id),
         { mediaType: 'movie', mediaId: media.id }
     );
+    const externalReviews = await API.fetchTmdbExternalReviews('movie', movieDetails.source_id || media.source_id || media.id, signal).catch((error) => {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn('Falha ao carregar reviews externas do filme.', error);
+        return [];
+    });
 
     const isInLibrary = isMediaInLibrary('movie', movieDetails.id);
     if (isInLibrary) {
@@ -2208,7 +2219,7 @@ async function displayMovieDetails(media: Series): Promise<void> {
     }
     const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
     const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
-    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived });
+    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived }, externalReviews);
 }
 
 async function displayBookDetails(media: Series): Promise<void> {
@@ -2228,7 +2239,7 @@ async function displayBookDetails(media: Series): Promise<void> {
     const isInLibrary = isMediaInLibrary('book', bookDetails.id);
     const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
     const progressPercent = getMediaProgressPercent('book', bookDetails.id);
-    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived });
+    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived }, []);
 }
 
 async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
