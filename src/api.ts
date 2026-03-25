@@ -196,10 +196,10 @@ export async function fetchTmdbExternalReviews(
     };
 
     const ptReviews = await fetchReviewsForLanguage('pt-PT');
-    if (ptReviews.length > 0) return ptReviews.slice(0, 8);
+    if (ptReviews.length > 0) return ptReviews.slice(0, 15);
 
     const enReviews = await fetchReviewsForLanguage('en-US');
-    return enReviews.slice(0, 8);
+    return enReviews.slice(0, 15);
 }
 
 export async function searchBooks(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
