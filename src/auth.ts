@@ -12,6 +12,11 @@ export type DisplayNameAvailability = {
   normalizedName?: string;
 };
 
+export type ProfileUpdateInput = {
+  displayName: string;
+  password?: string;
+};
+
 function normalizeDisplayName(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
@@ -130,4 +135,52 @@ export async function signOutCurrentUser(): Promise<void> {
   const client = getSupabaseClient();
   const { error } = await client.auth.signOut();
   if (error) throw error;
+}
+
+export async function updateCurrentUserProfile(input: ProfileUpdateInput): Promise<void> {
+  const client = getSupabaseClient();
+  const normalizedDisplayName = normalizeDisplayName(input.displayName);
+  const password = String(input.password || '').trim();
+
+  const updatePayload: {
+    password?: string;
+    data?: {
+      full_name?: string;
+    };
+  } = {};
+
+  if (normalizedDisplayName) {
+    updatePayload.data = {
+      full_name: normalizedDisplayName,
+    };
+  }
+
+  if (password) {
+    updatePayload.password = password;
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    const { error } = await client.auth.updateUser(updatePayload);
+    if (error) throw error;
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
+
+  if (userError) throw userError;
+  if (!user) throw new Error('Sessão inválida para atualizar perfil.');
+
+  if (normalizedDisplayName) {
+    const { error: profileError } = await client.from('profiles').upsert(
+      {
+        id: user.id,
+        display_name: normalizedDisplayName,
+      },
+      { onConflict: 'id' }
+    );
+
+    if (profileError) throw profileError;
+  }
 }

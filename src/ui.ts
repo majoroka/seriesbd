@@ -349,6 +349,9 @@ function closeTopModal() {
         case 'auth-modal':
             closeAuthModal();
             break;
+        case 'profile-modal':
+            closeProfileModal();
+            break;
         default:
             break;
     }
@@ -450,6 +453,14 @@ export function openAuthModal() {
 
 export function closeAuthModal() {
     hideModal(DOM.authModal);
+}
+
+export function openProfileModal() {
+    showModal(DOM.profileModal, DOM.profileDisplayNameInput);
+}
+
+export function closeProfileModal() {
+    hideModal(DOM.profileModal);
 }
 
 export function openAllRatingsModal() {

@@ -134,13 +134,14 @@
                                     </div>
                                 </li>
                                 <li class="separator"></li>
+                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
+                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
+                                <li><button id="account-profile-btn" hidden><i class="fas fa-user-gear"></i> Perfil</button></li>
+                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
+                                <li class="separator"></li>
                                 <li><button id="theme-toggle-btn"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
                                 <li><button id="export-data-btn"><i class="fas fa-file-export"></i> Exportar Media</button></li>
                                 <li><button id="import-data-btn"><i class="fas fa-file-import"></i> Importar Media</button></li>
-                                <li class="separator"></li>
-                                <li><button id="auth-login-btn"><i class="fas fa-right-to-bracket"></i> Entrar</button></li>
-                                <li><button id="auth-signup-btn"><i class="fas fa-user-plus"></i> Registar</button></li>
-                                <li><button id="auth-logout-btn" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
                                 <li class="separator"></li>
                                 <li><button id="rescan-series-btn"><i class="fas fa-sync"></i> Procurar Atualizações</button></li>
                                 <li><button id="refetch-data-btn"><i class="fas fa-cloud-download-alt"></i> Recarregar Metadados</button></li>
@@ -607,6 +608,35 @@
             <button id="auth-toggle-mode-btn" type="button" class="auth-toggle-mode">
                 Ainda não tens conta? Registar
             </button>
+        </div>
+    </div>
+
+    <!-- ========== PROFILE MODAL ========== -->
+    <div id="profile-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" aria-hidden="true">
+        <div class="modal-content auth-modal-content profile-modal-content" tabindex="-1">
+            <button class="modal-close-btn" id="profile-modal-close-btn" aria-label="Fechar modal">&times;</button>
+            <h2 id="profile-modal-title">Perfil</h2>
+            <p class="auth-modal-description">Atualize o nome apresentado e, se quiser, defina uma nova password.</p>
+            <p id="profile-inline-feedback" class="auth-inline-feedback" role="status" aria-live="polite" hidden></p>
+            <form id="profile-form" class="auth-form">
+                <div class="auth-field">
+                    <label for="profile-display-name">Nome a apresentar</label>
+                    <input id="profile-display-name" type="text" maxlength="80" autocomplete="name" required>
+                </div>
+                <div class="auth-field">
+                    <label for="profile-email">Email</label>
+                    <input id="profile-email" type="email" autocomplete="email" readonly>
+                </div>
+                <div class="auth-field">
+                    <label for="profile-password">Nova password</label>
+                    <input id="profile-password" type="password" minlength="8" autocomplete="new-password" placeholder="Deixe em branco para manter">
+                </div>
+                <div class="auth-field">
+                    <label for="profile-password-confirm">Confirmar nova password</label>
+                    <input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Repita a nova password">
+                </div>
+                <button id="profile-submit-btn" type="submit" class="search-bar-button">Guardar perfil</button>
+            </form>
         </div>
     </div>
 

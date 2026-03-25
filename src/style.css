@@ -2630,6 +2630,15 @@ details[open] > .season-summary::before {
     font-size: 1rem;
 }
 
+.auth-field input[readonly] {
+    opacity: 0.78;
+    cursor: default;
+}
+
+.profile-modal-content {
+    max-width: 500px;
+}
+
 .auth-toggle-mode {
     margin-top: 0.9rem;
     border: none;
@@ -4771,6 +4780,29 @@ body.light-theme .network-logo {
     body.light-theme .season-details {
         border-color: rgba(0, 0, 0, 0.08);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+}
+
+/* Tablet portrait header: let account controls wrap below the search bar when needed */
+@media (min-width: 769px) and (max-width: 992px) {
+    .main-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .main-header-left {
+        width: 100%;
+    }
+
+    .main-header-right {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .search-bar {
+        width: 100%;
     }
 }
 
