@@ -3,6 +3,7 @@ import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
 import {
     Series,
+    ExternalReview,
     DashboardNewsItem,
     DashboardNewsResponse,
     TMDbSeriesDetails,
@@ -141,6 +142,64 @@ export async function fetchMovieDetails(
         production_countries: Array.isArray(payload?.production_countries) ? payload.production_countries : [],
         videos: { results: mergedVideos },
     } as Series);
+}
+
+function mapTmdbReview(rawReview: any): ExternalReview | null {
+    const content = String(rawReview?.content || '').trim();
+    if (!content) return null;
+    const authorDetails = rawReview?.author_details || {};
+    const author = String(
+        authorDetails?.name
+        || authorDetails?.username
+        || rawReview?.author
+        || 'Utilizador anónimo'
+    ).trim();
+    const rating = typeof authorDetails?.rating === 'number' ? authorDetails.rating : null;
+    return {
+        id: String(rawReview?.id || `${author}-${rawReview?.created_at || rawReview?.updated_at || content.slice(0, 32)}`),
+        source: 'TMDb',
+        sourceKey: 'tmdb',
+        author: author || 'Utilizador anónimo',
+        authorUrl: rawReview?.url || null,
+        rating,
+        createdAt: typeof rawReview?.created_at === 'string' ? rawReview.created_at : null,
+        updatedAt: typeof rawReview?.updated_at === 'string' ? rawReview.updated_at : null,
+        content,
+        url: rawReview?.url || null,
+        language: typeof rawReview?.author_details?.language === 'string' ? rawReview.author_details.language : null,
+    };
+}
+
+export async function fetchTmdbExternalReviews(
+    mediaType: 'series' | 'movie',
+    sourceId: number | string,
+    signal: AbortSignal | null
+): Promise<ExternalReview[]> {
+    const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
+    const resolvedId = mediaType === 'movie'
+        ? (() => {
+            const parsedSourceId = Number(sourceId);
+            return Number.isFinite(parsedSourceId) ? Math.trunc(parsedSourceId) : fromScopedMovieId(Number(sourceId));
+        })()
+        : Math.trunc(Number(sourceId));
+
+    if (!Number.isFinite(resolvedId) || resolvedId <= 0) return [];
+
+    const fetchReviewsForLanguage = async (language: string): Promise<ExternalReview[]> => {
+        const url = `${API_BASE_TMDB}/${tmdbMediaType}/${resolvedId}/reviews?language=${language}&page=1`;
+        const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const payload = await response.json() as { results?: any[] };
+        return (Array.isArray(payload?.results) ? payload.results : [])
+            .map(mapTmdbReview)
+            .filter((review): review is ExternalReview => Boolean(review));
+    };
+
+    const ptReviews = await fetchReviewsForLanguage('pt-PT');
+    if (ptReviews.length > 0) return ptReviews.slice(0, 15);
+
+    const enReviews = await fetchReviewsForLanguage('en-US');
+    return enReviews.slice(0, 15);
 }
 
 export async function searchBooks(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {

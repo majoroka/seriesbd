@@ -9,7 +9,7 @@ vi.mock('./db', () => ({
   },
 }));
 
-import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchTraktData } from './api';
+import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchTmdbExternalReviews, fetchTraktData } from './api';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -245,6 +245,48 @@ describe('TMDb detail fallbacks', () => {
     expect(details.name).toBe('Fallback Show');
     expect(details.videos.results).toHaveLength(1);
     expect(details.external_ids?.imdb_id).toBe('tt1705');
+  });
+});
+
+describe('fetchTmdbExternalReviews', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to en-US reviews when pt-PT returns empty results', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes('/api/tmdb/tv/1705/reviews?language=pt-PT&page=1')) {
+        return jsonResponse({ results: [] });
+      }
+
+      if (url.includes('/api/tmdb/tv/1705/reviews?language=en-US&page=1')) {
+        return jsonResponse({
+          results: [
+            {
+              id: 'abc',
+              author: 'Author One',
+              author_details: { username: 'author-one', rating: 8.5 },
+              content: 'This show review should be visible.',
+              created_at: '2026-03-20T12:00:00.000Z',
+              updated_at: '2026-03-21T12:00:00.000Z',
+              url: 'https://www.themoviedb.org/review/abc',
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const reviews = await fetchTmdbExternalReviews('series', 1705, null);
+
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].source).toBe('TMDb');
+    expect(reviews[0].author).toBe('author-one');
+    expect(reviews[0].rating).toBe(8.5);
+    expect(reviews[0].content).toContain('This show review should be visible.');
   });
 });
 

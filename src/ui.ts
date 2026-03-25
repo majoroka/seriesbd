@@ -4,7 +4,7 @@ import * as S from './state';
 import * as API from './api';
 import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey } from './media';
 
 declare module 'chart.js' {
@@ -116,6 +116,66 @@ function sanitizePlainText(value: unknown): string {
 function getSafeOverviewText(value: unknown): string {
     const sanitized = sanitizePlainText(value);
     return sanitized || 'Sinopse não disponível.';
+}
+
+function formatExternalReviewDate(value: string | null | undefined): string {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleDateString('pt-PT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+function truncateReviewContent(value: string, maxLength = 560): string {
+    const normalized = sanitizePlainText(value);
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
+function renderExternalReviewsCard(
+    reviews: ExternalReview[],
+    emptyMessage: string
+): HTMLElement {
+    const reviewContent = reviews.length > 0
+        ? el('div', { class: 'external-reviews-scroll' }, reviews.map((review) =>
+            el('article', { class: 'external-review-card' }, [
+                el('div', { class: 'external-review-header' }, [
+                    el('div', { class: 'external-review-author-block' }, [
+                        el('strong', { class: 'external-review-author', text: review.author }),
+                        el('div', { class: 'external-review-meta' }, [
+                            el('span', { class: 'external-review-source', text: review.source }),
+                            review.rating && review.rating > 0
+                                ? el('span', { class: 'external-review-rating', text: `${review.rating.toFixed(1)}/10` })
+                                : null,
+                            formatExternalReviewDate(review.updatedAt || review.createdAt)
+                                ? el('span', { class: 'external-review-date', text: formatExternalReviewDate(review.updatedAt || review.createdAt) })
+                                : null,
+                        ])
+                    ]),
+                    review.url
+                        ? el('a', {
+                            class: 'external-review-link',
+                            href: review.url,
+                            target: '_blank',
+                            rel: 'noopener noreferrer',
+                            text: 'Abrir'
+                        })
+                        : null
+                ]),
+                el('p', { class: 'external-review-body', text: truncateReviewContent(review.content) })
+            ])
+        ))
+        : el('div', { class: 'external-reviews-empty', text: emptyMessage });
+
+    return el('div', { class: 'v2-info-card collapsible external-reviews-card' }, [
+        el('details', {}, [
+            el('summary', { text: 'Reviews Externas' }),
+            reviewContent
+        ])
+    ]);
 }
 
 function createPosterImage(
@@ -2733,7 +2793,8 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
 
 export function renderMediaDetails(
     media: Series,
-    options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean }
+    options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean },
+    externalReviews: ExternalReview[] = []
 ) {
     const detailSection = DOM.seriesViewSection;
     detailSection.innerHTML = '';
@@ -3019,7 +3080,13 @@ export function renderMediaDetails(
                     text: currentUserNotes
                 })
             ])
-        ])
+        ]),
+        renderExternalReviewsCard(
+            externalReviews,
+            mediaType === 'book'
+                ? 'As fontes atuais deste livro não disponibilizam reviews externas textuais.'
+                : 'Não existem reviews externas disponíveis para este conteúdo.'
+        )
     ]);
     detailSection.appendChild(bodyContentContainer);
 }
@@ -3030,7 +3097,8 @@ export function renderSeriesDetails(
     creditsData: TMDbCredits,
     traktSeriesData: TraktData | null,
     traktSeasonsData: TraktSeason[] | null,
-    aggregatedSeriesData: AggregatedSeriesMetadata | null = null
+    aggregatedSeriesData: AggregatedSeriesMetadata | null = null,
+    externalReviews: ExternalReview[] = []
 ) {
     const detailSection = DOM.seriesViewSection;
     detailSection.innerHTML = '';
@@ -3255,6 +3323,13 @@ export function renderSeriesDetails(
         ])
     ]);
     bodyContentContainer.appendChild(userNotesElement);
+
+    bodyContentContainer.appendChild(
+        renderExternalReviewsCard(
+            externalReviews,
+            'Não existem reviews externas disponíveis para esta série.'
+        )
+    );
 
     const seasonsContainer = el('div', { class: 'v2-seasons-container' });
     const traktSeasonPosters: { [key: number]: { thumb?: string, full?: string } } = {};
