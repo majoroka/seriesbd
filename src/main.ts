@@ -34,6 +34,7 @@ import {
     pushLocalLibrarySnapshot,
     syncLibrarySnapshotAfterLogin,
 } from './librarySync';
+import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
@@ -2638,6 +2639,10 @@ async function importData(): Promise<void> {
     input.onchange = (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+            UI.showNotification('O ficheiro excede o tamanho máximo suportado para importação.');
+            return;
+        }
         const reader = new FileReader();
         reader.onload = async (event: ProgressEvent<FileReader>) => {
             if (!event.target?.result) return;
@@ -2784,16 +2789,14 @@ async function importData(): Promise<void> {
                             if (!normalizedMedia) continue;
 
                             const valueRecord = rawValue as Record<string, unknown>;
-                            const rawProgress = valueRecord.progress_percent ?? valueRecord.progressPercent;
-                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
                                 media_type: normalizedMedia.media_type,
                                 media_id: normalizedMedia.media_id,
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof valueRecord.rating === 'number' ? valueRecord.rating : undefined,
-                                notes: typeof valueRecord.notes === 'string' ? valueRecord.notes : undefined,
-                                progress_percent: progressPercent,
+                                notes: clampUserNotes(valueRecord.notes),
+                                progress_percent: clampProgressPercent(valueRecord.progress_percent ?? valueRecord.progressPercent),
                             };
                             userDataMap.set(item.media_key, item);
                         }
@@ -2817,8 +2820,6 @@ async function importData(): Promise<void> {
                             const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
                             const normalizedMedia = parseMediaKey(normalizedMediaKey);
                             if (!normalizedMedia) return;
-                            const rawProgress = parsedRecord.progress_percent ?? parsedRecord.progressPercent;
-                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
 
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
@@ -2826,8 +2827,8 @@ async function importData(): Promise<void> {
                                 media_id: normalizedMedia.media_id,
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof parsedRecord.rating === 'number' ? parsedRecord.rating : undefined,
-                                notes: typeof parsedRecord.notes === 'string' ? parsedRecord.notes : undefined,
-                                progress_percent: progressPercent,
+                                notes: clampUserNotes(parsedRecord.notes),
+                                progress_percent: clampProgressPercent(parsedRecord.progress_percent ?? parsedRecord.progressPercent),
                             };
                             userDataMap.set(item.media_key, item);
                         });

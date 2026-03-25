@@ -3,6 +3,12 @@ import * as S from './state';
 import { UserData, UserDataItem, WatchedState, WatchedStateItem, Series } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey } from './media';
+import {
+  assertSerializedJsonLimit,
+  clampProgressPercent,
+  clampUserNotes,
+  MAX_LIBRARY_SNAPSHOT_SIZE_BYTES,
+} from './dataGuards';
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = 2;
 export const LOCAL_LIBRARY_MUTATION_AT_KEY = 'seriesdb.localLibraryMutationAt';
@@ -51,18 +57,10 @@ function normalizeUserData(input: unknown): UserData {
   Object.entries(input).forEach(([mediaKey, value]) => {
     if (!isObjectLike(value)) return;
     const rawRating = value.rating;
-    const rawNotes = value.notes;
-    const rawProgress = value.progress_percent;
-    const parsedProgress =
-      typeof rawProgress === 'number'
-        ? rawProgress
-        : Number(rawProgress);
     normalized[mediaKey] = {
       rating: typeof rawRating === 'number' ? rawRating : Number(rawRating || 0),
-      notes: typeof rawNotes === 'string' ? rawNotes : '',
-      progress_percent: Number.isFinite(parsedProgress)
-        ? Math.max(0, Math.min(100, Math.round(parsedProgress)))
-        : undefined,
+      notes: clampUserNotes(value.notes),
+      progress_percent: clampProgressPercent(value.progress_percent),
     };
   });
   return normalized;
@@ -138,7 +136,8 @@ async function fetchRemoteLibrarySnapshot(userId: string): Promise<RemoteLibrary
 export async function pushLocalLibrarySnapshot(userId: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const client = getSupabaseClient();
-  const payload = buildLocalLibrarySnapshot();
+  const payload = normalizeLibraryPayload(buildLocalLibrarySnapshot());
+  assertSerializedJsonLimit(payload, MAX_LIBRARY_SNAPSHOT_SIZE_BYTES, 'O snapshot da biblioteca');
   const { error } = await client.from('library_snapshots').upsert(
     {
       user_id: userId,
@@ -152,6 +151,7 @@ export async function pushLocalLibrarySnapshot(userId: string): Promise<void> {
 
 export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, remoteUpdatedAtIso: string): Promise<void> {
   const payload = normalizeLibraryPayload(rawPayload);
+  assertSerializedJsonLimit(payload, MAX_LIBRARY_SNAPSHOT_SIZE_BYTES, 'O snapshot remoto da biblioteca');
 
   const watchedItems: WatchedStateItem[] = [];
   Object.entries(payload.watchedState).forEach(([stateKey, episodeIds]) => {
@@ -180,8 +180,8 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
       media_id: parsedMedia.media_id,
       seriesId: parsedMedia.media_id,
       rating: data?.rating || 0,
-      notes: data?.notes || '',
-      progress_percent: typeof data?.progress_percent === 'number' ? data.progress_percent : undefined,
+      notes: clampUserNotes(data?.notes),
+      progress_percent: clampProgressPercent(data?.progress_percent),
     });
   });
 

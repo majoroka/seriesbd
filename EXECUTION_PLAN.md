@@ -131,6 +131,13 @@ Critério de fecho:
 - export/sync preservados
 - sem regressão de notas, progresso e biblioteca
 
+Estado atual do sprint:
+- limite explícito para ficheiros de importação
+- notas de utilizador truncadas de forma consistente para evitar payloads descontrolados
+- progresso normalizado com clamp `0..100` em import, migração e sync remoto
+- migração legada de `localStorage` com parsing seguro para JSON inválido
+- snapshots locais/remotos rejeitados quando excedem o tamanho máximo suportado
+
 ### Sprint C5 | Acessibilidade Sistemática
 
 Objetivo:

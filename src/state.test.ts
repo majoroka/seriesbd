@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as C from './constants';
 import type { Series, UserDataItem, WatchedStateItem } from './types';
+import { MAX_USER_NOTES_LENGTH } from './dataGuards';
 
 const mocked = vi.hoisted(() => {
   const showNotification = vi.fn();
@@ -203,5 +204,37 @@ describe('state transitions', () => {
     expect(localStorage.getItem(C.WATCHLIST_VIEW_MODE_KEY)).toBeNull();
     expect(localStorage.getItem(C.THEME_STORAGE_KEY)).toBeNull();
     expect(mocked.showNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it('truncates notes when updating user data', async () => {
+    const longNotes = 'a'.repeat(MAX_USER_NOTES_LENGTH + 50);
+
+    await S.updateMediaNotes('series', 77, longNotes);
+
+    expect(S.userData[77].notes).toHaveLength(MAX_USER_NOTES_LENGTH);
+    expect(mocked.db.userData.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        media_key: 'series:77',
+        notes: 'a'.repeat(MAX_USER_NOTES_LENGTH),
+      }),
+    );
+  });
+
+  it('falls back safely when legacy localStorage JSON is invalid', async () => {
+    localStorage.setItem('seriesdb.watchlist', '{bad json');
+    localStorage.setItem('seriesdb.archive', '{bad json');
+    localStorage.setItem('seriesdb.watchedState', '{bad json');
+    localStorage.setItem('seriesdb.userData', '{bad json');
+
+    await S.migrateFromLocalStorage();
+
+    expect(mocked.db.watchlist.bulkPut).not.toHaveBeenCalled();
+    expect(mocked.db.archive.bulkPut).not.toHaveBeenCalled();
+    expect(mocked.db.watchedState.bulkPut).not.toHaveBeenCalled();
+    expect(mocked.db.userData.bulkPut).not.toHaveBeenCalled();
+    expect(localStorage.getItem('seriesdb.watchlist')).toBeNull();
+    expect(localStorage.getItem('seriesdb.archive')).toBeNull();
+    expect(localStorage.getItem('seriesdb.watchedState')).toBeNull();
+    expect(localStorage.getItem('seriesdb.userData')).toBeNull();
   });
 });

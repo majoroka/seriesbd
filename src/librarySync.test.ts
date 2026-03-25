@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Series } from './types';
+import { MAX_USER_NOTES_LENGTH } from './dataGuards';
 
 const mocked = vi.hoisted(() => {
   const db = {
@@ -111,5 +112,36 @@ describe('library snapshot restore', () => {
       key: 'seriesdb.localLibraryMutationAt',
       value: remoteUpdatedAtIso,
     });
+  });
+
+  it('sanitizes remote snapshot notes and progress values', async () => {
+    const remoteUpdatedAtIso = '2026-03-19T10:00:00.000Z';
+    const longNotes = 'x'.repeat(MAX_USER_NOTES_LENGTH + 100);
+
+    await applyRemoteLibrarySnapshotToLocal(
+      {
+        version: 2,
+        generatedAt: remoteUpdatedAtIso,
+        watchlist: [makeBook(456, 'Book Sanitized')],
+        archive: [],
+        watchedState: {},
+        userData: {
+          'book:456': {
+            rating: 7,
+            notes: longNotes,
+            progress_percent: 999,
+          },
+        },
+      },
+      remoteUpdatedAtIso,
+    );
+
+    expect(mocked.db.userData.bulkPut).toHaveBeenCalledWith([
+      expect.objectContaining({
+        media_key: 'book:456',
+        notes: 'x'.repeat(MAX_USER_NOTES_LENGTH),
+        progress_percent: 100,
+      }),
+    ]);
   });
 });
