@@ -1,4 +1,19 @@
-import { el, hexToRgb, getTranslatedSeasonName, formatHoursMinutes, formatCertification, animateValue, animateDuration, formatDuration, translateGenreName } from './utils';
+import {
+    el,
+    hexToRgb,
+    getTranslatedSeasonName,
+    formatHoursMinutes,
+    formatCertification,
+    animateValue,
+    animateDuration,
+    formatDuration,
+    translateGenreName,
+    clearElementChildren,
+    setElementMessage,
+    setElementIconLabel,
+    setButtonIconLabel,
+    renderFormattedDuration,
+} from './utils';
 import * as DOM from './dom';
 import * as S from './state';
 import * as API from './api';
@@ -309,7 +324,7 @@ export function applyTheme(theme: string) {
         const isLightTheme = theme === 'light';
         const label = isLightTheme ? 'Mudar para tema escuro' : 'Mudar para tema claro';
         const icon = isLightTheme ? 'fa-moon' : 'fa-sun';
-        DOM.themeToggleBtn.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
+        setElementIconLabel(DOM.themeToggleBtn, `fas ${icon}`, label);
         DOM.themeToggleBtn.title = label;
         DOM.themeToggleBtn.setAttribute('aria-label', label);
     }
@@ -499,7 +514,7 @@ export function closeTrailerModal() {
 
 export function openLibrarySearchModal() {
     DOM.librarySearchModalInput.value = '';
-    DOM.librarySearchModalResults.innerHTML = '<p>Comece a escrever para pesquisar na sua biblioteca.</p>';
+    setElementMessage(DOM.librarySearchModalResults, 'Comece a escrever para pesquisar na sua biblioteca.');
     showModal(DOM.librarySearchModal, DOM.librarySearchModalInput);
 }
 
@@ -583,9 +598,9 @@ export function closeConfirmationModal(result: boolean) {
 
 // Rendering Functions
 export function renderNextAired(episodeList: { seriesName: string, seriesPoster: string | null, episode: Episode }[]) {
-    DOM.nextAiredListContainer.innerHTML = '';
+    clearElementChildren(DOM.nextAiredListContainer);
     if (episodeList.length === 0) {
-        DOM.nextAiredListContainer.innerHTML = '<p>Nenhum episódio agendado para as séries que está a ver.</p>';
+        setElementMessage(DOM.nextAiredListContainer, 'Nenhum episódio agendado para as séries que está a ver.');
         return;
     }
     episodeList.forEach(item => {
@@ -613,7 +628,7 @@ export function renderNextAired(episodeList: { seriesName: string, seriesPoster:
 }
 
 export function renderSearchResults(resultsList: Series[]) {
-    DOM.searchResultsContainer.innerHTML = '';
+    clearElementChildren(DOM.searchResultsContainer);
     if (resultsList.length === 0) {
         DOM.searchResultsContainer.appendChild(el('p', { text: 'Nenhum resultado encontrado.' }));
         return;
@@ -674,10 +689,10 @@ export function renderSearchResults(resultsList: Series[]) {
 export function renderTrending(seriesList: Series[], container: HTMLElement) {
     if (!container) return; // Early exit if container is not valid
 
-    container.innerHTML = ''; // Limpa o conteúdo anterior
+    clearElementChildren(container);
 
     if (seriesList.length === 0) {
-        container.innerHTML = '<p class="empty-list-message">Não foi possível carregar as tendências.</p>';
+        setElementMessage(container, 'Não foi possível carregar as tendências.', { className: 'empty-list-message' });
         return;
     }
 
@@ -724,7 +739,7 @@ export function renderTrending(seriesList: Series[], container: HTMLElement) {
 
 export function renderWatchlist() {
     const viewMode = DOM.watchlistContainer.classList.contains('grid-view') ? 'grid' : 'list';
-    DOM.watchlistContainer.innerHTML = '';
+    clearElementChildren(DOM.watchlistContainer);
     const seriesToWatch = S.myWatchlist
         .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
         .filter((series) => {
@@ -737,11 +752,11 @@ export function renderWatchlist() {
     });
     if (seriesToWatch.length === 0) {
         if (scopedLibraryMediaType === 'book') {
-            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum livro novo para começar.</p>';
+            setElementMessage(DOM.watchlistContainer, 'Nenhum livro novo para começar.', { className: 'empty-list-message' });
         } else if (scopedLibraryMediaType === 'movie') {
-            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum filme novo para começar.</p>';
+            setElementMessage(DOM.watchlistContainer, 'Nenhum filme novo para começar.', { className: 'empty-list-message' });
         } else {
-            DOM.watchlistContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo novo para começar. Adicione itens ou veja o separador "A Ver".</p>';
+            setElementMessage(DOM.watchlistContainer, 'Nenhum conteúdo novo para começar. Adicione itens ou veja o separador "A Ver".', { className: 'empty-list-message' });
         }
         return;
     }
@@ -753,7 +768,7 @@ export function renderWatchlist() {
 
 export function renderUnseen() {
     const viewMode = DOM.unseenContainer.classList.contains('grid-view') ? 'grid' : 'list';
-    DOM.unseenContainer.innerHTML = '';
+    clearElementChildren(DOM.unseenContainer);
     const seriesInProgress = S.myWatchlist
         .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
         .filter(series => {
@@ -771,11 +786,11 @@ export function renderUnseen() {
     });
     if (seriesInProgress.length === 0) {
         if (scopedLibraryMediaType === 'book') {
-            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum livro em leitura.</p>';
+            setElementMessage(DOM.unseenContainer, 'Nenhum livro em leitura.', { className: 'empty-list-message' });
         } else if (scopedLibraryMediaType === 'movie') {
-            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum filme em progresso.</p>';
+            setElementMessage(DOM.unseenContainer, 'Nenhum filme em progresso.', { className: 'empty-list-message' });
         } else {
-            DOM.unseenContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo em progresso.</p>';
+            setElementMessage(DOM.unseenContainer, 'Nenhum conteúdo em progresso.', { className: 'empty-list-message' });
         }
         return;
     }
@@ -788,10 +803,10 @@ export function renderUnseen() {
 export function renderArchive() {
     if (!DOM.archiveContainer) return;
     const viewMode = DOM.archiveContainer.classList.contains('grid-view') ? 'grid' : 'list';
-    DOM.archiveContainer.innerHTML = '';
+    clearElementChildren(DOM.archiveContainer);
     S.myArchive.sort((a, b) => a.name.localeCompare(b.name));
     if (S.myArchive.length === 0) {
-        DOM.archiveContainer.innerHTML = '<p class="empty-list-message">O seu arquivo está vazio.</p>';
+        setElementMessage(DOM.archiveContainer, 'O seu arquivo está vazio.', { className: 'empty-list-message' });
         return;
     }
     S.myArchive.forEach(series => {
@@ -1228,9 +1243,12 @@ function renderDashboardGenresChart(): void {
         delete S.charts.dashboardGenres;
     }
 
-    DOM.dashboardGenresLegend.innerHTML = '';
+    clearElementChildren(DOM.dashboardGenresLegend);
     if (!hasData) {
-        DOM.dashboardGenresLegend.innerHTML = '<li class="dashboard-legend-empty">Sem dados de género suficientes.</li>';
+        setElementMessage(DOM.dashboardGenresLegend, 'Sem dados de género suficientes.', {
+            className: 'dashboard-legend-empty',
+            tagName: 'li',
+        });
         return;
     }
 
@@ -1688,16 +1706,18 @@ function renderDashboardRecentCarousel(): void {
     const visibleItems = uniqueRecent
         .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
         .slice(0, 12);
-    DOM.dashboardRecentCarousel.innerHTML = '';
+    clearElementChildren(DOM.dashboardRecentCarousel);
 
     renderDashboardPanelFilters('recent');
 
     if (visibleItems.length === 0) {
-        DOM.dashboardRecentCarousel.innerHTML = `<p class="dashboard-empty-message">${
+        setElementMessage(
+            DOM.dashboardRecentCarousel,
             uniqueRecent.length === 0
                 ? 'Ainda não existem conteúdos vistos/lidos recentemente.'
-                : 'Sem conteúdos recentes para este filtro.'
-        }</p>`;
+                : 'Sem conteúdos recentes para este filtro.',
+            { className: 'dashboard-empty-message' }
+        );
         return;
     }
 
@@ -1736,18 +1756,22 @@ function renderDashboardSuggestionsCarousel(): void {
     const visibleItems = dashboardSuggestedRecommendationEntries
         .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter))
         .slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL);
-    DOM.dashboardSuggestionsCarousel.innerHTML = '';
+    clearElementChildren(DOM.dashboardSuggestionsCarousel);
 
     renderDashboardPanelFilters('suggestions');
 
     if (visibleItems.length === 0) {
-        DOM.dashboardSuggestionsCarousel.innerHTML = dashboardSuggestedInFlight
-            ? '<p class="dashboard-empty-message">A preparar sugestões para ti...</p>'
-            : `<p class="dashboard-empty-message">${
-                dashboardSuggestedRecommendationEntries.length === 0
-                    ? 'Adiciona mais conteúdos para gerar sugestões personalizadas.'
-                    : 'Sem sugestões para este filtro.'
-            }</p>`;
+        setElementMessage(
+            DOM.dashboardSuggestionsCarousel,
+            dashboardSuggestedInFlight
+                ? 'A preparar sugestões para ti...'
+                : (
+                    dashboardSuggestedRecommendationEntries.length === 0
+                        ? 'Adiciona mais conteúdos para gerar sugestões personalizadas.'
+                        : 'Sem sugestões para este filtro.'
+                ),
+            { className: 'dashboard-empty-message' }
+        );
         return;
     }
 
@@ -2452,15 +2476,17 @@ function renderDashboardUpcomingReleases(): void {
         .filter(({ item }) => matchesDashboardContentFilter(item.media_type || 'series', filter));
     const visibleEntries = selectDashboardUpcomingEntries(filteredEntries, DASHBOARD_UPCOMING_VISIBLE_LIMIT, filter);
 
-    DOM.dashboardUpcomingList.innerHTML = '';
+    clearElementChildren(DOM.dashboardUpcomingList);
     renderDashboardPanelFilters('upcoming');
 
     if (visibleEntries.length === 0) {
-        DOM.dashboardUpcomingList.innerHTML = `<p class="dashboard-empty-message">${
+        setElementMessage(
+            DOM.dashboardUpcomingList,
             sortedEntries.length === 0
                 ? 'Sem lançamentos futuros registados para já.'
-                : 'Sem lançamentos para este filtro.'
-        }</p>`;
+                : 'Sem lançamentos para este filtro.',
+            { className: 'dashboard-empty-message' }
+        );
         return;
     }
 
@@ -2578,7 +2604,7 @@ function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
     const newSignature = newOptions.map(([value, label]) => `${value}:${label}`).join('|');
 
     if (currentSignature !== newSignature) {
-        select.innerHTML = '';
+        select.replaceChildren();
         newOptions.forEach(([value, label]) => {
             const option = document.createElement('option');
             option.value = value;
@@ -2599,7 +2625,7 @@ function updateAllSeriesGenreFilterOptions(allSeries: Series[]) {
 export function renderAllSeries() {
     if (!DOM.allSeriesContainer) return;
     const viewMode = DOM.allSeriesContainer.classList.contains('grid-view') ? 'grid' : 'list';
-    DOM.allSeriesContainer.innerHTML = '';
+    clearElementChildren(DOM.allSeriesContainer);
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     allSeries.sort((a, b) => a.name.localeCompare(b.name));
     if (DOM.allSeriesMediaFilter) {
@@ -2628,13 +2654,13 @@ export function renderAllSeries() {
 
     if (filteredSeries.length === 0) {
         if (allSeries.length === 0) {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo na sua biblioteca. Adicione conteúdos através da pesquisa.</p>';
+            setElementMessage(DOM.allSeriesContainer, 'Nenhum conteúdo na sua biblioteca. Adicione conteúdos através da pesquisa.', { className: 'empty-list-message' });
         } else if (mediaFilteredSeries.length === 0) {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o tipo selecionado.</p>';
+            setElementMessage(DOM.allSeriesContainer, 'Nenhum conteúdo encontrado para o tipo selecionado.', { className: 'empty-list-message' });
         } else if (statusFilteredSeries.length === 0) {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o estado selecionado.</p>';
+            setElementMessage(DOM.allSeriesContainer, 'Nenhum conteúdo encontrado para o estado selecionado.', { className: 'empty-list-message' });
         } else {
-            DOM.allSeriesContainer.innerHTML = '<p class="empty-list-message">Nenhum conteúdo encontrado para o género selecionado.</p>';
+            setElementMessage(DOM.allSeriesContainer, 'Nenhum conteúdo encontrado para o género selecionado.', { className: 'empty-list-message' });
         }
         return;
     }
@@ -2649,7 +2675,7 @@ export function renderPopularSeries(seriesList: Series[], startingRank: number =
     const viewMode = DOM.popularContainer.classList.contains('grid-view') ? 'grid' : 'list';
 
     if (seriesList.length === 0) {
-        DOM.popularContainer.innerHTML = '<p class="empty-list-message">Nenhuma série top rated encontrada.</p>';
+        setElementMessage(DOM.popularContainer, 'Nenhuma série top rated encontrada.', { className: 'empty-list-message' });
         return;
     }
 
@@ -2661,8 +2687,8 @@ export function renderPopularSeries(seriesList: Series[], startingRank: number =
 
 export function renderPremieresSeries(seriesList: Series[], startingRank: number = 1) {
     const viewMode = DOM.premieresContainer.classList.contains('grid-view') ? 'grid' : 'list';    
-    if (seriesList.length === 0 && DOM.premieresContainer.innerHTML === '') {
-        DOM.premieresContainer.innerHTML = '<p class="empty-list-message">Nenhuma série em estreia encontrada.</p>';
+    if (seriesList.length === 0 && DOM.premieresContainer.childElementCount === 0) {
+        setElementMessage(DOM.premieresContainer, 'Nenhuma série em estreia encontrada.', { className: 'empty-list-message' });
         return;
     }
 
@@ -2797,7 +2823,7 @@ export function renderMediaDetails(
     externalReviews: ExternalReview[] = []
 ) {
     const detailSection = DOM.seriesViewSection;
-    detailSection.innerHTML = '';
+    clearElementChildren(detailSection);
 
     const mediaType = media.media_type || 'series';
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
@@ -3101,7 +3127,7 @@ export function renderSeriesDetails(
     externalReviews: ExternalReview[] = []
 ) {
     const detailSection = DOM.seriesViewSection;
-    detailSection.innerHTML = '';
+    clearElementChildren(detailSection);
     const backdropPath = seriesData.backdrop_path ? `https://image.tmdb.org/t/p/w1280${seriesData.backdrop_path}` : '';
     const posterPath = seriesData.poster_path ? `https://image.tmdb.org/t/p/w300_and_h450_bestv2${seriesData.poster_path}` : '/placeholders/poster.svg';
     const releaseYear = seriesData.first_air_date ? `(${new Date(seriesData.first_air_date).getFullYear()})` : '';
@@ -3410,7 +3436,7 @@ function createSeasonElement(seriesData: Series, seasonData: TMDbSeason, traktEp
 }
 
 function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId: number, seriesPosterPath: string | null, traktSeasonPosters: { [key: number]: { thumb?: string, full?: string } }, traktEpisodes: { number: number; overview: string | null }[]) {
-    container.innerHTML = '';
+    clearElementChildren(container);
     episodes.forEach(episode => {
         const seasonNumber = episode.season_number;
         const seasonPoster = traktSeasonPosters ? traktSeasonPosters[seasonNumber] : null;
@@ -3480,7 +3506,13 @@ export function updateOverallProgressBar(seriesId: number) {
     const progressBar = DOM.seriesViewSection.querySelector<HTMLElement>('.v2-progress-bar');
     const progressText = DOM.seriesViewSection.querySelector<HTMLDivElement>('.v2-progress-text');
     if (progressBar) progressBar.style.width = `${overallProgress}%`;
-    if (progressText) progressText.innerHTML = `<span>${Math.round(overallProgress)}%</span><span>${watchedCount} / ${totalEpisodes} episódios</span>`;
+    if (progressText) {
+        const progressPercentage = document.createElement('span');
+        progressPercentage.textContent = `${Math.round(overallProgress)}%`;
+        const progressCounter = document.createElement('span');
+        progressCounter.textContent = `${watchedCount} / ${totalEpisodes} episódios`;
+        progressText.replaceChildren(progressPercentage, progressCounter);
+    }
 }
 
 export function updateSeasonProgressUI(seriesId: number, seasonNumber: number) {
@@ -3851,7 +3883,7 @@ function applyStatsLabels(summary: StatsSummary): void {
     const yearsTitle = document.getElementById('stats-years-title');
     const topRatedTitle = document.getElementById('stats-top-rated-title');
 
-    if (sectionTitle) sectionTitle.innerHTML = `<i class="fas fa-chart-pie"></i> ${summary.meta.sectionTitle}`;
+    if (sectionTitle) setElementIconLabel(sectionTitle, 'fas fa-chart-pie', summary.meta.sectionTitle);
     if (primaryLabel) primaryLabel.textContent = summary.meta.primaryLabel;
     if (secondaryLabel) secondaryLabel.textContent = summary.meta.secondaryLabel;
     if (tertiaryLabel) tertiaryLabel.textContent = summary.meta.tertiaryLabel;
@@ -4015,7 +4047,7 @@ export function updateKeyStats(animate = false): StatsSummary {
         DOM.statWatchedEpisodes.textContent = summary.primaryValue.toLocaleString('pt-PT');
         DOM.statUnwatchedEpisodes.textContent = summary.secondaryValue.toLocaleString('pt-PT');
         if (summary.meta.tertiaryMode === 'duration') {
-            DOM.statWatchTime.innerHTML = formatDuration(summary.tertiaryValue, true);
+            renderFormattedDuration(DOM.statWatchTime, summary.tertiaryValue);
         } else {
             DOM.statWatchTime.textContent = `${Math.round(summary.tertiaryValue)}%`;
         }
@@ -4143,7 +4175,7 @@ function renderGlobalGenresPanel(stats: StatsSummary): void {
         .slice(0, 8);
 
     if (topGenres.length === 0) {
-        DOM.statsGlobalGenresList.innerHTML = '<p class="stats-global-empty-state">Sem dados de género suficientes.</p>';
+        setElementMessage(DOM.statsGlobalGenresList, 'Sem dados de género suficientes.', { className: 'stats-global-empty-state' });
         return;
     }
 
@@ -4633,9 +4665,10 @@ function renderTopRatedSeries(stats: StatsSummary) {
     }).filter((s): s is Series & { userRating: number } => s !== null);
     ratedSeries.sort((a, b) => (b.userRating ?? 0) - (a.userRating ?? 0) || a.name.localeCompare(b.name));
     const topRated = ratedSeries.slice(0, 10);
-    container.innerHTML = '';
+    clearElementChildren(container);
     if (topRated.length === 0) {
-        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.topRatedEmptyMessage}</p>`;
+        const message = setElementMessage(container, stats.meta.topRatedEmptyMessage);
+        if (message) message.style.cssText = 'text-align: center; color: var(--text-secondary); padding: 2rem 0;';
         return;
     }
     topRated.forEach(series => {
@@ -4674,7 +4707,7 @@ function renderRatingsSummary() {
             ratingsMap[rating]++;
         }
     });
-    container.innerHTML = '';
+    clearElementChildren(container);
     let hasRatings = false;
     for (let i = 10; i >= 1; i--) {
         if (ratingsMap[i]) {
@@ -4688,18 +4721,20 @@ function renderRatingsSummary() {
         }
     }
     if (!hasRatings) {
-        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.topRatedEmptyMessage}</p>`;
+        const message = setElementMessage(container, stats.meta.topRatedEmptyMessage);
+        if (message) message.style.cssText = 'text-align: center; color: var(--text-secondary); padding: 2rem 0;';
     }
 }
 
 function renderRatedSeriesByRating(rating: number) {
     const container = DOM.seriesByRatingModalResults;
-    container.innerHTML = '';
+    clearElementChildren(container);
     const stats = buildStatsSummary();
     const allSeries = getContextItems(stats.context);
     const ratedSeries = allSeries.filter(series => getMediaRating(series) === rating).sort((a, b) => a.name.localeCompare(b.name));
     if (ratedSeries.length === 0) {
-        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">${stats.meta.noRatedAtValueMessage}</p>`;
+        const message = setElementMessage(container, stats.meta.noRatedAtValueMessage);
+        if (message) message.style.cssText = 'text-align: center; color: var(--text-secondary); padding: 2rem 0;';
         return;
     }
     ratedSeries.forEach(series => {
@@ -4738,15 +4773,18 @@ export function renderStatistics(stats: StatsSummary) {
 
 export function performModalLibrarySearch() {
     const searchTerm = DOM.librarySearchModalInput.value.toLowerCase().trim();
-    DOM.librarySearchModalResults.innerHTML = '';
+    clearElementChildren(DOM.librarySearchModalResults);
     if (searchTerm.length < 2) {
-        DOM.librarySearchModalResults.innerHTML = searchTerm.length === 0 ? '<p>Comece a escrever para pesquisar na sua biblioteca.</p>' : '<p>Continue a escrever...</p>';
+        setElementMessage(
+            DOM.librarySearchModalResults,
+            searchTerm.length === 0 ? 'Comece a escrever para pesquisar na sua biblioteca.' : 'Continue a escrever...'
+        );
         return;
     }
     const allSeries = [...S.myWatchlist, ...S.myArchive];
     const filteredSeries = allSeries.filter(series => series.name.toLowerCase().includes(searchTerm));
     if (filteredSeries.length === 0) {
-        DOM.librarySearchModalResults.innerHTML = '<p>Nenhum conteúdo encontrado.</p>';
+        setElementMessage(DOM.librarySearchModalResults, 'Nenhum conteúdo encontrado.');
         return;
     }
     filteredSeries.sort((a, b) => a.name.localeCompare(b.name));
@@ -4800,5 +4838,5 @@ export function markButtonAsAdded(button: HTMLButtonElement, text: string = 'Adi
     button.title = 'Adicionado à Biblioteca';
     button.setAttribute('aria-label', 'Adicionado à Biblioteca');
     const isIconOnly = button.classList.contains('icon-only');
-    button.innerHTML = isIconOnly ? '<i class="fas fa-check"></i>' : `<i class="fas fa-check"></i> ${text}`;
+    setButtonIconLabel(button, 'fas fa-check', text, { iconOnly: isIconOnly });
 }
