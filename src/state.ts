@@ -3,6 +3,7 @@ import * as C from './constants';
 import { showNotification } from './ui';
 import { MediaType, Series, WatchedState, UserData, WatchedStateItem, UserDataItem } from './types';
 import { createMediaKey, getSeriesMediaKey, normalizeSeries, normalizeSeriesCollection, parseMediaKey } from './media';
+import { clampProgressPercent, clampUserNotes, safeParseJson } from './dataGuards';
 
 // State variables
 export let myWatchlist: Series[] = [];
@@ -231,17 +232,18 @@ export async function updateMediaNotes(mediaType: MediaType, mediaId: number, no
     const stateKey = toStateKey(mediaType, mediaId);
     const rating = userData[stateKey]?.rating || 0;
     const progressPercent = userData[stateKey]?.progress_percent;
+    const normalizedNotes = clampUserNotes(notes);
     if (!userData[stateKey]) {
         userData[stateKey] = {};
     }
-    userData[stateKey].notes = notes;
+    userData[stateKey].notes = normalizedNotes;
     await db.userData.put({
         media_key: mediaType === 'series' ? getSeriesMediaKey(mediaId) : createMediaKey(mediaType, mediaId),
         media_type: mediaType,
         media_id: mediaId,
         seriesId: mediaId,
         rating,
-        notes,
+        notes: normalizedNotes,
         progress_percent: progressPercent,
     });
     emitStateMutation('updateMediaNotes');
@@ -297,8 +299,8 @@ async function loadUserDataFromDB(): Promise<UserData> {
         const stateKey = parsed.media_type === 'series' ? String(parsed.media_id) : createMediaKey(parsed.media_type, parsed.media_id);
         data[stateKey] = {
             rating: record.rating || 0,
-            notes: record.notes,
-            progress_percent: typeof record.progress_percent === 'number' ? record.progress_percent : undefined,
+            notes: clampUserNotes(record.notes),
+            progress_percent: clampProgressPercent(record.progress_percent),
         };
     });
     return data;
@@ -319,10 +321,10 @@ export async function migrateFromLocalStorage() {
     console.log("Migrating data from localStorage to IndexedDB...");
     showNotification("A atualizar a base de dados local... Por favor, aguarde.");
     
-    const oldWatchlist = normalizeSeriesCollection(JSON.parse(localStorage.getItem('seriesdb.watchlist') || '[]'));
-    const oldArchive = normalizeSeriesCollection(JSON.parse(localStorage.getItem('seriesdb.archive') || '[]'));
-    const oldWatchedState: WatchedState = JSON.parse(localStorage.getItem('seriesdb.watchedState') || '{}');
-    const oldUserData: UserData = JSON.parse(localStorage.getItem('seriesdb.userData') || '{}');
+    const oldWatchlist = normalizeSeriesCollection(safeParseJson(localStorage.getItem('seriesdb.watchlist'), [] as Series[]));
+    const oldArchive = normalizeSeriesCollection(safeParseJson(localStorage.getItem('seriesdb.archive'), [] as Series[]));
+    const oldWatchedState = safeParseJson(localStorage.getItem('seriesdb.watchedState'), {} as WatchedState);
+    const oldUserData = safeParseJson(localStorage.getItem('seriesdb.userData'), {} as UserData);
 
     await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData, db.kvStore], async () => {
         if (oldWatchlist.length > 0) await db.watchlist.bulkPut(oldWatchlist);
@@ -364,10 +366,8 @@ export async function migrateFromLocalStorage() {
                         media_id: parsedMedia.media_id,
                         seriesId: parsedMedia.media_id,
                         rating,
-                        notes,
-                        progress_percent: typeof oldUserData[stateKey]?.progress_percent === 'number'
-                            ? oldUserData[stateKey].progress_percent
-                            : undefined,
+                        notes: clampUserNotes(notes),
+                        progress_percent: clampProgressPercent(oldUserData[stateKey]?.progress_percent),
                     });
                 }
             }

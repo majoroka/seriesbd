@@ -24,6 +24,52 @@ export function el(tag: string, props: Record<string, any> = {}, children: (Node
     return element;
 }
 
+export function clearElementChildren(element: Element | null | undefined): void {
+    element?.replaceChildren();
+}
+
+export function setElementMessage(
+    element: Element | null | undefined,
+    message: string,
+    options: { className?: string; tagName?: keyof HTMLElementTagNameMap } = {}
+): HTMLElement | null {
+    if (!element) return null;
+    const messageElement = document.createElement(options.tagName ?? 'p');
+    if (options.className) messageElement.className = options.className;
+    messageElement.textContent = message;
+    element.replaceChildren(messageElement);
+    return messageElement;
+}
+
+export function setElementIconLabel(
+    element: HTMLElement | null | undefined,
+    iconClassName: string,
+    label: string
+): void {
+    if (!element) return;
+    const icon = document.createElement('i');
+    icon.className = iconClassName;
+    icon.setAttribute('aria-hidden', 'true');
+    element.replaceChildren(icon, document.createTextNode(` ${label}`));
+}
+
+export function setButtonIconLabel(
+    button: HTMLElement | null | undefined,
+    iconClassName: string,
+    label = '',
+    options: { iconOnly?: boolean } = {}
+): void {
+    if (!button) return;
+    const icon = document.createElement('i');
+    icon.className = iconClassName;
+    icon.setAttribute('aria-hidden', 'true');
+    if (options.iconOnly) {
+        button.replaceChildren(icon);
+        return;
+    }
+    button.replaceChildren(icon, document.createTextNode(` ${label}`));
+}
+
 /**
  * Fetches a resource with exponential backoff retry logic.
  * @param {string} url The URL to fetch.
@@ -232,6 +278,55 @@ export function formatDuration(totalMinutes: number, asHTML: boolean = false): s
     return parts.slice(0, 3).join(' ');
 }
 
+function buildFormattedDurationFragment(totalMinutes: number): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+    const MIN_IN_HOUR = 60;
+    const MIN_IN_DAY = 24 * MIN_IN_HOUR;
+    const MIN_IN_MONTH = 30 * MIN_IN_DAY;
+    const MIN_IN_YEAR = 365 * MIN_IN_DAY;
+
+    const appendPart = (value: number, unit: string) => {
+        fragment.append(String(value));
+        const unitSpan = document.createElement('span');
+        unitSpan.className = 'time-unit';
+        unitSpan.textContent = unit;
+        fragment.append(unitSpan);
+    };
+
+    if (totalMinutes <= 0) {
+        appendPart(0, 'min');
+        return fragment;
+    }
+
+    const years = Math.floor(totalMinutes / MIN_IN_YEAR);
+    let remainder = totalMinutes % MIN_IN_YEAR;
+    const months = Math.floor(remainder / MIN_IN_MONTH);
+    remainder %= MIN_IN_MONTH;
+    const days = Math.floor(remainder / MIN_IN_DAY);
+    remainder %= MIN_IN_DAY;
+    const hours = Math.floor(remainder / MIN_IN_HOUR);
+    const minutes = remainder % MIN_IN_HOUR;
+
+    const parts: Array<[number, string]> = [];
+    if (years > 0) parts.push([years, 'a']);
+    if (months > 0) parts.push([months, 'm']);
+    if (days > 0) parts.push([days, 'd']);
+    if (hours > 0) parts.push([hours, 'h']);
+    if (minutes > 0) parts.push([minutes, 'min']);
+    if (parts.length === 0) parts.push([0, 'min']);
+
+    parts.slice(0, 3).forEach(([value, unit], index) => {
+        if (index > 0) fragment.append(' ');
+        appendPart(value, unit);
+    });
+
+    return fragment;
+}
+
+export function renderFormattedDuration(element: HTMLElement, totalMinutes: number): void {
+    element.replaceChildren(buildFormattedDurationFragment(totalMinutes));
+}
+
 /**
  * Helper to convert a hex color string to an RGB string.
  * @param {string} hex - The hex color.
@@ -336,7 +431,7 @@ export function exportDataToCSV(data: Record<string, any>[], headers: Record<str
  */
 export function animateDuration(element: HTMLElement, start: number, end: number, duration: number) {
     if (end === start) {
-        element.innerHTML = formatDuration(end, true);
+        renderFormattedDuration(element, end);
         return;
     }
     const range = end - start;
@@ -345,11 +440,11 @@ export function animateDuration(element: HTMLElement, start: number, end: number
         if (!startTime) startTime = timestamp;
         const progress = Math.min((timestamp - (startTime as number)) / duration, 1);
         const currentValue = Math.floor(progress * range + start);
-        element.innerHTML = formatDuration(currentValue, true);
+        renderFormattedDuration(element, currentValue);
         if (progress < 1) {
             window.requestAnimationFrame(step);
         } else {
-            element.innerHTML = formatDuration(end, true);
+            renderFormattedDuration(element, end);
         }
     }
     window.requestAnimationFrame(step);

@@ -515,7 +515,6 @@ export async function onRequest(context) {
     const response = addCorsHeaders(jsonResponse({
       ok: false,
       error: 'Failed to aggregate news feeds',
-      details,
     }, 500), corsConfig);
     addProxyHeaders(response, {
       requestId,

@@ -48,7 +48,7 @@ const normalizeString = (value) =>
 const buildTvMazeHeaders = () => {
   const headers = {
     Accept: 'application/json',
-    'User-Agent': 'seriesBD/1.0 (+https://seriesbd.netlify.app)',
+    'User-Agent': 'seriesBD/1.0 (+https://mediadex.app)',
   };
   if (TVMAZE_API_KEY) {
     headers['x-api-key'] = TVMAZE_API_KEY;

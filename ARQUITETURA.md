@@ -141,7 +141,9 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
     - Dev (`vite.config.ts`): política compatível com HMR (`ws/wss`, regras mais permissivas).
     - Produção (`public/_headers`): política mais restritiva via headers HTTP no deploy Cloudflare.
 - **Compatibilidade local**
-  - `npm run dev` usa `netlify dev` e as funções em `netlify/functions/*.mjs` para facilitar desenvolvimento local sem depender do runtime da Cloudflare.
+  - `npm run dev` usa `netlify dev` e os wrappers em `netlify/functions/*.mjs` apenas como compatibilidade local.
+  - produção e preview oficiais usam exclusivamente `functions/api/*` em Cloudflare Pages.
+  - novas alterações backend devem entrar em `functions/api/*`; `netlify/` fica congelado e não é runtime de produção.
 
 ## PWA e funcionamento offline
 

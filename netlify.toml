@@ -1,3 +1,5 @@
+# Legado local: este ficheiro existe apenas para compatibilidade com `netlify dev`.
+# Produção e preview oficiais correm em Cloudflare Pages/Functions.
 [build]
   command = "vite build"
   functions = "netlify/functions"
@@ -20,7 +22,7 @@
     X-Frame-Options = "DENY"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
 
-# Redireciona os pedidos de API para as Netlify Functions
+# Compatibilidade local: redireciona /api/* para os wrappers legados quando se usa `netlify dev`.
 [[redirects]]
   from = "/api/tmdb/*"
   to = "/.netlify/functions/tmdb/:splat"

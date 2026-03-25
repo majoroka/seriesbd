@@ -1,7 +1,7 @@
 const TRAKT_API_KEY = process.env.TRAKT_API_KEY;
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
-const TRAKT_USER_AGENT = process.env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://seriesbd.netlify.app)';
+const TRAKT_USER_AGENT = process.env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://mediadex.app)';
 const PROXY_HEADER_EXPOSE = 'x-request-id, x-upstream-status, x-upstream-latency-ms';
 
 const createRequestId = () => {

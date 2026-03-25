@@ -330,7 +330,7 @@ export async function onRequest(context) {
     });
 
     const errorResponse = new Response(
-      JSON.stringify({ error: 'Falha ao processar o pedido na função tvmaze', details: message }),
+      JSON.stringify({ error: 'Falha ao processar o pedido na função tvmaze' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
     addProxyHeaders(errorResponse, {

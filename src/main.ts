@@ -4,7 +4,15 @@ import * as DOM from './dom';
 import * as API from './api';
 import * as UI from './ui';
 import * as S from './state';
-import { debounce, exportChartToPNG, exportDataToCSV, processInBatches } from './utils';
+import {
+    debounce,
+    exportChartToPNG,
+    exportDataToCSV,
+    processInBatches,
+    clearElementChildren,
+    setElementMessage,
+    setElementIconLabel,
+} from './utils';
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
@@ -26,6 +34,7 @@ import {
     pushLocalLibrarySnapshot,
     syncLibrarySnapshotAfterLogin,
 } from './librarySync';
+import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
@@ -115,6 +124,12 @@ function getErrorMessage(error: unknown): string {
     return String(error);
 }
 
+function isBenignMissingRefreshTokenError(error: unknown): boolean {
+    const normalizedMessage = getErrorMessage(error).toLowerCase();
+    return normalizedMessage.includes('invalid refresh token')
+        || normalizedMessage.includes('refresh token not found');
+}
+
 function getErrorStatus(error: unknown): number | null {
     if (typeof error === 'object' && error !== null && 'status' in error) {
         const status = Number((error as { status?: unknown }).status);
@@ -140,7 +155,7 @@ function renderInitializationErrorState(error: unknown): void {
     const timestamp = new Date().toISOString();
     const diagnosticsId = `init-${Date.now().toString(36)}`;
 
-    DOM.dashboard.innerHTML = '';
+    clearElementChildren(DOM.dashboard);
 
     const card = document.createElement('div');
     card.className = 'card app-init-error-card';
@@ -690,7 +705,7 @@ function renderNotificationsMenu(): void {
     DOM.notificationsMarkAllReadBtn.hidden = unreadCount <= 0;
     DOM.notificationsClearBtn.hidden = notificationsCenterEntries.length <= 0;
 
-    DOM.notificationsMenuList.innerHTML = '';
+    clearElementChildren(DOM.notificationsMenuList);
     if (notificationsCenterEntries.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'notifications-empty';
@@ -781,14 +796,18 @@ function updateSectionHeadingsForMediaTarget(mediaTarget: SubmenuMediaTarget): v
     const watchlistHeading = document.querySelector('#watchlist-section h2');
     const unseenHeading = document.querySelector('#unseen-section h2');
     if (watchlistHeading) {
-        watchlistHeading.innerHTML = mediaTarget === 'book'
-            ? '<i class="fas fa-star"></i> Quero Ler'
-            : '<i class="fas fa-star"></i> Quero Ver';
+        setElementIconLabel(
+            watchlistHeading as HTMLElement,
+            'fas fa-star',
+            mediaTarget === 'book' ? 'Quero Ler' : 'Quero Ver'
+        );
     }
     if (unseenHeading) {
-        unseenHeading.innerHTML = mediaTarget === 'book'
-            ? '<i class="fas fa-eye-slash"></i> A Ler'
-            : '<i class="fas fa-eye-slash"></i> A Ver';
+        setElementIconLabel(
+            unseenHeading as HTMLElement,
+            'fas fa-eye-slash',
+            mediaTarget === 'book' ? 'A Ler' : 'A Ver'
+        );
     }
 }
 
@@ -1349,6 +1368,11 @@ async function signOutDueToInactivity(): Promise<void> {
         lastSignOutReason = 'inactivity';
         await signOutCurrentUser();
     } catch (error) {
+        if (isBenignMissingRefreshTokenError(error)) {
+            console.warn('[auth] Refresh token ausente ao terminar sessão por inatividade. A limpar sessão local.', error);
+            handleAuthStateChange('SIGNED_OUT', null);
+            return;
+        }
         const message = getErrorMessage(error);
         lastSignOutReason = null;
         console.error('[auth] Erro ao terminar sessão por inatividade.', error);
@@ -1639,8 +1663,13 @@ async function initializeAuthState() {
             await syncCloudStateAfterLogin(currentUser.id);
         }
     } catch (error) {
+        if (isBenignMissingRefreshTokenError(error)) {
+            console.warn('[auth] Refresh token ausente durante validação inicial. A continuar como sessão terminada.', error);
+            setAuthenticatedUi(null);
+        } else {
         console.error('[auth] Falha ao validar sessão inicial.', error);
         setAuthStatusLabel('Erro ao validar sessão', 'error');
+        }
     }
 
     subscribeToAuthState((event, session) => {
@@ -1841,7 +1870,7 @@ async function removeSeriesFromLibrary(seriesId: number, mediaType: MediaType = 
 }
 
 async function updateNextAired() {
-    DOM.nextAiredListContainer.innerHTML = '<p>A verificar próximos episódios...</p>';
+    setElementMessage(DOM.nextAiredListContainer, 'A verificar próximos episódios...');
     let allUserSeries = [...S.myWatchlist, ...S.myArchive].filter(series => series.media_type === 'series');
     const now = new Date().getTime();
     const oneDay = 24 * 60 * 60 * 1000;
@@ -2014,7 +2043,7 @@ async function displaySeriesDetails(seriesId: number) {
 
     try {
         captureDetailReturnContext();
-        DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes da série...</p>';
+        setElementMessage(DOM.seriesViewSection, 'A carregar detalhes da série...');
         UI.showSection('series-view-section');
         
         const seriesData = await runObservedSection(
@@ -2167,7 +2196,7 @@ async function displaySeriesDetails(seriesId: number) {
         );
         persistObservabilitySnapshot();
         console.error('Erro ao exibir detalhes da série:', typedError.message);
-        DOM.seriesViewSection.innerHTML = `<p>Não foi possível carregar os detalhes da série. Tente novamente mais tarde.</p>`;
+        setElementMessage(DOM.seriesViewSection, 'Não foi possível carregar os detalhes da série. Tente novamente mais tarde.');
         const status = getErrorStatus(typedError);
         if (status === 429) {
             UI.showNotification('Demasiados pedidos em pouco tempo. Tente novamente dentro de 1 minuto.');
@@ -2181,7 +2210,7 @@ async function displayMovieDetails(media: Series): Promise<void> {
     S.resetDetailViewAbortController();
     const signal = S.detailViewAbortController.signal;
     captureDetailReturnContext();
-    DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes do filme...</p>';
+    setElementMessage(DOM.seriesViewSection, 'A carregar detalhes do filme...');
     UI.showSection('series-view-section');
 
     const movieDetails = await runObservedSection(
@@ -2226,7 +2255,7 @@ async function displayBookDetails(media: Series): Promise<void> {
     S.resetDetailViewAbortController();
     const signal = S.detailViewAbortController.signal;
     captureDetailReturnContext();
-    DOM.seriesViewSection.innerHTML = '<p>A carregar detalhes do livro...</p>';
+    setElementMessage(DOM.seriesViewSection, 'A carregar detalhes do livro...');
     UI.showSection('series-view-section');
 
     const bookDetails = await runObservedSection(
@@ -2273,7 +2302,7 @@ async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
             { phase: 'render', mediaType, mediaId }
         );
         persistObservabilitySnapshot();
-        DOM.seriesViewSection.innerHTML = '<p>Não foi possível carregar os detalhes deste conteúdo.</p>';
+        setElementMessage(DOM.seriesViewSection, 'Não foi possível carregar os detalhes deste conteúdo.');
         UI.showNotification(`Erro ao carregar detalhes: ${typedError.message}`);
     }
 }
@@ -2610,6 +2639,10 @@ async function importData(): Promise<void> {
     input.onchange = (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+            UI.showNotification('O ficheiro excede o tamanho máximo suportado para importação.');
+            return;
+        }
         const reader = new FileReader();
         reader.onload = async (event: ProgressEvent<FileReader>) => {
             if (!event.target?.result) return;
@@ -2756,16 +2789,14 @@ async function importData(): Promise<void> {
                             if (!normalizedMedia) continue;
 
                             const valueRecord = rawValue as Record<string, unknown>;
-                            const rawProgress = valueRecord.progress_percent ?? valueRecord.progressPercent;
-                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
                                 media_type: normalizedMedia.media_type,
                                 media_id: normalizedMedia.media_id,
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof valueRecord.rating === 'number' ? valueRecord.rating : undefined,
-                                notes: typeof valueRecord.notes === 'string' ? valueRecord.notes : undefined,
-                                progress_percent: progressPercent,
+                                notes: clampUserNotes(valueRecord.notes),
+                                progress_percent: clampProgressPercent(valueRecord.progress_percent ?? valueRecord.progressPercent),
                             };
                             userDataMap.set(item.media_key, item);
                         }
@@ -2789,8 +2820,6 @@ async function importData(): Promise<void> {
                             const normalizedMediaKey = remappedMediaKeys.get(sourceMediaKey) || sourceMediaKey;
                             const normalizedMedia = parseMediaKey(normalizedMediaKey);
                             if (!normalizedMedia) return;
-                            const rawProgress = parsedRecord.progress_percent ?? parsedRecord.progressPercent;
-                            const progressPercent = typeof rawProgress === 'number' ? rawProgress : undefined;
 
                             const item: UserDataItem = {
                                 media_key: normalizedMediaKey,
@@ -2798,8 +2827,8 @@ async function importData(): Promise<void> {
                                 media_id: normalizedMedia.media_id,
                                 seriesId: normalizedMedia.media_id,
                                 rating: typeof parsedRecord.rating === 'number' ? parsedRecord.rating : undefined,
-                                notes: typeof parsedRecord.notes === 'string' ? parsedRecord.notes : undefined,
-                                progress_percent: progressPercent,
+                                notes: clampUserNotes(parsedRecord.notes),
+                                progress_percent: clampProgressPercent(parsedRecord.progress_percent ?? parsedRecord.progressPercent),
                             };
                             userDataMap.set(item.media_key, item);
                         });
@@ -2986,7 +3015,7 @@ function renderRemoteErrorWithRetry(
     options: { offlineMessage: string; onlineMessage: string }
 ) {
     const message = navigator.onLine ? options.onlineMessage : options.offlineMessage;
-    container.innerHTML = '';
+    clearElementChildren(container);
     const wrapper = document.createElement('div');
     wrapper.className = 'remote-error-state';
 
@@ -3006,7 +3035,7 @@ function renderRemoteErrorWithRetry(
 }
 
 function renderComingSoonState(container: HTMLElement, title: string, description: string) {
-    container.innerHTML = '';
+    clearElementChildren(container);
     const wrapper = document.createElement('div');
     wrapper.className = 'coming-soon-state';
 
@@ -3045,7 +3074,7 @@ async function loadTrending(
         return;
     }
 
-    container.innerHTML = '<p>A carregar tendências...</p>';
+    setElementMessage(container, 'A carregar tendências...');
     try {
         const section: ObservabilitySection = timeWindow === 'day' ? 'trending-day' : 'trending-week';
         const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
@@ -3174,7 +3203,7 @@ function updatePopularLoadMoreVisibility() {
 
 function renderVisiblePopularSeries() {
     const visibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
-    DOM.popularContainer.innerHTML = '';
+    clearElementChildren(DOM.popularContainer);
     UI.renderPopularSeries(allPopularSeries.slice(0, visibleCount));
 }
 
@@ -3269,9 +3298,10 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
     popularSeriesCacheMediaType = mediaType;
     allPopularSeries = [];
     popularSeriesDisplayedCount = POPULAR_SERIES_DISPLAY_BATCH_SIZE;
-    DOM.popularContainer.innerHTML = mediaType === 'movie'
-        ? '<p>A carregar filmes top rated...</p>'
-        : '<p>A carregar séries top rated...</p>';
+    setElementMessage(
+        DOM.popularContainer,
+        mediaType === 'movie' ? 'A carregar filmes top rated...' : 'A carregar séries top rated...'
+    );
     updatePopularLoadMoreVisibility();
 
     const fetchAndProcessChunk = async (page: number): Promise<{ results: Series[]; totalPages: number }> => {
@@ -3389,9 +3419,10 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
     if (!loadMore) {
         premieresSeriesPage = 1;
         loadedPremieresSeriesIds.clear();
-        DOM.premieresContainer.innerHTML = mediaType === 'movie'
-            ? '<p>A carregar estreias de filmes...</p>'
-            : '<p>A carregar estreias...</p>';
+        setElementMessage(
+            DOM.premieresContainer,
+            mediaType === 'movie' ? 'A carregar estreias de filmes...' : 'A carregar estreias...'
+        );
         DOM.premieresLoadMoreContainer.style.display = 'none';
     }
 
@@ -3408,7 +3439,7 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
         );
         
         if (!loadMore) {
-            DOM.premieresContainer.innerHTML = '';
+            clearElementChildren(DOM.premieresContainer);
         }
 
         // Filtra as séries para excluir as que já estão na biblioteca do utilizador
@@ -3594,7 +3625,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaLabel = getMediaTypeLabel(mediaType).toLowerCase();
         if (query.length > 1) {
             S.resetSearchAbortController();
-            DOM.searchResultsContainer.innerHTML = '<p>A pesquisar...</p>';
+            setElementMessage(DOM.searchResultsContainer, 'A pesquisar...');
             UI.showSection('add-series-section');
             const menuTarget: MainMenuTarget = mediaType === 'movie' ? 'movie' : mediaType === 'book' ? 'book' : 'series';
             updateMainMenuActiveState(menuTarget);
@@ -3624,7 +3655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
         } else if (query.length === 0) {
-            DOM.searchResultsContainer.innerHTML = `<p>${getSearchEmptyMessage(mediaType)}</p>`;
+            setElementMessage(DOM.searchResultsContainer, getSearchEmptyMessage(mediaType));
         }
     };
 
@@ -4208,6 +4239,11 @@ document.addEventListener('DOMContentLoaded', () => {
             lastSignOutReason = 'manual';
             await signOutCurrentUser();
         } catch (error) {
+            if (isBenignMissingRefreshTokenError(error)) {
+                console.warn('[auth] Refresh token ausente ao terminar sessão manualmente. A limpar sessão local.', error);
+                handleAuthStateChange('SIGNED_OUT', null);
+                return;
+            }
             const message = getErrorMessage(error);
             lastSignOutReason = null;
             console.error('[auth] Erro ao terminar sessão.', error);
