@@ -109,6 +109,11 @@ Critério de fecho:
 - menos dívida operacional
 - sem quebra de `staging` ou `main`
 
+Estado atual do sprint:
+- Cloudflare confirmado como runtime canónico de produção e preview
+- `netlify/` mantido apenas como compatibilidade local legada
+- novas alterações backend devem concentrar-se em `functions/api/*`
+
 ### Sprint C4 | Dados, Import/Export e Snapshots
 
 Objetivo:

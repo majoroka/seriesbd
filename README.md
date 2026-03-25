@@ -101,11 +101,22 @@ Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOA
 ├─ functions/
 │  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze, /api/books, /api/heartbeat)
 ├─ netlify/
-│  └─ functions/         # Proxies legados (compatibilidade local)
+│  └─ functions/         # Wrappers legados apenas para compatibilidade com `netlify dev`
 ├─ workers/
 │  └─ heartbeat-cron/    # Worker com Cron Trigger para chamar /api/heartbeat
 └─ vite.config.ts        # Configuração Vite + PWA + Vitest
 ```
+
+## Runtime
+
+- Produção: `Cloudflare Pages` + `functions/api/*`
+- Preview/staging: `Cloudflare Pages`
+- Compatibilidade local legada: `netlify dev` + `netlify/functions/*.mjs`
+
+Regras atuais:
+- novas evoluções serverless devem entrar em `functions/api/*`
+- `netlify/` fica congelado como camada de compatibilidade local
+- `netlify.toml` não é fonte de verdade para produção
 
 ## Testes
 
