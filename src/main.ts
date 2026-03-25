@@ -115,6 +115,12 @@ function getErrorMessage(error: unknown): string {
     return String(error);
 }
 
+function isBenignMissingRefreshTokenError(error: unknown): boolean {
+    const normalizedMessage = getErrorMessage(error).toLowerCase();
+    return normalizedMessage.includes('invalid refresh token')
+        || normalizedMessage.includes('refresh token not found');
+}
+
 function getErrorStatus(error: unknown): number | null {
     if (typeof error === 'object' && error !== null && 'status' in error) {
         const status = Number((error as { status?: unknown }).status);
@@ -1349,6 +1355,11 @@ async function signOutDueToInactivity(): Promise<void> {
         lastSignOutReason = 'inactivity';
         await signOutCurrentUser();
     } catch (error) {
+        if (isBenignMissingRefreshTokenError(error)) {
+            console.warn('[auth] Refresh token ausente ao terminar sessão por inatividade. A limpar sessão local.', error);
+            handleAuthStateChange('SIGNED_OUT', null);
+            return;
+        }
         const message = getErrorMessage(error);
         lastSignOutReason = null;
         console.error('[auth] Erro ao terminar sessão por inatividade.', error);
@@ -1639,8 +1650,13 @@ async function initializeAuthState() {
             await syncCloudStateAfterLogin(currentUser.id);
         }
     } catch (error) {
+        if (isBenignMissingRefreshTokenError(error)) {
+            console.warn('[auth] Refresh token ausente durante validação inicial. A continuar como sessão terminada.', error);
+            setAuthenticatedUi(null);
+        } else {
         console.error('[auth] Falha ao validar sessão inicial.', error);
         setAuthStatusLabel('Erro ao validar sessão', 'error');
+        }
     }
 
     subscribeToAuthState((event, session) => {
@@ -4208,6 +4224,11 @@ document.addEventListener('DOMContentLoaded', () => {
             lastSignOutReason = 'manual';
             await signOutCurrentUser();
         } catch (error) {
+            if (isBenignMissingRefreshTokenError(error)) {
+                console.warn('[auth] Refresh token ausente ao terminar sessão manualmente. A limpar sessão local.', error);
+                handleAuthStateChange('SIGNED_OUT', null);
+                return;
+            }
             const message = getErrorMessage(error);
             lastSignOutReason = null;
             console.error('[auth] Erro ao terminar sessão.', error);
