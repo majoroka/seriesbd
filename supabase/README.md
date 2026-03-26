@@ -19,6 +19,7 @@ No painel Supabase:
 `supabase/migrations/20260307_000001_init_profiles_user_settings.sql`
 `supabase/migrations/20260307_000002_init_library_snapshots.sql`
 `supabase/migrations/20260307_000003_init_system_heartbeat.sql`
+`supabase/migrations/20260326_000004_harden_display_name_uniqueness.sql`
 
 Isto cria:
 
