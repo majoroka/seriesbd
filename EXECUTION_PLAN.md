@@ -169,6 +169,12 @@ Critério de fecho:
 - melhorias guiadas por medição
 - sem regressão visual
 
+Estado atual do sprint:
+- `resize` do header móvel com debounce para evitar trabalho repetido em cascata
+- métricas do dashboard consolidadas num único cálculo por render
+- estatísticas com cache local por ciclo de render para evitar filtros, listas e resumos duplicados
+- removido um render redundante da dashboard no arranque
+
 ### Sprint C7 | Design System Mínimo
 
 Objetivo:
@@ -184,6 +190,12 @@ Critério de fecho:
 - padrões mínimos documentados
 - menor heterogeneidade entre áreas
 - revisão visual desktop/tablet/mobile aprovada
+
+Estado atual do sprint:
+- empty states consolidados com tipografia e espaçamento coerentes
+- modais principais alinhados por grupos de estilo partilhados em vez de CSS repetido
+- títulos de modais de conta e listas avaliadas com hierarquia visual mais consistente
+- sem redesenho estrutural nem alteração de fluxo
 
 ## Ordem recomendada
 

@@ -1051,6 +1051,34 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
     };
 }
 
+function computeAllDashboardMetrics(): Record<DashboardCardType, DashboardMetrics> {
+    const metrics: Record<DashboardCardType, DashboardMetrics> = {
+        series: { total: 0, pending: 0, inProgress: 0, completed: 0 },
+        movie: { total: 0, pending: 0, inProgress: 0, completed: 0 },
+        book: { total: 0, pending: 0, inProgress: 0, completed: 0 },
+        all: { total: 0, pending: 0, inProgress: 0, completed: 0 },
+    };
+
+    const allLibraryItems = [...S.myWatchlist, ...S.myArchive];
+    allLibraryItems.forEach((item) => {
+        const mediaType = (item.media_type || 'series') as MediaType;
+        const archived = isItemArchived(item);
+        const progress = archived ? 100 : resolveDashboardProgress(item);
+        const bucket = archived || progress >= 100
+            ? 'completed'
+            : progress > 0
+                ? 'inProgress'
+                : 'pending';
+
+        metrics[mediaType].total += 1;
+        metrics[mediaType][bucket] += 1;
+        metrics.all.total += 1;
+        metrics.all[bucket] += 1;
+    });
+
+    return metrics;
+}
+
 function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string): string {
     if (metricKey === 'pending') {
         if (mediaType === 'all') return 'Quero Ver / Ler';
@@ -2528,12 +2556,13 @@ function renderDashboardUpcomingReleases(): void {
 
 export function renderMediaDashboard() {
     if (!DOM.dashboardMediaCards || DOM.dashboardMediaCards.length === 0) return;
+    const allMetrics = computeAllDashboardMetrics();
     DOM.dashboardMediaCards.forEach((card) => {
         const rawType = card.dataset.mediaType || 'series';
         const mediaType: DashboardCardType = rawType === 'movie' || rawType === 'book' || rawType === 'all'
             ? rawType
             : 'series';
-        const metrics = computeDashboardMetrics(mediaType);
+        const metrics = allMetrics[mediaType] || computeDashboardMetrics(mediaType);
         const total = card.querySelector<HTMLElement>('[data-metric="total"]');
         const pending = card.querySelector<HTMLElement>('[data-metric="pending"]');
         const inProgress = card.querySelector<HTMLElement>('[data-metric="in-progress"]');
@@ -3549,6 +3578,12 @@ export function updateSeasonProgressUI(seriesId: number, seasonNumber: number) {
 }
 
 type StatsMediaContext = 'series' | 'movie' | 'book' | 'all';
+type StatsComputationCache = {
+    allItems: Series[];
+    archiveKeys: Set<string>;
+    contextItems: Map<StatsMediaContext, Series[]>;
+    summaries: Map<StatsMediaContext, StatsSummary>;
+};
 type StatsTertiaryMode = 'duration' | 'percent';
 
 type StatsUiMeta = {
@@ -3746,15 +3781,35 @@ function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
     };
 }
 
-function getContextItems(context: StatsMediaContext): Series[] {
+function createStatsComputationCache(): StatsComputationCache {
     const allItems = [...S.myWatchlist, ...S.myArchive];
-    if (context === 'all') return allItems;
-    return allItems.filter((item) => (item.media_type || 'series') === context);
+    return {
+        allItems,
+        archiveKeys: new Set(S.myArchive.map((item) => createMediaKey(item.media_type || 'series', item.id))),
+        contextItems: new Map<StatsMediaContext, Series[]>(),
+        summaries: new Map<StatsMediaContext, StatsSummary>(),
+    };
 }
 
-function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
+function getContextItems(context: StatsMediaContext, cache?: StatsComputationCache): Series[] {
+    if (cache?.contextItems.has(context)) {
+        return cache.contextItems.get(context)!;
+    }
+    const allItems = cache?.allItems || [...S.myWatchlist, ...S.myArchive];
+    const items = context === 'all' ? allItems : allItems.filter((item) => (item.media_type || 'series') === context);
+    if (cache) {
+        cache.contextItems.set(context, items);
+    }
+    return items;
+}
+
+function buildStatsSummaryForContext(context: StatsMediaContext, cache?: StatsComputationCache): StatsSummary {
+    if (cache?.summaries.has(context)) {
+        return cache.summaries.get(context)!;
+    }
     const meta = getStatsUiMeta(context);
-    const items = getContextItems(context);
+    const items = getContextItems(context, cache);
+    const archiveKeys = cache?.archiveKeys || new Set(S.myArchive.map((item) => createMediaKey(item.media_type || 'series', item.id)));
 
     let completedItems = 0;
     let pendingItems = 0;
@@ -3766,7 +3821,7 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
 
     items.forEach((item) => {
         const mediaType = item.media_type || 'series';
-        const isArchived = S.myArchive.some((archived) => archived.media_type === mediaType && archived.id === item.id);
+        const isArchived = archiveKeys.has(createMediaKey(mediaType, item.id));
 
         if (mediaType === 'series') {
             const watchedCount = S.watchedState[item.id]?.length || 0;
@@ -3814,7 +3869,7 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
     const secondaryValue = context === 'series' ? pendingUnits : Math.max(totalItems - completedItems, 0);
     const tertiaryValue = meta.tertiaryMode === 'duration' ? totalTimeMinutes : averageProgressPercent;
 
-    return {
+    const summary = {
         context,
         meta,
         totalItems,
@@ -3830,10 +3885,16 @@ function buildStatsSummaryForContext(context: StatsMediaContext): StatsSummary {
         secondaryValue: Math.max(0, secondaryValue),
         tertiaryValue: Math.max(0, tertiaryValue),
     };
+
+    if (cache) {
+        cache.summaries.set(context, summary);
+    }
+
+    return summary;
 }
 
-function buildStatsSummary(): StatsSummary {
-    return buildStatsSummaryForContext(getStatsMediaContext());
+function buildStatsSummary(cache?: StatsComputationCache): StatsSummary {
+    return buildStatsSummaryForContext(getStatsMediaContext(), cache);
 }
 
 async function backfillMovieRuntimeForStats(summary: StatsSummary): Promise<void> {
@@ -3898,7 +3959,7 @@ function applyStatsLabels(summary: StatsSummary): void {
     if (topRatedTitle) topRatedTitle.textContent = summary.meta.topRatedTitle;
 }
 
-function renderStatsGlobalOverview(summary: StatsSummary): void {
+function renderStatsGlobalOverview(summary: StatsSummary, cache?: StatsComputationCache): void {
     if (!DOM.statsGlobalOverview) return;
     const isGlobal = summary.context === 'all';
     DOM.statsGlobalOverview.hidden = !isGlobal;
@@ -3929,7 +3990,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
     if (!isGlobal || !DOM.statsGlobalSummaryGrid) return;
 
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
-        summary: buildStatsSummaryForContext(mediaType),
+        summary: buildStatsSummaryForContext(mediaType, cache),
         visual: getStatsMediaVisual(mediaType),
     }));
     const metricCards = [
@@ -4041,7 +4102,7 @@ function renderStatsGlobalOverview(summary: StatsSummary): void {
 }
 
 export function updateKeyStats(animate = false): StatsSummary {
-    const summary = buildStatsSummary();
+    const summary = buildStatsSummary(createStatsComputationCache());
     applyStatsLabels(summary);
 
     if (animate) {
@@ -4106,13 +4167,13 @@ function toggleGlobalStatsPanels(isGlobal: boolean): void {
     }
 }
 
-function renderGlobalCompletionPanel(summary: StatsSummary): void {
+function renderGlobalCompletionPanel(summary: StatsSummary, cache?: StatsComputationCache): void {
     if (!DOM.statsGlobalCompletionRing || !DOM.statsGlobalCompletionLegend) return;
     const isGlobal = summary.context === 'all';
     toggleGlobalStatsPanels(isGlobal);
     if (!isGlobal) return;
     const mediaSummaries = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
-        summary: buildStatsSummaryForContext(mediaType),
+        summary: buildStatsSummaryForContext(mediaType, cache),
         visual: getStatsMediaVisual(mediaType),
     }));
 
@@ -4158,13 +4219,13 @@ function renderGlobalCompletionPanel(summary: StatsSummary): void {
     DOM.statsGlobalCompletionLegend.replaceChildren();
 }
 
-function renderGlobalGenresPanel(stats: StatsSummary): void {
+function renderGlobalGenresPanel(stats: StatsSummary, cache?: StatsComputationCache): void {
     if (!DOM.statsGlobalGenresList) return;
     if (stats.context !== 'all') return;
 
     const genreMap = new Map<string, Record<MediaType, number>>();
     (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
-        getContextItems(mediaType).forEach((item) => {
+        getContextItems(mediaType, cache).forEach((item) => {
             if (!Array.isArray(item.genres)) return;
             item.genres.forEach((genre: Genre) => {
                 const genreName = translateGenreName(genre.name) || genre.name;
@@ -4214,14 +4275,14 @@ function renderGlobalGenresPanel(stats: StatsSummary): void {
     );
 }
 
-function renderWatchedUnwatchedChart(stats: StatsSummary) {
+function renderWatchedUnwatchedChart(stats: StatsSummary, cache?: StatsComputationCache) {
     const canvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement;
     if (!canvas) return;
     if (stats.context === 'all') {
         if (S.charts.watchedUnwatched) {
             S.charts.watchedUnwatched.destroy();
         }
-        renderGlobalCompletionPanel(stats);
+        renderGlobalCompletionPanel(stats, cache);
         return;
     }
     const ctx = canvas.getContext('2d');
@@ -4319,7 +4380,7 @@ function renderWatchedUnwatchedChart(stats: StatsSummary) {
 }
 
 
-function renderGenresChart(stats: StatsSummary) {
+function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
     const canvas = document.getElementById('genres-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
     if (stats.context === 'all') {
@@ -4336,7 +4397,7 @@ function renderGenresChart(stats: StatsSummary) {
         };
         const genreMap = new Map<string, Record<MediaType, number>>();
         (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
-            getContextItems(mediaType).forEach((item) => {
+            getContextItems(mediaType, cache).forEach((item) => {
                 if (!Array.isArray(item.genres)) return;
                 item.genres.forEach((genre: Genre) => {
                     const genreName = translateGenreName(genre.name) || genre.name;
@@ -4434,7 +4495,7 @@ function renderGenresChart(stats: StatsSummary) {
     }
     const ctx = canvas.getContext('2d');
     const colors = getChartColors();
-    const allSeries = getContextItems(stats.context);
+    const allSeries = getContextItems(stats.context, cache);
     const genreCounts: Record<string, number> = {};
     allSeries.forEach(series => {
         if (!Array.isArray(series.genres)) return;
@@ -4514,7 +4575,7 @@ function renderGenresChart(stats: StatsSummary) {
     }
 }
 
-function renderAiredYearsChart(stats: StatsSummary) {
+function renderAiredYearsChart(stats: StatsSummary, cache?: StatsComputationCache) {
     const canvas = document.getElementById('aired-years-chart') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -4540,7 +4601,7 @@ function renderAiredYearsChart(stats: StatsSummary) {
             book: {},
         };
         (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
-            getContextItems(mediaType).forEach((item) => {
+            getContextItems(mediaType, cache).forEach((item) => {
                 if (!item.first_air_date) return;
                 const year = new Date(item.first_air_date).getFullYear();
                 if (Number.isNaN(year)) return;
@@ -4599,7 +4660,7 @@ function renderAiredYearsChart(stats: StatsSummary) {
         return;
     }
 
-    const allSeries = getContextItems(stats.context);
+    const allSeries = getContextItems(stats.context, cache);
     const yearCounts: { [key: number]: number } = {};
     allSeries.forEach(series => {
         if (series.first_air_date) {
@@ -4651,7 +4712,7 @@ function renderAiredYearsChart(stats: StatsSummary) {
     }
 }
 
-function renderTopRatedSeries(stats: StatsSummary) {
+function renderTopRatedSeries(stats: StatsSummary, cache?: StatsComputationCache) {
     const container = document.getElementById('top-rated-series-list');
     if (!container) return;
     const existingBtn = container.parentElement?.querySelector('.view-all-btn');
@@ -4659,7 +4720,7 @@ function renderTopRatedSeries(stats: StatsSummary) {
     if (stats.context === 'all') {
         const groups = (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => {
             const visual = getStatsMediaVisual(mediaType);
-            const items = getContextItems(mediaType)
+            const items = getContextItems(mediaType, cache)
                 .map((item) => {
                     const userRating = getMediaRating(item);
                     return userRating > 0 ? { ...item, userRating } : null;
@@ -4694,7 +4755,7 @@ function renderTopRatedSeries(stats: StatsSummary) {
         );
         return;
     }
-    const allSeries = getContextItems(stats.context);
+    const allSeries = getContextItems(stats.context, cache);
     const ratedSeries: (Series & { userRating: number })[] = allSeries.map(series => {
         const userRating = getMediaRating(series);
         if (userRating > 0) return { ...series, userRating };
@@ -4795,17 +4856,19 @@ function renderRatedSeriesByRating(rating: number) {
 }
 
 export function renderStatistics(stats: StatsSummary) {
-    void backfillMovieRuntimeForStats(stats);
+    const statsCache = createStatsComputationCache();
+    const effectiveStats = buildStatsSummaryForContext(stats.context, statsCache);
+    void backfillMovieRuntimeForStats(effectiveStats);
     Object.values(S.charts).forEach(chart => {
         if (chart instanceof Chart) chart.destroy();
     });
     S.setCharts({});
-    renderStatsGlobalOverview(stats);
-    toggleGlobalStatsPanels(stats.context === 'all');
-    renderWatchedUnwatchedChart(stats);
-    renderGenresChart(stats);
-    renderAiredYearsChart(stats);
-    renderTopRatedSeries(stats);
+    renderStatsGlobalOverview(effectiveStats, statsCache);
+    toggleGlobalStatsPanels(effectiveStats.context === 'all');
+    renderWatchedUnwatchedChart(effectiveStats, statsCache);
+    renderGenresChart(effectiveStats, statsCache);
+    renderAiredYearsChart(effectiveStats, statsCache);
+    renderTopRatedSeries(effectiveStats, statsCache);
 }
 
 export function performModalLibrarySearch() {

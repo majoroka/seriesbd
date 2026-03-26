@@ -1467,9 +1467,14 @@ body.light-theme .dashboard-media-card-total-badge {
 }
 
 .dashboard-legend-empty,
-.dashboard-empty-message {
+.dashboard-empty-message,
+.empty-list-message,
+.stats-global-empty-state {
+    margin: 0;
     color: var(--text-secondary);
     font-size: 0.95rem;
+    line-height: 1.6;
+    text-align: center;
 }
 
 .dashboard-recent-carousel {
@@ -2182,11 +2187,9 @@ details[open] > .season-summary::before {
     background-color: var(--bg-hover);
 }
 
-.empty-list-message {
-    text-align: center;
-    color: var(--text-secondary);
+.empty-list-message,
+.dashboard-empty-message {
     padding: 2rem 1rem;
-    line-height: 1.6;
 }
 
 .remote-error-state {
@@ -2569,8 +2572,12 @@ details[open] > .season-summary::before {
     max-width: 460px;
 }
 
-.auth-modal-content h2 {
+.auth-modal-content h2,
+.all-ratings-modal-content h2,
+.series-by-rating-modal-content h2 {
     margin-bottom: 0.4rem;
+    font-weight: 600;
+    color: var(--text-secondary);
 }
 
 .auth-modal-description {
@@ -2945,10 +2952,7 @@ body.light-theme .stats-global-summary-card-title {
 }
 
 .stats-global-empty-state {
-    margin: 0;
-    color: var(--text-secondary);
     padding: 1rem 0;
-    text-align: center;
 }
 
 .key-stats-grid {
@@ -3064,14 +3068,25 @@ body.light-theme .stats-global-summary-card-title {
 }
 
 /* Styles for All Ratings Modal */
-.all-ratings-modal-content {
-    max-width: 600px;
+.auth-modal-content,
+.library-search-modal-content,
+.all-ratings-modal-content,
+.series-by-rating-modal-content {
     max-height: 80vh;
     display: flex;
     flex-direction: column;
+}
+
+.auth-modal-content,
+.all-ratings-modal-content,
+.series-by-rating-modal-content {
     background-color: var(--bg-card);
     padding: 1.5rem;
     overflow: hidden;
+}
+
+.all-ratings-modal-content {
+    max-width: 600px;
 }
 
 .all-ratings-modal-content h2 {
@@ -3615,9 +3630,6 @@ body.light-theme .network-logo {
 /* ========== LIBRARY SEARCH MODAL ========== */
 .library-search-modal-content {
     max-width: 600px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
 }
 
 #library-search-modal-results {
@@ -3631,19 +3643,12 @@ body.light-theme .network-logo {
 .series-by-rating-modal-content {
     /* Make this modal also look like a chart-card for consistency */
     max-width: 600px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--bg-card);
-    padding: 1.5rem;
-    overflow: hidden;
 }
 
+.all-ratings-modal-content h2,
 .series-by-rating-modal-content h2 {
     text-align: center;
     margin-bottom: 1.5rem;
-    font-weight: 600;
-    color: var(--text-secondary);
     text-transform: uppercase;
     font-size: 1rem;
 }

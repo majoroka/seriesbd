@@ -673,6 +673,9 @@ function setupMobileTopbarControls(): void {
     if (!DOM.mobileTopbarToggle || !DOM.mobileTopbarPanel || !DOM.mobileTopbarControls) return;
 
     syncMobileTopbarLayout();
+    const handleViewportResize = debounce(() => {
+        syncMobileTopbarLayout();
+    }, 120);
 
     DOM.mobileTopbarToggle.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -683,9 +686,7 @@ function setupMobileTopbarControls(): void {
         event.stopPropagation();
     });
 
-    window.addEventListener('resize', () => {
-        syncMobileTopbarLayout();
-    });
+    window.addEventListener('resize', handleViewportResize);
 }
 
 function renderNotificationsMenu(): void {
@@ -2973,9 +2974,7 @@ async function initializeApp(): Promise<void> {
         if (sectionFromHash && document.getElementById(sectionFromHash)) {
             UI.showSection(sectionFromHash);
             updateMainMenuActiveState(getMainMenuTargetFromSection(sectionFromHash));
-            if (sectionFromHash === 'media-dashboard-section') {
-                UI.renderMediaDashboard();
-            } else if (sectionFromHash === 'all-series-section') {
+            if (sectionFromHash === 'all-series-section') {
                 UI.renderAllSeries();
             } else if (sectionFromHash === 'trending-section') {
                 S.resetSearchAbortController();
