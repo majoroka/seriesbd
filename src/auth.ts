@@ -21,6 +21,27 @@ function normalizeDisplayName(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
+function isDisplayNameConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+  const joined = [
+    typeof candidate.code === 'string' ? candidate.code : '',
+    typeof candidate.message === 'string' ? candidate.message : '',
+    typeof candidate.details === 'string' ? candidate.details : '',
+    typeof candidate.hint === 'string' ? candidate.hint : '',
+  ].join(' ');
+  return /23505|display_name_normalized|profiles_display_name_normalized_unique_idx/i.test(joined);
+}
+
+function throwFriendlyDisplayNameConflict(): never {
+  throw new Error('Este nome a apresentar já existe. Escolha outro nome.');
+}
+
 export async function checkDisplayNameAvailability(displayName: string): Promise<DisplayNameAvailability> {
   const normalized = normalizeDisplayName(displayName);
   if (!normalized) return { available: false, normalizedName: normalized };
@@ -112,7 +133,12 @@ export async function signUpWithPassword(input: SignUpInput): Promise<AuthRespon
     },
   };
   const { data, error } = await client.auth.signUp(payload);
-  if (error) throw error;
+  if (error) {
+    if (isDisplayNameConflictError(error)) {
+      throwFriendlyDisplayNameConflict();
+    }
+    throw error;
+  }
 
   if (data.user && input.displayName?.trim()) {
     const { error: profileError } = await client.from('profiles').upsert(
@@ -124,6 +150,9 @@ export async function signUpWithPassword(input: SignUpInput): Promise<AuthRespon
     );
 
     if (profileError) {
+      if (isDisplayNameConflictError(profileError)) {
+        throwFriendlyDisplayNameConflict();
+      }
       console.warn('[auth] Não foi possível atualizar o display_name no perfil.', profileError);
     }
   }
@@ -181,6 +210,11 @@ export async function updateCurrentUserProfile(input: ProfileUpdateInput): Promi
       { onConflict: 'id' }
     );
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      if (isDisplayNameConflictError(profileError)) {
+        throwFriendlyDisplayNameConflict();
+      }
+      throw profileError;
+    }
   }
 }

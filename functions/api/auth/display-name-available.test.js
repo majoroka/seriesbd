@@ -9,7 +9,7 @@ describe('display-name-available function', () => {
   });
 
   it('returns availability when Supabase query succeeds', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response('[]', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -33,6 +33,9 @@ describe('display-name-available function', () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.available).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const requestUrl = fetchSpy.mock.calls[0][0];
+    expect(String(requestUrl)).toContain('display_name_normalized=eq.majoroka');
   });
 
   it('returns 429 when per-IP rate limit is exceeded', async () => {

@@ -15,6 +15,10 @@ function normalizeDisplayName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
+function normalizeDisplayNameKey(value) {
+  return normalizeDisplayName(value).toLowerCase();
+}
+
 function resolveRequestedName(url) {
   return url.searchParams.get('name') || url.searchParams.get('display_name') || '';
 }
@@ -28,8 +32,8 @@ async function fetchMatchingProfiles(env, normalizedName) {
 
   const baseUrl = supabaseUrl.replace(/\/$/, '');
   const queryUrl = new URL(`${baseUrl}/rest/v1/profiles`);
-  queryUrl.searchParams.set('select', 'id,display_name');
-  queryUrl.searchParams.set('display_name', `ilike.${normalizedName}`);
+  queryUrl.searchParams.set('select', 'id');
+  queryUrl.searchParams.set('display_name_normalized', `eq.${normalizeDisplayNameKey(normalizedName)}`);
   queryUrl.searchParams.set('limit', '1');
 
   const response = await fetch(queryUrl.toString(), {
