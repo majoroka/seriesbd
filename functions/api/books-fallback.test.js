@@ -296,6 +296,45 @@ describe('books fallback parsers', () => {
     });
   });
 
+  it('prefers Portuguese Goodreads descriptions over longer English variants', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"A fórmula de Deus","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg"}
+          </script>
+        </head>
+        <body>
+          <div data-testid="description">
+            <span class="Formatted">This novel follows Tomás Noronha through a long investigation about science, faith, and the origins of the universe in a sweeping international thriller.</span>
+            <span class="Formatted">Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é arrastado para uma investigação sobre ciência, fé e a origem do universo.</span>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus?from_search=true',
+      'A fórmula de Deus',
+      null,
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: null,
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
+        name: 'A fórmula de Deus',
+        author: '',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é arrastado para uma investigação sobre ciência, fé e a origem do universo.',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
+      }),
+    });
+  });
+
   it('rejects fallback pages when ISBN cannot be confirmed', () => {
     const html = `
       <html>

@@ -397,6 +397,11 @@ const sanitizeOverviewText = (value) => {
   return text.length > 1200 ? `${text.slice(0, 1197).trim()}...` : text;
 };
 
+const countRegexMatches = (value, regex) => {
+  const matches = String(value || '').match(regex);
+  return matches ? matches.length : 0;
+};
+
 const normalizeBookMatchText = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -647,7 +652,48 @@ export const parseGoodreadsSearchResults = (html) => {
   return results;
 };
 
+const scorePortugueseCandidate = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return Number.NEGATIVE_INFINITY;
+
+  const lower = text.toLowerCase();
+  const portugueseWordCount = countRegexMatches(
+    lower,
+    /\b(que|não|uma|umas|um|uns|para|com|como|quando|depois|porque|também|livro|história|romance|vida|mistério|amor|segredo|museu|escadarias|pleno|cairo|investigação|português|portuguesa|pessoas|entra|saem|todos|gente|leitor|leitura)\b/gu,
+  );
+  const englishWordCount = countRegexMatches(
+    lower,
+    /\b(the|and|with|when|what|from|into|about|read|reviews|book|novel|story|life|people|love|mystery|reader|this|that|world)\b/g,
+  );
+  const accentCount = countRegexMatches(lower, /[áàâãéêíóôõúç]/g);
+
+  return (portugueseWordCount * 4) + (accentCount * 2) - (englishWordCount * 3);
+};
+
 const extractGoodreadsDescription = (html) => {
+  const chooseBestCandidate = (candidates) => {
+    if (!Array.isArray(candidates) || candidates.length === 0) return '';
+    const ranked = candidates
+      .map((candidate) => {
+        const text = sanitizeOverviewText(candidate);
+        return {
+          text,
+          score: scorePortugueseCandidate(text),
+          length: text.length,
+        };
+      })
+      .filter((candidate) => candidate.text);
+
+    if (ranked.length === 0) return '';
+
+    ranked.sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return right.length - left.length;
+    });
+
+    return ranked[0]?.text || '';
+  };
+
   const descriptionMarkerIndex =
     html.indexOf('data-testid="description"') >= 0
       ? html.indexOf('data-testid="description"')
@@ -656,31 +702,15 @@ const extractGoodreadsDescription = (html) => {
   if (descriptionMarkerIndex >= 0) {
     const descriptionWindow = html.slice(descriptionMarkerIndex, descriptionMarkerIndex + 20000);
     const formattedMatches = descriptionWindow.matchAll(/<span[^>]+class=["'][^"']*Formatted[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
-    let bestCandidate = '';
-
-    for (const match of formattedMatches) {
-      const candidate = sanitizeOverviewText(match[1] || '');
-      if (!candidate) continue;
-      if (candidate.length > bestCandidate.length) {
-        bestCandidate = candidate;
-      }
-    }
+    const candidates = Array.from(formattedMatches, (match) => match[1] || '');
+    const bestCandidate = chooseBestCandidate(candidates);
 
     if (bestCandidate) return bestCandidate;
   }
 
   const fallbackFormattedMatches = html.matchAll(/<span[^>]+class=["'][^"']*Formatted[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
-  let bestFallbackCandidate = '';
-
-  for (const match of fallbackFormattedMatches) {
-    const candidate = sanitizeOverviewText(match[1] || '');
-    if (!candidate) continue;
-    if (candidate.length > bestFallbackCandidate.length) {
-      bestFallbackCandidate = candidate;
-    }
-  }
-
-  return bestFallbackCandidate;
+  const fallbackCandidates = Array.from(fallbackFormattedMatches, (match) => match[1] || '');
+  return chooseBestCandidate(fallbackCandidates);
 };
 
 export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsbn = null) => {
