@@ -16,6 +16,7 @@ const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
 const OPEN_LIBRARY_COVERS_BASE_URL = 'https://covers.openlibrary.org/b/id';
 const PRESENCA_BASE_URL = 'https://www.presenca.pt';
 const GOODREADS_BASE_URL = 'https://www.goodreads.com';
+const SEARCH_FALLBACK_ENRICHMENT_LIMIT = 3;
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
 const ROUTE_KEY = 'books';
@@ -848,6 +849,23 @@ const enrichBookByOfficialSourcesAndFallbacks = async (baseResult, { isbn = null
   return result;
 };
 
+const enrichBookSearchResultsWithFallbacks = async (results, { query = '', googleApiKey = null, limit = SEARCH_FALLBACK_ENRICHMENT_LIMIT } = {}) => {
+  const safeResults = Array.isArray(results) ? results : [];
+  let remaining = Math.max(0, Number(limit) || 0);
+
+  return Promise.all(
+    safeResults.map(async (entry) => {
+      if (remaining <= 0 || !bookNeedsMetadata(entry)) return entry;
+      remaining -= 1;
+      return enrichBookByOfficialSourcesAndFallbacks(entry, {
+        isbn: entry?.isbn || entry?.isbn_13 || entry?.isbn_10 || null,
+        title: entry?.name || query,
+        googleApiKey,
+      });
+    }),
+  );
+};
+
 const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) return { ok: false, status: 400, result: null };
@@ -1009,6 +1027,13 @@ export async function onRequest(context) {
           ...openLibraryKeyword.results,
           ...openLibraryAuthor.results,
         ]);
+      }
+
+      if (!normalizedIsbn && results.length > 0) {
+        results = await enrichBookSearchResultsWithFallbacks(results, {
+          query,
+          googleApiKey,
+        });
       }
 
       const response = addCorsHeaders(
