@@ -818,12 +818,18 @@ const enrichBookByOfficialSourcesAndFallbacks = async (baseResult, { isbn = null
   let result = baseResult;
 
   if (isbn) {
-    const googleByIsbn = await fetchGoogleBookByIsbn(isbn, googleApiKey);
+    const shouldFetchGoogleByIsbn = result?.source_provider !== 'google_books';
+    const shouldFetchOpenLibraryByIsbn = result?.source_provider !== 'open_library';
+
+    const [googleByIsbn, openLibraryByIsbn] = await Promise.all([
+      shouldFetchGoogleByIsbn ? fetchGoogleBookByIsbn(isbn, googleApiKey) : Promise.resolve({ ok: false, status: 204, result: null }),
+      shouldFetchOpenLibraryByIsbn ? fetchOpenLibraryBookByIsbn(isbn) : Promise.resolve({ ok: false, status: 204, result: null }),
+    ]);
+
     if (googleByIsbn.ok && googleByIsbn.result) {
       result = mergeBookMetadata(result, googleByIsbn.result);
     }
 
-    const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(isbn);
     if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
       result = mergeBookMetadata(result, openLibraryByIsbn.result);
     }
