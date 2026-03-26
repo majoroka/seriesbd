@@ -68,6 +68,21 @@ describe('books ISBN mapping', () => {
 
     expect(merged.poster_path).toBe('https://cdn.shopify.com/s/files/1/teste.jpg?v=1');
   });
+
+  it('replaces weak truncated overviews with richer fallback synopses', () => {
+    const merged = mergeBookMetadata(
+      {
+        source_provider: 'google_books',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás...',
+      },
+      {
+        source_provider: 'goodreads',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é subitamente envolvido numa investigação complexa que o conduz por um labirinto de segredos científicos, religiosos e históricos.',
+      },
+    );
+
+    expect(merged.overview).toBe('Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é subitamente envolvido numa investigação complexa que o conduz por um labirinto de segredos científicos, religiosos e históricos.');
+  });
 });
 
 describe('books fallback parsers', () => {

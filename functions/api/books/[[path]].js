@@ -80,6 +80,22 @@ const dedupeBookResults = (results) => {
 };
 
 const hasBookText = (value) => String(value || '').trim().length > 0;
+const isWeakBookOverview = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return true;
+  if (normalized.length < 180) return true;
+  return /(?:\.\.\.|…|[…"])\s*$/.test(normalized);
+};
+
+const shouldPreferEnrichmentOverview = (baseOverview, enrichmentOverview) => {
+  const base = String(baseOverview || '').trim();
+  const enrichment = String(enrichmentOverview || '').trim();
+  if (!enrichment) return false;
+  if (!base) return true;
+  if (isWeakBookOverview(base) && enrichment.length > base.length + 40) return true;
+  return false;
+};
+
 const isWeakBookPosterUrl = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return true;
@@ -94,7 +110,9 @@ export const mergeBookMetadata = (baseResult, enrichmentResult) => {
 
   return {
     ...baseResult,
-    overview: hasBookText(baseResult.overview) ? baseResult.overview : enrichmentResult.overview,
+    overview: shouldPreferEnrichmentOverview(baseResult.overview, enrichmentResult.overview)
+      ? enrichmentResult.overview
+      : (hasBookText(baseResult.overview) ? baseResult.overview : enrichmentResult.overview),
     poster_path: (!baseResult.poster_path || isWeakBookPosterUrl(baseResult.poster_path))
       ? (enrichmentResult.poster_path || baseResult.poster_path || null)
       : (baseResult.poster_path || enrichmentResult.poster_path || null),
