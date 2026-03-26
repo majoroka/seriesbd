@@ -15,7 +15,7 @@ Objetivo:
 - Sprint 1 a Sprint 13 concluídos no escopo previsto
 - Cutover DNS (`S6-T06`) concluído
 - Dashboard V2 concluída no escopo atual
-- Fase atual: **consolidação técnica e funcional**
+- Fase atual: **consolidação concluída e evolução funcional controlada**
 
 ## Resumo executivo
 
@@ -54,8 +54,8 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 ## Em aberto real
 
 1. monitorização pós-release
-2. consolidação técnica e funcional
-3. melhorias futuras opcionais
+2. melhorias futuras opcionais
+3. evolução funcional controlada
 
 ## Plano de consolidação
 
@@ -206,6 +206,34 @@ Estado atual do sprint:
 5. `C5 Acessibilidade`
 6. `C6 Performance`
 7. `C7 Design System mínimo`
+8. `F1 Fallback Editorial de Livros`
+
+## Fase seguinte
+
+### F1 | Fallback Editorial de Livros
+
+Objetivo:
+- enriquecer livros sem capa e/ou sinopse sem degradar metadata já boa.
+
+Tarefas:
+- manter ordem `Google Books -> Open Library -> Presença -> Goodreads`
+- usar `Presença` apenas por `ISBN`
+- usar `Goodreads` apenas como fallback tardio por título
+- preencher apenas campos em falta:
+  - capa
+  - sinopse
+- preservar a metadata principal quando já existe com qualidade aceitável
+
+Critério de fecho:
+- detalhes de livros continuam estáveis
+- `Presença` mantém fallback rigoroso por `ISBN`
+- `Goodreads` entra apenas quando os providers anteriores deixam lacunas
+
+Estado atual da fase:
+- implementado fallback editorial tardio com Goodreads
+- `Goodreads` entra apenas após `Presença`
+- endpoint `/api/books/fallback` suporta `provider=goodreads` e pesquisa por título
+- frontend reconhece `Goodreads` como origem possível
 
 ## Como acompanhar cada sprint
 

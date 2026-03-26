@@ -251,6 +251,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
                 media_type: 'book',
                 source_id: normalizedSourceId,
                 id: book.id,
+                author: normalizedDetails.author || book.author,
                 overview: sanitizeOverview(normalizedDetails.overview || book.overview),
             });
         }
@@ -263,6 +264,7 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
         media_type: 'book',
         source_id: sourceId || String(book.id),
         id: book.id,
+        author: book.author,
         overview: sanitizeOverview(book.overview),
     });
 }

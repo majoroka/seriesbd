@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGoogleSearchQueries,
+  hasStrongSearchMatch,
   mapGoogleBook,
   mergeBookMetadata,
   mapOpenLibraryBook,
   normalizeIsbn,
+  parseGoodreadsBookPage,
+  parseGoodreadsSearchResults,
   parseBertrandBookPage,
   parsePresencaProductPayload,
   parsePresencaSearchResults,
@@ -65,6 +68,33 @@ describe('books ISBN mapping', () => {
     );
 
     expect(merged.poster_path).toBe('https://cdn.shopify.com/s/files/1/teste.jpg?v=1');
+  });
+
+  it('replaces weak truncated overviews with richer fallback synopses', () => {
+    const merged = mergeBookMetadata(
+      {
+        source_provider: 'google_books',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás...',
+      },
+      {
+        source_provider: 'goodreads',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é subitamente envolvido numa investigação complexa que o conduz por um labirinto de segredos científicos, religiosos e históricos.',
+      },
+    );
+
+    expect(merged.overview).toBe('Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é subitamente envolvido numa investigação complexa que o conduz por um labirinto de segredos científicos, religiosos e históricos.');
+  });
+
+  it('detects when existing search results do not strongly match the requested title', () => {
+    expect(hasStrongSearchMatch([
+      { name: 'O Segredo do Egipto' },
+      { name: 'A Vida é Bela' },
+    ], 'Quartzo Fumado')).toBe(false);
+
+    expect(hasStrongSearchMatch([
+      { name: 'Quartzo Fumado' },
+      { name: 'Outro Livro' },
+    ], 'Quartzo Fumado')).toBe(true);
   });
 });
 
@@ -167,6 +197,157 @@ describe('books fallback parsers', () => {
     });
   });
 
+  it('parses Goodreads search results into clean product URLs', () => {
+    const html = `
+      <html>
+        <body>
+          <a class="bookTitle" href="/book/show/49634616-ganhei-uma-vida-quando-te-perdi?from_search=true&amp;rank=1">
+            <span>Ganhei uma vida quando te perdi</span>
+          </a>
+          <a class="bookTitle" href="/book/show/222199303-ganhei-uma-vida-quando-te-perdi?from_search=true&amp;rank=2">
+            <span>Ganhei Uma Vida Quando Te Perdi</span>
+          </a>
+        </body>
+      </html>
+    `;
+
+    expect(parseGoodreadsSearchResults(html)).toEqual([
+      {
+        author: '',
+        imageUrl: null,
+        productUrl: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
+        title: 'Ganhei uma vida quando te perdi',
+      },
+      {
+        author: '',
+        imageUrl: null,
+        productUrl: 'https://www.goodreads.com/book/show/222199303-ganhei-uma-vida-quando-te-perdi',
+        title: 'Ganhei Uma Vida Quando Te Perdi',
+      },
+    ]);
+  });
+
+  it('parses Goodreads book pages with matching title and extracts cover and synopsis', () => {
+    const html = `
+      <html>
+        <head>
+          <meta name="description" content="Read 160 reviews. Como é que se esquece alguém?" />
+          <meta property="og:description" content="Como é que se esquece alguém? Quando Alice decide esquecer..." />
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"Ganhei uma vida quando te perdi","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg","isbn":"9789899254787"}
+          </script>
+        </head>
+        <body>
+          <div data-testid="description" class="BookPageMetadataSection__description">
+            <div class="TruncatedContent__text TruncatedContent__text--large">
+              <span class="Formatted">Como é que se esquece alguém? Quando Alice decide esquecer Tomás, percebe que o fim também pode ser um começo.<br />Esta é a versão completa da sinopse.</span>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi?from_search=true',
+      'Ganhei uma vida quando te perdi',
+      '9789899254787',
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: '9789899254787',
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
+        name: 'Ganhei uma vida quando te perdi',
+        author: '',
+        isbn: '9789899254787',
+        overview: 'Como é que se esquece alguém? Quando Alice decide esquecer Tomás, percebe que o fim também pode ser um começo. Esta é a versão completa da sinopse.',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg',
+      }),
+    });
+  });
+
+  it('accepts Goodreads titles with series suffixes or parenthetical expansions', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:description" content="Sinopse Goodreads com metadados completos." />
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"A fórmula de Deus (Tomás Noronha, #2)","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg"}
+          </script>
+        </head>
+        <body>
+          <div data-testid="description">
+            <span class="Formatted">Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é convocado para uma investigação que o levará ao coração da ciência e da fé.</span>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus?from_search=true',
+      'A fórmula de Deus',
+      null,
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: null,
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
+        name: 'A fórmula de Deus (Tomás Noronha, #2)',
+        author: '',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é convocado para uma investigação que o levará ao coração da ciência e da fé.',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
+      }),
+    });
+  });
+
+  it('prefers Portuguese Goodreads descriptions over longer English variants', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"A fórmula de Deus","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg"}
+          </script>
+        </head>
+        <body>
+          <div data-testid="description">
+            <span class="Formatted">This novel follows Tomás Noronha through a long investigation about science, faith, and the origins of the universe in a sweeping international thriller.</span>
+            <span class="Formatted">Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é arrastado para uma investigação sobre ciência, fé e a origem do universo.</span>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus?from_search=true',
+      'A fórmula de Deus',
+      null,
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: null,
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
+        name: 'A fórmula de Deus',
+        author: '',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é arrastado para uma investigação sobre ciência, fé e a origem do universo.',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
+      }),
+    });
+  });
+
   it('rejects fallback pages when ISBN cannot be confirmed', () => {
     const html = `
       <html>
@@ -180,5 +361,6 @@ describe('books fallback parsers', () => {
     expect(parseBertrandBookPage(html, 'https://www.bertrand.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parseWookBookPage(html, 'https://www.wook.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parsePresencaProductPayload({ variants: [{ sku: '9781111111111' }] }, '9789899254275')).toBeNull();
+    expect(parseGoodreadsBookPage(html, 'https://www.goodreads.com/book/show/teste', 'Ganhei uma vida quando te perdi', '9789899254275')).toBeNull();
   });
 });
