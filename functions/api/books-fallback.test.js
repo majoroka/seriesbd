@@ -185,10 +185,14 @@ describe('books fallback parsers', () => {
 
     expect(parseGoodreadsSearchResults(html)).toEqual([
       {
+        author: '',
+        imageUrl: null,
         productUrl: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
         title: 'Ganhei uma vida quando te perdi',
       },
       {
+        author: '',
+        imageUrl: null,
         productUrl: 'https://www.goodreads.com/book/show/222199303-ganhei-uma-vida-quando-te-perdi',
         title: 'Ganhei Uma Vida Quando Te Perdi',
       },
@@ -222,6 +226,8 @@ describe('books fallback parsers', () => {
       result: expect.objectContaining({
         source_provider: 'goodreads',
         source_id: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
+        name: 'Ganhei uma vida quando te perdi',
+        author: '',
         isbn: '9789899254787',
         overview: 'Como é que se esquece alguém? Quando Alice decide esquecer...',
         poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg',
@@ -255,6 +261,8 @@ describe('books fallback parsers', () => {
       result: expect.objectContaining({
         source_provider: 'goodreads',
         source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
+        name: 'A fórmula de Deus (Tomás Noronha, #2)',
+        author: '',
         overview: 'Sinopse Goodreads com metadados completos.',
         poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
       }),

@@ -2888,6 +2888,7 @@ export function renderMediaDetails(
     const countriesText = media.production_countries?.length
         ? media.production_countries.map((country) => country.name).filter(Boolean).join(', ')
         : 'N/A';
+    const authorText = String(media.author || '').trim() || 'N/A';
     const isbnText = String(media.isbn || media.isbn_13 || media.isbn_10 || '').trim() || 'N/A';
     const sourceProviderLabel = (() => {
         if (media.source_provider === 'tmdb_movie') return 'TMDb';
@@ -2978,11 +2979,12 @@ export function renderMediaDetails(
         ]
         : [
             { label: 'Estado Leitura', value: progressLabel },
-            { label: 'Géneros', value: genres },
+            { label: 'Autor', value: authorText },
             { label: 'Publicado', value: releaseDate },
             { label: 'Fonte', value: sourceProviderLabel },
             { label: 'ISBN', value: isbnText },
             { label: 'Progresso', value: `${progressPercent}%` },
+            { label: 'Géneros', value: genres },
         ];
 
     const actionButtons: (HTMLElement | null)[] = [

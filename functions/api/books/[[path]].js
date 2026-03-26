@@ -17,6 +17,8 @@ const OPEN_LIBRARY_COVERS_BASE_URL = 'https://covers.openlibrary.org/b/id';
 const PRESENCA_BASE_URL = 'https://www.presenca.pt';
 const GOODREADS_BASE_URL = 'https://www.goodreads.com';
 const SEARCH_FALLBACK_ENRICHMENT_LIMIT = 3;
+const FALLBACK_CACHE_TTL_MS = 30 * 60 * 1000;
+const fallbackMetadataCache = new Map();
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
 const ROUTE_KEY = 'books';
@@ -99,6 +101,7 @@ export const mergeBookMetadata = (baseResult, enrichmentResult) => {
     genres: Array.isArray(baseResult.genres) && baseResult.genres.length > 0 ? baseResult.genres : enrichmentResult.genres,
     first_air_date: hasBookText(baseResult.first_air_date) ? baseResult.first_air_date : enrichmentResult.first_air_date,
     original_name: hasBookText(baseResult.original_name) ? baseResult.original_name : enrichmentResult.original_name,
+    author: hasBookText(baseResult.author) ? baseResult.author : enrichmentResult.author,
     isbn: baseResult.isbn || enrichmentResult.isbn || null,
     isbn_13: baseResult.isbn_13 || enrichmentResult.isbn_13 || null,
     isbn_10: baseResult.isbn_10 || enrichmentResult.isbn_10 || null,
@@ -181,6 +184,7 @@ export const mapGoogleBook = (item) => {
     media_type: 'book',
     source_provider: 'google_books',
     source_id: sourceId,
+    author: Array.isArray(info.authors) ? info.authors.filter(Boolean).join(', ') : '',
     name: String(info.title || 'Livro sem titulo'),
     original_name: String(info.subtitle || info.title || ''),
     overview: description,
@@ -206,6 +210,7 @@ export const mapOpenLibraryBook = (doc) => {
     media_type: 'book',
     source_provider: 'open_library',
     source_id: sourceId,
+    author: Array.isArray(doc?.author_name) ? doc.author_name.filter(Boolean).join(', ') : '',
     name: String(doc?.title || 'Livro sem titulo'),
     original_name: String(doc?.subtitle || doc?.title || ''),
     overview,
@@ -216,6 +221,21 @@ export const mapOpenLibraryBook = (doc) => {
     ...isbnFields,
   };
 };
+
+const mapGoodreadsSearchResult = (entry) => ({
+  id: toScopedBookId(`goodreads:${entry?.productUrl || entry?.title || Math.random()}`),
+  media_type: 'book',
+  source_provider: 'goodreads',
+  source_id: String(entry?.productUrl || '').trim(),
+  author: String(entry?.author || '').trim(),
+  name: String(entry?.title || 'Livro sem titulo'),
+  original_name: String(entry?.title || ''),
+  overview: '',
+  poster_path: entry?.imageUrl || null,
+  backdrop_path: null,
+  first_air_date: '',
+  genres: [],
+});
 
 const searchGoogleBooks = async (query, apiKey) => {
   const url = new URL(`${GOOGLE_BOOKS_BASE_URL}/volumes`);
@@ -236,6 +256,27 @@ const searchGoogleBooks = async (query, apiKey) => {
     ok: true,
     status: response.status,
     results: rawItems.map(mapGoogleBook),
+  };
+};
+
+const searchGoodreadsBooksByTitle = async (query) => {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery) return { ok: false, status: 400, results: [] };
+
+  const searchPage = await fetchHtmlPage(`${GOODREADS_BASE_URL}/search?q=${encodeURIComponent(normalizedQuery)}&search%5Bfield%5D=title`);
+  if (!searchPage.ok) {
+    return { ok: false, status: searchPage.status, results: [] };
+  }
+
+  const results = parseGoodreadsSearchResults(searchPage.html)
+    .filter((entry) => titlesStronglyMatch(entry.title, normalizedQuery))
+    .slice(0, 8)
+    .map(mapGoodreadsSearchResult);
+
+  return {
+    ok: results.length > 0,
+    status: searchPage.status,
+    results,
   };
 };
 
@@ -293,7 +334,7 @@ const fetchGoogleBookByIsbn = async (isbn, apiKey) => {
   };
 };
 
-const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '') => {
+const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '', fallbackAuthor = '') => {
   const descriptionRaw = payload?.description;
   const description = typeof descriptionRaw === 'string'
     ? descriptionRaw
@@ -308,6 +349,7 @@ const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '') => {
     media_type: 'book',
     source_provider: 'open_library',
     source_id: sourceId,
+    author: String(fallbackAuthor || ''),
     name: title,
     original_name: String(payload?.subtitle || title || ''),
     overview: description,
@@ -398,6 +440,24 @@ const absolutizeUrl = (rawUrl, baseUrl) => {
   }
 };
 
+const getCachedFallbackValue = (key) => {
+  const cached = fallbackMetadataCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    fallbackMetadataCache.delete(key);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedFallbackValue = (key, value) => {
+  fallbackMetadataCache.set(key, {
+    value,
+    expiresAt: Date.now() + FALLBACK_CACHE_TTL_MS,
+  });
+  return value;
+};
+
 const extractMetaContent = (html, attributeName, attributeValue) => {
   const pattern = new RegExp(
     `<meta[^>]+${attributeName}=["']${escapeRegExp(attributeValue)}["'][^>]+content=["']([^"']+)["'][^>]*>|<meta[^>]+content=["']([^"']+)["'][^>]+${attributeName}=["']${escapeRegExp(attributeValue)}["'][^>]*>`,
@@ -470,12 +530,14 @@ const extractFallbackProductLinks = (html, baseUrl, isbn) => {
   ).values()].map((entry) => entry.href);
 };
 
-const buildFallbackResult = ({ provider, isbn, productUrl, imageUrl, overview }) => ({
+const buildFallbackResult = ({ provider, isbn, productUrl, imageUrl, overview, name = '', author = '' }) => ({
   provider,
   isbn,
   result: {
     source_provider: provider,
     source_id: productUrl,
+    author: String(author || '').trim(),
+    name: String(name || '').trim(),
     isbn,
     overview: sanitizeOverviewText(overview),
     poster_path: imageUrl || null,
@@ -546,11 +608,20 @@ export const parseGoodreadsSearchResults = (html) => {
   for (const match of matches) {
     const productUrl = absolutizeUrl(String(match[1] || '').split('?')[0], GOODREADS_BASE_URL);
     const title = sanitizeOverviewText(match[2] || '');
+    const rawIndex = typeof match.index === 'number' ? match.index : 0;
+    const context = html.slice(Math.max(0, rawIndex - 500), rawIndex + 1200);
+    const imageMatch = context.match(/<img[^>]+src=["']([^"']+)["']/i);
+    const authorMatch = context.match(/authorName[^>]*>\s*<span[^>]*itemprop=["']name["'][^>]*>([^<]+)</i)
+      || context.match(/by\s+<a[^>]*class=["'][^"']*authorName[^"']*["'][^>]*>([\s\S]*?)<\/a>/i);
+    const imageUrl = absolutizeUrl(imageMatch?.[1] || '', GOODREADS_BASE_URL);
+    const author = sanitizeOverviewText(authorMatch?.[1] || '');
     if (!productUrl || !title || seen.has(productUrl)) continue;
     seen.add(productUrl);
     results.push({
       productUrl,
       title,
+      author,
+      imageUrl,
     });
   }
 
@@ -576,6 +647,13 @@ export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsb
   const rawImage = Array.isArray(bookNode?.image)
     ? bookNode.image[0]
     : (bookNode?.image?.url || bookNode?.image?.contentUrl || bookNode?.image);
+  const rawAuthors = Array.isArray(bookNode?.author)
+    ? bookNode.author
+    : (bookNode?.author ? [bookNode.author] : []);
+  const author = rawAuthors
+    .map((entry) => String(entry?.name || entry || '').trim())
+    .filter(Boolean)
+    .join(', ');
   const imageUrl = absolutizeUrl(
     rawImage || extractMetaContent(html, 'property', 'og:image') || extractMetaContent(html, 'name', 'twitter:image'),
     pageUrl,
@@ -592,6 +670,8 @@ export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsb
     productUrl: normalizedPageUrl,
     imageUrl,
     overview,
+    name: pageTitle,
+    author,
   });
 };
 
@@ -747,9 +827,13 @@ const resolvePresencaProductByIsbn = async (isbn) => {
 };
 
 const fetchPresencaFallbackByIsbn = async (isbn) => {
+  const cacheKey = `presenca:isbn:${isbn}`;
+  const cached = getCachedFallbackValue(cacheKey);
+  if (cached) return cached;
+
   const resolved = await resolvePresencaProductByIsbn(isbn);
   if (!resolved.ok || !resolved.handle) {
-    return { ok: false, status: resolved.status, provider: 'presenca', result: null, reason: resolved.reason };
+    return setCachedFallbackValue(cacheKey, { ok: false, status: resolved.status, provider: 'presenca', result: null, reason: resolved.reason });
   }
 
   const productUrl = `${PRESENCA_BASE_URL}${resolved.handle}.js`;
@@ -763,7 +847,7 @@ const fetchPresencaFallbackByIsbn = async (isbn) => {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload) {
-    return { ok: false, status: response.status, provider: 'presenca', result: null, reason: 'product_fetch_failed' };
+    return setCachedFallbackValue(cacheKey, { ok: false, status: response.status, provider: 'presenca', result: null, reason: 'product_fetch_failed' });
   }
 
   const parsed = parsePresencaProductPayload(payload, isbn);
@@ -771,24 +855,27 @@ const fetchPresencaFallbackByIsbn = async (isbn) => {
     parsed.result.poster_path = resolved.previewImageUrl;
   }
 
-  return {
+  return setCachedFallbackValue(cacheKey, {
     ok: Boolean(parsed),
     status: response.status,
     provider: 'presenca',
     result: parsed?.result || null,
     reason: parsed ? null : 'isbn_not_confirmed',
-  };
+  });
 };
 
 const fetchGoodreadsFallbackByTitle = async (title, isbn = null) => {
   const normalizedTitle = String(title || '').trim();
+  const cacheKey = `goodreads:title:${normalizeBookMatchText(normalizedTitle)}:isbn:${isbn || 'none'}`;
+  const cached = getCachedFallbackValue(cacheKey);
+  if (cached) return cached;
   if (!normalizedTitle) {
-    return { ok: false, status: 400, provider: 'goodreads', result: null, reason: 'missing_title' };
+    return setCachedFallbackValue(cacheKey, { ok: false, status: 400, provider: 'goodreads', result: null, reason: 'missing_title' });
   }
 
   const searchPage = await fetchHtmlPage(`${GOODREADS_BASE_URL}/search?q=${encodeURIComponent(normalizedTitle)}&search%5Bfield%5D=title`);
   if (!searchPage.ok) {
-    return { ok: false, status: searchPage.status, provider: 'goodreads', result: null, reason: 'search_failed' };
+    return setCachedFallbackValue(cacheKey, { ok: false, status: searchPage.status, provider: 'goodreads', result: null, reason: 'search_failed' });
   }
 
   const parsedCandidates = parseGoodreadsSearchResults(searchPage.html);
@@ -801,17 +888,17 @@ const fetchGoodreadsFallbackByTitle = async (title, isbn = null) => {
     if (!productPage.ok) continue;
     const parsed = parseGoodreadsBookPage(productPage.html, productPage.url, normalizedTitle, isbn);
     if (parsed?.result) {
-      return {
+      return setCachedFallbackValue(cacheKey, {
         ok: true,
         status: productPage.status,
         provider: 'goodreads',
         result: parsed.result,
         reason: null,
-      };
+      });
     }
   }
 
-  return { ok: false, status: searchPage.status || 404, provider: 'goodreads', result: null, reason: 'no_strong_match' };
+  return setCachedFallbackValue(cacheKey, { ok: false, status: searchPage.status || 404, provider: 'goodreads', result: null, reason: 'no_strong_match' });
 };
 
 const enrichBookByOfficialSourcesAndFallbacks = async (baseResult, { isbn = null, title = '', googleApiKey = null } = {}) => {
@@ -835,20 +922,19 @@ const enrichBookByOfficialSourcesAndFallbacks = async (baseResult, { isbn = null
     }
   }
 
-  if (isbn && bookNeedsMetadata(result)) {
-    const presencaFallback = await fetchPresencaFallbackByIsbn(isbn);
-    if (presencaFallback.ok && presencaFallback.result) {
-      result = mergeBookMetadata(result, presencaFallback.result);
-    }
-  }
-
   if (bookNeedsMetadata(result)) {
     const fallbackTitle = String(result?.name || title || '').trim();
-    if (fallbackTitle) {
-      const goodreadsFallback = await fetchGoodreadsFallbackByTitle(fallbackTitle, isbn);
-      if (goodreadsFallback.ok && goodreadsFallback.result) {
-        result = mergeBookMetadata(result, goodreadsFallback.result);
-      }
+    const [presencaFallback, goodreadsFallback] = await Promise.all([
+      isbn ? fetchPresencaFallbackByIsbn(isbn) : Promise.resolve(null),
+      fallbackTitle ? fetchGoodreadsFallbackByTitle(fallbackTitle, isbn) : Promise.resolve(null),
+    ]);
+
+    if (presencaFallback?.ok && presencaFallback.result) {
+      result = mergeBookMetadata(result, presencaFallback.result);
+    }
+
+    if (bookNeedsMetadata(result) && goodreadsFallback?.ok && goodreadsFallback.result) {
+      result = mergeBookMetadata(result, goodreadsFallback.result);
     }
   }
 
@@ -872,7 +958,7 @@ const enrichBookSearchResultsWithFallbacks = async (results, { query = '', googl
   );
 };
 
-const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
+const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '', fallbackAuthor = '') => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) return { ok: false, status: 400, result: null };
   let workPath = normalizedSourceId;
@@ -887,7 +973,7 @@ const fetchOpenLibraryBookDetails = async (sourceId, fallbackTitle = '') => {
   return {
     ok: true,
     status: response.status,
-    result: mapOpenLibraryWorkDetails(payload, normalizedSourceId, fallbackTitle),
+    result: mapOpenLibraryWorkDetails(payload, normalizedSourceId, fallbackTitle, fallbackAuthor),
   };
 };
 
@@ -900,7 +986,7 @@ const fetchOpenLibraryBookByIsbn = async (isbn) => {
     return { ok: false, status: search.status || 404, result: null };
   }
 
-  const details = await fetchOpenLibraryBookDetails(exactMatch.source_id, exactMatch.name);
+  const details = await fetchOpenLibraryBookDetails(exactMatch.source_id, exactMatch.name, exactMatch.author || '');
   if (!details.ok || !details.result) {
     return {
       ok: true,
@@ -914,6 +1000,30 @@ const fetchOpenLibraryBookByIsbn = async (isbn) => {
     status: details.status || search.status,
     result: mergeBookMetadata(exactMatch, details.result),
   };
+};
+
+const fetchGoodreadsBookDetails = async (sourceId, expectedTitle = '', expectedIsbn = null) => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) return { ok: false, status: 400, result: null };
+
+  const pageUrl = absolutizeUrl(normalizedSourceId, GOODREADS_BASE_URL);
+  if (!pageUrl) return { ok: false, status: 400, result: null };
+
+  const cacheKey = `goodreads:detail:${pageUrl}:isbn:${expectedIsbn || 'none'}:title:${normalizeBookMatchText(expectedTitle)}`;
+  const cached = getCachedFallbackValue(cacheKey);
+  if (cached) return cached;
+
+  const productPage = await fetchHtmlPage(pageUrl);
+  if (!productPage.ok) {
+    return setCachedFallbackValue(cacheKey, { ok: false, status: productPage.status, result: null });
+  }
+
+  const parsed = parseGoodreadsBookPage(productPage.html, productPage.url, expectedTitle, expectedIsbn);
+  return setCachedFallbackValue(cacheKey, {
+    ok: Boolean(parsed?.result),
+    status: productPage.status,
+    result: parsed?.result || null,
+  });
 };
 
 export async function onRequest(context) {
@@ -1033,6 +1143,15 @@ export async function onRequest(context) {
           ...openLibraryKeyword.results,
           ...openLibraryAuthor.results,
         ]);
+
+        if (results.length === 0) {
+          const goodreads = await searchGoodreadsBooksByTitle(query);
+          if (goodreads.ok && goodreads.results.length > 0) {
+            provider = 'goodreads';
+            upstreamStatus = goodreads.status;
+            results = dedupeBookResults(goodreads.results);
+          }
+        }
       }
 
       if (!normalizedIsbn && results.length > 0) {
@@ -1204,7 +1323,11 @@ export async function onRequest(context) {
       return applyRateLimitHeaders(badRequest, rateLimit);
     }
 
-    let provider = providerParam === 'open_library' ? 'open_library' : 'google_books';
+    let provider = providerParam === 'open_library'
+      ? 'open_library'
+      : providerParam === 'goodreads'
+        ? 'goodreads'
+        : 'google_books';
     let upstreamStatus = 200;
     let result = null;
 
@@ -1221,6 +1344,12 @@ export async function onRequest(context) {
       const openLibraryDetails = await fetchOpenLibraryBookDetails(sourceId, query);
       upstreamStatus = openLibraryDetails.status;
       result = openLibraryDetails.result;
+    }
+
+    if (provider === 'goodreads' && sourceId) {
+      const goodreadsDetails = await fetchGoodreadsBookDetails(sourceId, query, normalizedIsbn || null);
+      upstreamStatus = goodreadsDetails.status;
+      result = goodreadsDetails.result;
     }
 
     if (normalizedIsbn) {
@@ -1241,6 +1370,13 @@ export async function onRequest(context) {
       upstreamStatus = searchFallback.status;
       result = searchFallback.results[0] || null;
       provider = 'open_library';
+
+      if (!result) {
+        const goodreadsFallback = await searchGoodreadsBooksByTitle(query);
+        upstreamStatus = goodreadsFallback.status || upstreamStatus;
+        result = goodreadsFallback.results[0] || null;
+        if (result) provider = 'goodreads';
+      }
     }
 
     if (!result) {
