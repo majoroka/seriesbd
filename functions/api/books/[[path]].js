@@ -348,15 +348,44 @@ const normalizeBookMatchText = (value) =>
 const toTitleCandidates = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return [];
-  const rawCandidates = [raw, raw.split(':')[0], raw.split(' - ')[0]];
+  const rawCandidates = [
+    raw,
+    raw.split(':')[0],
+    raw.split(' - ')[0],
+    raw.replace(/\([^)]*\)/g, ' '),
+  ];
   return Array.from(new Set(rawCandidates.map((entry) => normalizeBookMatchText(entry)).filter(Boolean)));
 };
+
+const toMeaningfulTokens = (value) =>
+  normalizeBookMatchText(value)
+    .split(' ')
+    .filter((token) => token.length >= 3);
 
 const titlesStronglyMatch = (left, right) => {
   const leftCandidates = toTitleCandidates(left);
   const rightCandidates = toTitleCandidates(right);
   if (leftCandidates.length === 0 || rightCandidates.length === 0) return false;
-  return leftCandidates.some((candidate) => rightCandidates.includes(candidate));
+  if (leftCandidates.some((candidate) => rightCandidates.includes(candidate))) return true;
+
+  const partialMatch = leftCandidates.some((leftCandidate) =>
+    rightCandidates.some((rightCandidate) => {
+      const shorter = leftCandidate.length <= rightCandidate.length ? leftCandidate : rightCandidate;
+      const longer = leftCandidate.length > rightCandidate.length ? leftCandidate : rightCandidate;
+      return shorter.length >= 8 && longer.includes(shorter);
+    }),
+  );
+  if (partialMatch) return true;
+
+  return leftCandidates.some((leftCandidate) => {
+    const leftTokens = toMeaningfulTokens(leftCandidate);
+    if (leftTokens.length < 2) return false;
+    return rightCandidates.some((rightCandidate) => {
+      const rightTokens = new Set(toMeaningfulTokens(rightCandidate));
+      const sharedTokens = leftTokens.filter((token) => rightTokens.has(token)).length;
+      return sharedTokens >= Math.max(2, Math.ceil(leftTokens.length * 0.6));
+    });
+  });
 };
 
 const absolutizeUrl = (rawUrl, baseUrl) => {
@@ -761,8 +790,12 @@ const fetchGoodreadsFallbackByTitle = async (title, isbn = null) => {
     return { ok: false, status: searchPage.status, provider: 'goodreads', result: null, reason: 'search_failed' };
   }
 
-  const candidates = parseGoodreadsSearchResults(searchPage.html).filter((entry) => titlesStronglyMatch(entry.title, normalizedTitle));
-  for (const candidate of candidates.slice(0, 5)) {
+  const parsedCandidates = parseGoodreadsSearchResults(searchPage.html);
+  const strongCandidates = parsedCandidates.filter((entry) => titlesStronglyMatch(entry.title, normalizedTitle));
+  const fallbackCandidates = parsedCandidates.filter((entry) => !strongCandidates.some((match) => match.productUrl === entry.productUrl));
+  const candidates = [...strongCandidates, ...fallbackCandidates];
+
+  for (const candidate of candidates.slice(0, 8)) {
     const productPage = await fetchHtmlPage(candidate.productUrl);
     if (!productPage.ok) continue;
     const parsed = parseGoodreadsBookPage(productPage.html, productPage.url, normalizedTitle, isbn);

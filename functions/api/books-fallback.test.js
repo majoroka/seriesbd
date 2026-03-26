@@ -229,6 +229,38 @@ describe('books fallback parsers', () => {
     });
   });
 
+  it('accepts Goodreads titles with series suffixes or parenthetical expansions', () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:description" content="Sinopse Goodreads com metadados completos." />
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"A fórmula de Deus (Tomás Noronha, #2)","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg"}
+          </script>
+        </head>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus?from_search=true',
+      'A fórmula de Deus',
+      null,
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: null,
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
+        overview: 'Sinopse Goodreads com metadados completos.',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
+      }),
+    });
+  });
+
   it('rejects fallback pages when ISBN cannot be confirmed', () => {
     const html = `
       <html>
