@@ -225,6 +225,13 @@ describe('books fallback parsers', () => {
             {"@context":"https://schema.org","@type":"Book","name":"Ganhei uma vida quando te perdi","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg","isbn":"9789899254787"}
           </script>
         </head>
+        <body>
+          <div data-testid="description" class="BookPageMetadataSection__description">
+            <div class="TruncatedContent__text TruncatedContent__text--large">
+              <span class="Formatted">Como é que se esquece alguém? Quando Alice decide esquecer Tomás, percebe que o fim também pode ser um começo.<br />Esta é a versão completa da sinopse.</span>
+            </div>
+          </div>
+        </body>
       </html>
     `;
 
@@ -244,7 +251,7 @@ describe('books fallback parsers', () => {
         name: 'Ganhei uma vida quando te perdi',
         author: '',
         isbn: '9789899254787',
-        overview: 'Como é que se esquece alguém? Quando Alice decide esquecer...',
+        overview: 'Como é que se esquece alguém? Quando Alice decide esquecer Tomás, percebe que o fim também pode ser um começo. Esta é a versão completa da sinopse.',
         poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg',
       }),
     });
@@ -260,6 +267,11 @@ describe('books fallback parsers', () => {
             {"@context":"https://schema.org","@type":"Book","name":"A fórmula de Deus (Tomás Noronha, #2)","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg"}
           </script>
         </head>
+        <body>
+          <div data-testid="description">
+            <span class="Formatted">Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é convocado para uma investigação que o levará ao coração da ciência e da fé.</span>
+          </div>
+        </body>
       </html>
     `;
 
@@ -278,7 +290,7 @@ describe('books fallback parsers', () => {
         source_id: 'https://www.goodreads.com/book/show/2430907.A_F_rmula_de_Deus',
         name: 'A fórmula de Deus (Tomás Noronha, #2)',
         author: '',
-        overview: 'Sinopse Goodreads com metadados completos.',
+        overview: 'Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é convocado para uma investigação que o levará ao coração da ciência e da fé.',
         poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1234567890i/2430907.jpg',
       }),
     });

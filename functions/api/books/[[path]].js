@@ -18,6 +18,7 @@ const PRESENCA_BASE_URL = 'https://www.presenca.pt';
 const GOODREADS_BASE_URL = 'https://www.goodreads.com';
 const SEARCH_FALLBACK_ENRICHMENT_LIMIT = 3;
 const FALLBACK_CACHE_TTL_MS = 30 * 60 * 1000;
+const GOODREADS_FALLBACK_CACHE_VERSION = 'v2';
 const fallbackMetadataCache = new Map();
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
@@ -646,6 +647,42 @@ export const parseGoodreadsSearchResults = (html) => {
   return results;
 };
 
+const extractGoodreadsDescription = (html) => {
+  const descriptionMarkerIndex =
+    html.indexOf('data-testid="description"') >= 0
+      ? html.indexOf('data-testid="description"')
+      : html.indexOf("data-testid='description'");
+
+  if (descriptionMarkerIndex >= 0) {
+    const descriptionWindow = html.slice(descriptionMarkerIndex, descriptionMarkerIndex + 20000);
+    const formattedMatches = descriptionWindow.matchAll(/<span[^>]+class=["'][^"']*Formatted[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
+    let bestCandidate = '';
+
+    for (const match of formattedMatches) {
+      const candidate = sanitizeOverviewText(match[1] || '');
+      if (!candidate) continue;
+      if (candidate.length > bestCandidate.length) {
+        bestCandidate = candidate;
+      }
+    }
+
+    if (bestCandidate) return bestCandidate;
+  }
+
+  const fallbackFormattedMatches = html.matchAll(/<span[^>]+class=["'][^"']*Formatted[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
+  let bestFallbackCandidate = '';
+
+  for (const match of fallbackFormattedMatches) {
+    const candidate = sanitizeOverviewText(match[1] || '');
+    if (!candidate) continue;
+    if (candidate.length > bestFallbackCandidate.length) {
+      bestFallbackCandidate = candidate;
+    }
+  }
+
+  return bestFallbackCandidate;
+};
+
 export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsbn = null) => {
   const jsonLdNodes = flattenJsonLdNodes(parseJsonLdBlocks(html));
   const bookNode = jsonLdNodes.find((entry) => {
@@ -677,7 +714,8 @@ export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsb
     pageUrl,
   );
   const overview =
-    bookNode?.description
+    extractGoodreadsDescription(html)
+    || bookNode?.description
     || extractMetaContent(html, 'property', 'og:description')
     || extractMetaContent(html, 'name', 'description');
   const normalizedPageUrl = absolutizeUrl(String(pageUrl || '').split('?')[0], GOODREADS_BASE_URL) || pageUrl;
@@ -884,7 +922,7 @@ const fetchPresencaFallbackByIsbn = async (isbn) => {
 
 const fetchGoodreadsFallbackByTitle = async (title, isbn = null) => {
   const normalizedTitle = String(title || '').trim();
-  const cacheKey = `goodreads:title:${normalizeBookMatchText(normalizedTitle)}:isbn:${isbn || 'none'}`;
+  const cacheKey = `goodreads:${GOODREADS_FALLBACK_CACHE_VERSION}:title:${normalizeBookMatchText(normalizedTitle)}:isbn:${isbn || 'none'}`;
   const cached = getCachedFallbackValue(cacheKey);
   if (cached) return cached;
   if (!normalizedTitle) {
@@ -1027,7 +1065,7 @@ const fetchGoodreadsBookDetails = async (sourceId, expectedTitle = '', expectedI
   const pageUrl = absolutizeUrl(normalizedSourceId, GOODREADS_BASE_URL);
   if (!pageUrl) return { ok: false, status: 400, result: null };
 
-  const cacheKey = `goodreads:detail:${pageUrl}:isbn:${expectedIsbn || 'none'}:title:${normalizeBookMatchText(expectedTitle)}`;
+  const cacheKey = `goodreads:${GOODREADS_FALLBACK_CACHE_VERSION}:detail:${pageUrl}:isbn:${expectedIsbn || 'none'}:title:${normalizeBookMatchText(expectedTitle)}`;
   const cached = getCachedFallbackValue(cacheKey);
   if (cached) return cached;
 
