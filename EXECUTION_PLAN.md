@@ -169,6 +169,12 @@ Critério de fecho:
 - melhorias guiadas por medição
 - sem regressão visual
 
+Estado atual do sprint:
+- `resize` do header móvel com debounce para evitar trabalho repetido em cascata
+- métricas do dashboard consolidadas num único cálculo por render
+- estatísticas com cache local por ciclo de render para evitar filtros, listas e resumos duplicados
+- removido um render redundante da dashboard no arranque
+
 ### Sprint C7 | Design System Mínimo
 
 Objetivo:
