@@ -191,6 +191,12 @@ Critério de fecho:
 - menor heterogeneidade entre áreas
 - revisão visual desktop/tablet/mobile aprovada
 
+Estado atual do sprint:
+- empty states consolidados com tipografia e espaçamento coerentes
+- modais principais alinhados por grupos de estilo partilhados em vez de CSS repetido
+- títulos de modais de conta e listas avaliadas com hierarquia visual mais consistente
+- sem redesenho estrutural nem alteração de fluxo
+
 ## Ordem recomendada
 
 1. `C1 Segurança Frontend`
