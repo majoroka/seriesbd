@@ -121,6 +121,26 @@ const MOBILE_TOPBAR_BREAKPOINT_PX = 768;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error !== null) {
+        const candidate = error as {
+            message?: unknown;
+            error?: unknown;
+            details?: unknown;
+            hint?: unknown;
+        };
+        if (typeof candidate.message === 'string' && candidate.message.trim()) {
+            return candidate.message.trim();
+        }
+        if (typeof candidate.error === 'string' && candidate.error.trim()) {
+            return candidate.error.trim();
+        }
+        if (typeof candidate.details === 'string' && candidate.details.trim()) {
+            return candidate.details.trim();
+        }
+        if (typeof candidate.hint === 'string' && candidate.hint.trim()) {
+            return candidate.hint.trim();
+        }
+    }
     return String(error);
 }
 
