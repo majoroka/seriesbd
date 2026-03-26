@@ -5,6 +5,8 @@ import {
   mergeBookMetadata,
   mapOpenLibraryBook,
   normalizeIsbn,
+  parseGoodreadsBookPage,
+  parseGoodreadsSearchResults,
   parseBertrandBookPage,
   parsePresencaProductPayload,
   parsePresencaSearchResults,
@@ -167,6 +169,66 @@ describe('books fallback parsers', () => {
     });
   });
 
+  it('parses Goodreads search results into clean product URLs', () => {
+    const html = `
+      <html>
+        <body>
+          <a class="bookTitle" href="/book/show/49634616-ganhei-uma-vida-quando-te-perdi?from_search=true&amp;rank=1">
+            <span>Ganhei uma vida quando te perdi</span>
+          </a>
+          <a class="bookTitle" href="/book/show/222199303-ganhei-uma-vida-quando-te-perdi?from_search=true&amp;rank=2">
+            <span>Ganhei Uma Vida Quando Te Perdi</span>
+          </a>
+        </body>
+      </html>
+    `;
+
+    expect(parseGoodreadsSearchResults(html)).toEqual([
+      {
+        productUrl: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
+        title: 'Ganhei uma vida quando te perdi',
+      },
+      {
+        productUrl: 'https://www.goodreads.com/book/show/222199303-ganhei-uma-vida-quando-te-perdi',
+        title: 'Ganhei Uma Vida Quando Te Perdi',
+      },
+    ]);
+  });
+
+  it('parses Goodreads book pages with matching title and extracts cover and synopsis', () => {
+    const html = `
+      <html>
+        <head>
+          <meta name="description" content="Read 160 reviews. Como é que se esquece alguém?" />
+          <meta property="og:description" content="Como é que se esquece alguém? Quando Alice decide esquecer..." />
+          <meta property="og:image" content="https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Book","name":"Ganhei uma vida quando te perdi","image":"https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg","isbn":"9789899254787"}
+          </script>
+        </head>
+      </html>
+    `;
+
+    const parsed = parseGoodreadsBookPage(
+      html,
+      'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi?from_search=true',
+      'Ganhei uma vida quando te perdi',
+      '9789899254787',
+    );
+
+    expect(parsed).toEqual({
+      provider: 'goodreads',
+      isbn: '9789899254787',
+      result: expect.objectContaining({
+        source_provider: 'goodreads',
+        source_id: 'https://www.goodreads.com/book/show/49634616-ganhei-uma-vida-quando-te-perdi',
+        isbn: '9789899254787',
+        overview: 'Como é que se esquece alguém? Quando Alice decide esquecer...',
+        poster_path: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1576959857i/49634616.jpg',
+      }),
+    });
+  });
+
   it('rejects fallback pages when ISBN cannot be confirmed', () => {
     const html = `
       <html>
@@ -180,5 +242,6 @@ describe('books fallback parsers', () => {
     expect(parseBertrandBookPage(html, 'https://www.bertrand.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parseWookBookPage(html, 'https://www.wook.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parsePresencaProductPayload({ variants: [{ sku: '9781111111111' }] }, '9789899254275')).toBeNull();
+    expect(parseGoodreadsBookPage(html, 'https://www.goodreads.com/book/show/teste', 'Ganhei uma vida quando te perdi', '9789899254275')).toBeNull();
   });
 });

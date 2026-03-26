@@ -15,6 +15,7 @@ const GOOGLE_BOOKS_BASE_URL = 'https://www.googleapis.com/books/v1';
 const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
 const OPEN_LIBRARY_COVERS_BASE_URL = 'https://covers.openlibrary.org/b/id';
 const PRESENCA_BASE_URL = 'https://www.presenca.pt';
+const GOODREADS_BASE_URL = 'https://www.goodreads.com';
 const BOOK_ID_OFFSET = 2_000_000_000;
 const BOOK_ID_RANGE = 1_000_000_000;
 const ROUTE_KEY = 'books';
@@ -334,6 +335,30 @@ const sanitizeOverviewText = (value) => {
   return text.length > 1200 ? `${text.slice(0, 1197).trim()}...` : text;
 };
 
+const normalizeBookMatchText = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' e ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toTitleCandidates = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const rawCandidates = [raw, raw.split(':')[0], raw.split(' - ')[0]];
+  return Array.from(new Set(rawCandidates.map((entry) => normalizeBookMatchText(entry)).filter(Boolean)));
+};
+
+const titlesStronglyMatch = (left, right) => {
+  const leftCandidates = toTitleCandidates(left);
+  const rightCandidates = toTitleCandidates(right);
+  if (leftCandidates.length === 0 || rightCandidates.length === 0) return false;
+  return leftCandidates.some((candidate) => rightCandidates.includes(candidate));
+};
+
 const absolutizeUrl = (rawUrl, baseUrl) => {
   if (!rawUrl) return null;
   try {
@@ -367,6 +392,20 @@ const parseJsonLdBlocks = (html) => {
     }
   }
   return result;
+};
+
+const flattenJsonLdNodes = (input, bucket = []) => {
+  if (!input) return bucket;
+  if (Array.isArray(input)) {
+    input.forEach((entry) => flattenJsonLdNodes(entry, bucket));
+    return bucket;
+  }
+  if (typeof input !== 'object') return bucket;
+  bucket.push(input);
+  if (Array.isArray(input['@graph'])) {
+    input['@graph'].forEach((entry) => flattenJsonLdNodes(entry, bucket));
+  }
+  return bucket;
 };
 
 const collectJsonLdIsbns = (node) => {
@@ -466,6 +505,63 @@ export const parsePresencaProductPayload = (payload, expectedIsbn) => {
     productUrl: absolutizeUrl(payload?.url || '', PRESENCA_BASE_URL),
     imageUrl,
     overview: payload?.description || '',
+  });
+};
+
+export const parseGoodreadsSearchResults = (html) => {
+  const matches = html.matchAll(/<a[^>]+href=["']([^"']*\/book\/show\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  const results = [];
+  const seen = new Set();
+
+  for (const match of matches) {
+    const productUrl = absolutizeUrl(String(match[1] || '').split('?')[0], GOODREADS_BASE_URL);
+    const title = sanitizeOverviewText(match[2] || '');
+    if (!productUrl || !title || seen.has(productUrl)) continue;
+    seen.add(productUrl);
+    results.push({
+      productUrl,
+      title,
+    });
+  }
+
+  return results;
+};
+
+export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsbn = null) => {
+  const jsonLdNodes = flattenJsonLdNodes(parseJsonLdBlocks(html));
+  const bookNode = jsonLdNodes.find((entry) => {
+    const type = entry?.['@type'];
+    return type === 'Book' || (Array.isArray(type) && type.includes('Book'));
+  }) || null;
+
+  const pageTitle =
+    String(bookNode?.name || '').trim()
+    || extractMetaContent(html, 'property', 'og:title')
+    || extractMetaContent(html, 'name', 'twitter:title');
+  const jsonLdIsbns = collectJsonLdIsbns(bookNode);
+  const titleMatches = titlesStronglyMatch(pageTitle, expectedTitle);
+  const isbnMatches = expectedIsbn ? (jsonLdIsbns.includes(expectedIsbn) || html.includes(expectedIsbn)) : false;
+  if (!titleMatches && !isbnMatches) return null;
+
+  const rawImage = Array.isArray(bookNode?.image)
+    ? bookNode.image[0]
+    : (bookNode?.image?.url || bookNode?.image?.contentUrl || bookNode?.image);
+  const imageUrl = absolutizeUrl(
+    rawImage || extractMetaContent(html, 'property', 'og:image') || extractMetaContent(html, 'name', 'twitter:image'),
+    pageUrl,
+  );
+  const overview =
+    bookNode?.description
+    || extractMetaContent(html, 'property', 'og:description')
+    || extractMetaContent(html, 'name', 'description');
+  const normalizedPageUrl = absolutizeUrl(String(pageUrl || '').split('?')[0], GOODREADS_BASE_URL) || pageUrl;
+
+  return buildFallbackResult({
+    provider: 'goodreads',
+    isbn: expectedIsbn || jsonLdIsbns[0] || null,
+    productUrl: normalizedPageUrl,
+    imageUrl,
+    overview,
   });
 };
 
@@ -654,23 +750,65 @@ const fetchPresencaFallbackByIsbn = async (isbn) => {
   };
 };
 
-const enrichBookByOfficialSourcesAndPresenca = async (baseResult, isbn, googleApiKey) => {
+const fetchGoodreadsFallbackByTitle = async (title, isbn = null) => {
+  const normalizedTitle = String(title || '').trim();
+  if (!normalizedTitle) {
+    return { ok: false, status: 400, provider: 'goodreads', result: null, reason: 'missing_title' };
+  }
+
+  const searchPage = await fetchHtmlPage(`${GOODREADS_BASE_URL}/search?q=${encodeURIComponent(normalizedTitle)}&search%5Bfield%5D=title`);
+  if (!searchPage.ok) {
+    return { ok: false, status: searchPage.status, provider: 'goodreads', result: null, reason: 'search_failed' };
+  }
+
+  const candidates = parseGoodreadsSearchResults(searchPage.html).filter((entry) => titlesStronglyMatch(entry.title, normalizedTitle));
+  for (const candidate of candidates.slice(0, 5)) {
+    const productPage = await fetchHtmlPage(candidate.productUrl);
+    if (!productPage.ok) continue;
+    const parsed = parseGoodreadsBookPage(productPage.html, productPage.url, normalizedTitle, isbn);
+    if (parsed?.result) {
+      return {
+        ok: true,
+        status: productPage.status,
+        provider: 'goodreads',
+        result: parsed.result,
+        reason: null,
+      };
+    }
+  }
+
+  return { ok: false, status: searchPage.status || 404, provider: 'goodreads', result: null, reason: 'no_strong_match' };
+};
+
+const enrichBookByOfficialSourcesAndFallbacks = async (baseResult, { isbn = null, title = '', googleApiKey = null } = {}) => {
   let result = baseResult;
 
-  const googleByIsbn = await fetchGoogleBookByIsbn(isbn, googleApiKey);
-  if (googleByIsbn.ok && googleByIsbn.result) {
-    result = mergeBookMetadata(result, googleByIsbn.result);
+  if (isbn) {
+    const googleByIsbn = await fetchGoogleBookByIsbn(isbn, googleApiKey);
+    if (googleByIsbn.ok && googleByIsbn.result) {
+      result = mergeBookMetadata(result, googleByIsbn.result);
+    }
+
+    const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(isbn);
+    if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
+      result = mergeBookMetadata(result, openLibraryByIsbn.result);
+    }
   }
 
-  const openLibraryByIsbn = await fetchOpenLibraryBookByIsbn(isbn);
-  if (openLibraryByIsbn.ok && openLibraryByIsbn.result) {
-    result = mergeBookMetadata(result, openLibraryByIsbn.result);
-  }
-
-  if (bookNeedsMetadata(result)) {
+  if (isbn && bookNeedsMetadata(result)) {
     const presencaFallback = await fetchPresencaFallbackByIsbn(isbn);
     if (presencaFallback.ok && presencaFallback.result) {
       result = mergeBookMetadata(result, presencaFallback.result);
+    }
+  }
+
+  if (bookNeedsMetadata(result)) {
+    const fallbackTitle = String(result?.name || title || '').trim();
+    if (fallbackTitle) {
+      const goodreadsFallback = await fetchGoodreadsFallbackByTitle(fallbackTitle, isbn);
+      if (goodreadsFallback.ok && goodreadsFallback.result) {
+        result = mergeBookMetadata(result, goodreadsFallback.result);
+      }
     }
   }
 
@@ -753,7 +891,7 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const endpointPath = resolveEndpointPath(request.url, '/api/books');
     const safeParams = sanitizeSearchParams(url.searchParams, {
-      maxParams: endpointPath === '/details' ? 6 : endpointPath === '/fallback' ? 4 : 3,
+      maxParams: endpointPath === '/details' ? 6 : endpointPath === '/fallback' ? 5 : 3,
       maxValueLength: 500,
     });
 
@@ -822,7 +960,11 @@ export async function onRequest(context) {
           results.map(async (entry) => {
             const entryIsbn = entry?.isbn || entry?.isbn_13 || entry?.isbn_10;
             if (entryIsbn !== normalizedIsbn) return entry;
-            return enrichBookByOfficialSourcesAndPresenca(entry, normalizedIsbn, googleApiKey);
+            return enrichBookByOfficialSourcesAndFallbacks(entry, {
+              isbn: normalizedIsbn,
+              title: entry?.name || query,
+              googleApiKey,
+            });
           }),
         );
       } else if (!googleHadOkResponse || results.length === 0) {
@@ -866,10 +1008,15 @@ export async function onRequest(context) {
     if (endpointPath === '/fallback') {
       const rawIsbn = safeParams.get('isbn') || safeParams.get('q') || '';
       const normalizedIsbn = normalizeIsbn(rawIsbn);
+      const title = String(
+        safeParams.get('title')
+        || safeParams.get('query')
+        || (normalizedIsbn ? '' : (safeParams.get('q') || '')),
+      ).trim();
       const providerParam = String(safeParams.get('provider') || 'all').trim().toLowerCase();
-      if (!normalizedIsbn) {
+      if (!normalizedIsbn && !title) {
         const badRequest = addCorsHeaders(
-          new Response(JSON.stringify({ error: 'Missing or invalid isbn parameter' }), {
+          new Response(JSON.stringify({ error: 'Missing or invalid isbn parameter, or missing title parameter' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
           }),
@@ -890,7 +1037,11 @@ export async function onRequest(context) {
             ? ['wook']
             : providerParam === 'presenca'
               ? ['presenca']
-              : ['presenca', 'bertrand', 'wook'];
+              : providerParam === 'goodreads'
+                ? ['goodreads']
+                : normalizedIsbn
+                  ? ['presenca', 'goodreads']
+                  : ['goodreads'];
 
       const attempts = [];
       let result = null;
@@ -902,7 +1053,11 @@ export async function onRequest(context) {
           ? await fetchBertrandFallbackByIsbn(normalizedIsbn)
           : fallbackProvider === 'wook'
             ? await fetchWookFallbackByIsbn(normalizedIsbn)
-            : await fetchPresencaFallbackByIsbn(normalizedIsbn);
+            : fallbackProvider === 'goodreads'
+              ? await fetchGoodreadsFallbackByTitle(title, normalizedIsbn)
+              : normalizedIsbn
+                ? await fetchPresencaFallbackByIsbn(normalizedIsbn)
+                : { ok: false, status: 400, provider: 'presenca', result: null, reason: 'missing_isbn' };
         upstreamStatus = fallbackResponse.status || upstreamStatus;
         attempts.push({
           provider: fallbackProvider,
@@ -922,7 +1077,8 @@ export async function onRequest(context) {
           new Response(JSON.stringify({
             ok: false,
             error: 'Fallback book metadata not found',
-            isbn: normalizedIsbn,
+            isbn: normalizedIsbn || null,
+            title: title || null,
             attempts,
           }), {
             status: 404,
@@ -941,7 +1097,8 @@ export async function onRequest(context) {
       const response = addCorsHeaders(
         new Response(JSON.stringify({
           ok: true,
-          isbn: normalizedIsbn,
+          isbn: normalizedIsbn || null,
+          title: title || null,
           provider,
           result,
           attempts,
@@ -1003,7 +1160,16 @@ export async function onRequest(context) {
     }
 
     if (normalizedIsbn) {
-      result = await enrichBookByOfficialSourcesAndPresenca(result, normalizedIsbn, googleApiKey);
+      result = await enrichBookByOfficialSourcesAndFallbacks(result, {
+        isbn: normalizedIsbn,
+        title: result?.name || query,
+        googleApiKey,
+      });
+    } else if (result && bookNeedsMetadata(result)) {
+      result = await enrichBookByOfficialSourcesAndFallbacks(result, {
+        title: result?.name || query,
+        googleApiKey,
+      });
     }
 
     if (!result && query) {

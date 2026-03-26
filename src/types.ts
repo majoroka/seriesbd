@@ -83,7 +83,7 @@ export interface ExternalReview {
 export interface Series {
     id: number;
     media_type: MediaType;
-    source_provider?: 'tmdb_tv' | 'tmdb_movie' | 'google_books' | 'open_library' | 'presenca';
+    source_provider?: 'tmdb_tv' | 'tmdb_movie' | 'google_books' | 'open_library' | 'presenca' | 'goodreads';
     source_id?: string;
     isbn?: string;
     isbn_13?: string | null;

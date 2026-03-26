@@ -2894,6 +2894,7 @@ export function renderMediaDetails(
         if (media.source_provider === 'google_books') return 'Google Books';
         if (media.source_provider === 'open_library') return 'Open Library';
         if (media.source_provider === 'presenca') return 'Presenca';
+        if (media.source_provider === 'goodreads') return 'Goodreads';
         return media.source_provider || 'N/A';
     })();
     const progressLabel = mediaType === 'movie'
