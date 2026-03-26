@@ -12,8 +12,11 @@ import {
 const HEARTBEAT_TABLE = 'system_heartbeat';
 const ROUTE_KEY = 'heartbeat';
 
+function hasConfiguredToken(expectedToken) {
+  return Boolean(String(expectedToken || '').trim());
+}
+
 function isAuthorized(request, expectedToken) {
-  if (!expectedToken) return true;
   const receivedToken = request.headers.get('x-heartbeat-token');
   return Boolean(receivedToken) && receivedToken === expectedToken;
 }
@@ -118,6 +121,38 @@ export async function onRequest(context) {
   }
 
   const expectedToken = env.HEARTBEAT_TOKEN;
+
+  if (method === 'GET') {
+    const response = addCorsHeaders(jsonResponse({
+      ok: true,
+      source: 'cloudflare-pages-function',
+      timestamp: new Date().toISOString(),
+      method,
+      tokenConfigured: hasConfiguredToken(expectedToken),
+      persisted: false,
+      health: 'ok',
+    }), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
+  }
+
+  if (!hasConfiguredToken(expectedToken)) {
+    const response = addCorsHeaders(jsonResponse({
+      ok: false,
+      error: 'Heartbeat token is not configured',
+    }, 503), corsConfig);
+    addProxyHeaders(response, {
+      requestId,
+      upstreamStatus: 503,
+      durationMs: Date.now() - startedAt,
+    });
+    return applyRateLimitHeaders(response, rateLimit);
+  }
+
   if (!isAuthorized(request, expectedToken)) {
     const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Unauthorized heartbeat request' }, 401), corsConfig);
     addProxyHeaders(response, {
