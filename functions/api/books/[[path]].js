@@ -80,6 +80,12 @@ const dedupeBookResults = (results) => {
   });
 };
 
+export const hasStrongSearchMatch = (results, query) =>
+  (Array.isArray(results) ? results : []).some((entry) => {
+    const title = String(entry?.name || entry?.original_name || '').trim();
+    return title && titlesStronglyMatch(title, query);
+  });
+
 const hasBookText = (value) => String(value || '').trim().length > 0;
 const isWeakBookOverview = (value) => {
   const normalized = String(value || '').trim();
@@ -1236,6 +1242,30 @@ export async function onRequest(context) {
             provider = 'goodreads';
             upstreamStatus = goodreads.status;
             results = dedupeBookResults(goodreads.results);
+          }
+        }
+      } else if (!hasStrongSearchMatch(results, query)) {
+        const openLibraryKeyword = await searchOpenLibraryBooks(query);
+        const openLibraryAuthor = await searchOpenLibraryBooks(query, { byAuthor: true });
+        const openLibraryResults = dedupeBookResults([
+          ...openLibraryKeyword.results,
+          ...openLibraryAuthor.results,
+        ]);
+
+        results = dedupeBookResults([
+          ...results,
+          ...openLibraryResults,
+        ]);
+
+        if (!hasStrongSearchMatch(results, query)) {
+          const goodreads = await searchGoodreadsBooksByTitle(query);
+          if (goodreads.ok && goodreads.results.length > 0) {
+            provider = 'goodreads';
+            upstreamStatus = goodreads.status;
+            results = dedupeBookResults([
+              ...goodreads.results,
+              ...results,
+            ]);
           }
         }
       }

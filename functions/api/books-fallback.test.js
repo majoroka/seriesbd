@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGoogleSearchQueries,
+  hasStrongSearchMatch,
   mapGoogleBook,
   mergeBookMetadata,
   mapOpenLibraryBook,
@@ -82,6 +83,18 @@ describe('books ISBN mapping', () => {
     );
 
     expect(merged.overview).toBe('Nas escadarias do Museu Egípcio, em pleno Cairo, Tomás Noronha é subitamente envolvido numa investigação complexa que o conduz por um labirinto de segredos científicos, religiosos e históricos.');
+  });
+
+  it('detects when existing search results do not strongly match the requested title', () => {
+    expect(hasStrongSearchMatch([
+      { name: 'O Segredo do Egipto' },
+      { name: 'A Vida é Bela' },
+    ], 'Quartzo Fumado')).toBe(false);
+
+    expect(hasStrongSearchMatch([
+      { name: 'Quartzo Fumado' },
+      { name: 'Outro Livro' },
+    ], 'Quartzo Fumado')).toBe(true);
   });
 });
 
