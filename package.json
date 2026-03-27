@@ -10,8 +10,11 @@
     "preview": "vite preview",
     "cron:deploy": "npx wrangler deploy --config workers/heartbeat-cron/wrangler.toml",
     "test": "vitest",
+    "test:run": "vitest run",
     "coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "verify:release": "npm run test:run && npm run build",
+    "bundle:audit": "sh scripts/create-audit-bundle.sh"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.1.0",

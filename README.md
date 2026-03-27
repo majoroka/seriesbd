@@ -87,8 +87,11 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - `npm run build` – build Vite otimizado para `dist/`.
 - `npm run preview` – servidor estático para testar o build.
 - `npm run test` – Vitest em modo WATCH/CLI padrão.
+- `npm run test:run` – suite Vitest em modo não interativo.
 - `npm run coverage` – Vitest em modo cobertura.
 - `npm run test:ui` – runner interactivo da Testing Library.
+- `npm run verify:release` – validação reprodutível mínima (`test:run` + `build`).
+- `npm run bundle:audit` – gera um zip limpo do `HEAD` em `artifacts/`, sem `node_modules`, `dist` nem artefactos locais.
 
 ## Estrutura relevante
 
@@ -134,6 +137,30 @@ Cobertura atual inclui:
 ```bash
 npm run test
 ```
+
+## Artefacto auditável
+
+Para gerar um pacote limpo para auditoria ou partilha:
+
+1. garantir que o worktree está limpo e commitado;
+2. correr:
+
+   ```bash
+   npm run verify:release
+   npm run bundle:audit
+   ```
+
+Resultado:
+- o zip é criado em `artifacts/`
+- contém apenas ficheiros tracked no `HEAD`
+- exclui automaticamente:
+  - `node_modules`
+  - `dist`
+  - `.netlify`
+  - `.wrangler`
+  - `.DS_Store`
+  - `__MACOSX`
+  - ficheiros locais não versionados
 
 ## Convenções e boas práticas
 

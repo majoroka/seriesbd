@@ -5,6 +5,20 @@
 ### Regressão automática
 - [x] `npm test -- --run`
 - [x] `npm run build`
+- [ ] `npm run verify:release`
+
+### Artefacto auditável
+- [ ] worktree limpo (`git status` sem alterações)
+- [ ] sem artefactos locais no pacote:
+  - [ ] `node_modules`
+  - [ ] `dist`
+  - [ ] `.netlify`
+  - [ ] `.wrangler`
+  - [ ] `.DS_Store`
+  - [ ] `__MACOSX`
+- [ ] `npm run bundle:audit`
+- [ ] zip gerado em `artifacts/`
+- [ ] pacote criado a partir do `HEAD` commitado
 
 ### UAT em staging
 - [ ] `Dashboard`

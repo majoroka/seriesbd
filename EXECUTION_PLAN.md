@@ -210,6 +210,23 @@ Estado atual do sprint:
 
 ## Fase seguinte
 
+## Hardening pós-reauditoria
+
+### H5 | Processo Reprodutível / Artefacto Limpo
+
+Objetivo:
+- tornar auditoria e validação externas realmente reproduzíveis.
+
+Estado atual:
+- `npm run verify:release` formaliza a validação mínima (`test:run` + `build`)
+- `npm run bundle:audit` gera um zip limpo a partir do `HEAD`
+- artefactos locais passam a ficar fora do pacote por construção
+- `artifacts/` fica ignorado no repositório
+
+Critério de fecho:
+- pacote limpo e reproduzível sem `node_modules`, `dist` ou lixo local
+- checklist de release alinhada com esse processo
+
 ### F1 | Fallback Editorial de Livros
 
 Objetivo:
