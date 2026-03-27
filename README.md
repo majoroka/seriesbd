@@ -2,8 +2,7 @@
 
 Aplicação web para organizar e acompanhar consumo de media (séries, filmes e livros) usando dados do TMDb, Trakt, TVMaze, Google Books e Open Library. Permite gerir uma biblioteca pessoal, acompanhar progresso, pesquisar conteúdos, consultar tendências/estreias e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
-Plano de execução e estado dos sprints: [SPRINTS.md](./SPRINTS.md).  
-Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOARD_V2_PLAN.md).
+Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 
 - ## Funcionalidades principais
 
@@ -57,16 +56,24 @@ Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOA
    VITE_SUPABASE_ANON_KEY=...
    ```
 
-3. Iniciar o ambiente de desenvolvimento local:
+3. Opcionalmente, definir a origem dos endpoints `/api/*` usados localmente:
+
+   ```env
+   VITE_LOCAL_API_ORIGIN=https://mediadex.app
+   ```
+
+   Se preferires validar contra preview/staging ou outro runtime Cloudflare compatível, aponta esta variável para essa origem.
+
+4. Iniciar o ambiente de desenvolvimento local:
 
    ```bash
 
    npm run dev
    ```
 
-   `npm run dev` mantém um fluxo local compatível com os proxies legados.  
-   Em produção/staging, os proxies ativos são os da Cloudflare Pages Functions.
-4. Build de produção:
+   `npm run dev` arranca o Vite e faz proxy local de `/api/*` para a origem definida em `VITE_LOCAL_API_ORIGIN`.  
+   Produção e preview continuam a usar exclusivamente Cloudflare Pages Functions.
+5. Build de produção:
 
    ```bash
 
@@ -76,7 +83,7 @@ Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOA
 
 ## Scripts npm
 
-- `npm run dev` – ambiente local compatível com desenvolvimento do frontend e PWA.
+- `npm run dev` – Vite local com proxy `/api/*` para a origem Cloudflare configurada.
 - `npm run build` – build Vite otimizado para `dist/`.
 - `npm run preview` – servidor estático para testar o build.
 - `npm run test` – Vitest em modo WATCH/CLI padrão.
@@ -100,8 +107,6 @@ Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOA
 │  └─ style.css          # Tema e responsividade
 ├─ functions/
 │  └─ api/               # Cloudflare Pages Functions (/api/tmdb, /api/trakt, /api/tvmaze, /api/books, /api/heartbeat)
-├─ netlify/
-│  └─ functions/         # Wrappers legados apenas para compatibilidade com `netlify dev`
 ├─ workers/
 │  └─ heartbeat-cron/    # Worker com Cron Trigger para chamar /api/heartbeat
 └─ vite.config.ts        # Configuração Vite + PWA + Vitest
@@ -111,12 +116,11 @@ Plano detalhado da nova dashboard SaaS (UI/UX): [DASHBOARD_V2_PLAN.md](./DASHBOA
 
 - Produção: `Cloudflare Pages` + `functions/api/*`
 - Preview/staging: `Cloudflare Pages`
-- Compatibilidade local legada: `netlify dev` + `netlify/functions/*.mjs`
+- Desenvolvimento local: `Vite` + proxy `/api/*` para origem Cloudflare configurável
 
 Regras atuais:
 - novas evoluções serverless devem entrar em `functions/api/*`
-- `netlify/` fica congelado como camada de compatibilidade local
-- `netlify.toml` não é fonte de verdade para produção
+- não existe runtime Netlify suportado no projeto
 
 ## Testes
 
@@ -145,7 +149,6 @@ npm run test
 ## Documentação complementar
 
 - [ARQUITETURA](ARQUITETURA.md) – detalhe dos módulos, fluxos e decisões técnicas.
-- [ROADMAP](ROADMAP.md) – visão da evolução prevista e tarefas futuras.
 - [S6_QA_ROLLBACK](S6_QA_ROLLBACK.md) – checklist formal de UAT/go-live e plano de rollback.
 
 ## Deploy

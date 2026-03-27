@@ -110,9 +110,9 @@ Critério de fecho:
 - sem quebra de `staging` ou `main`
 
 Estado atual do sprint:
-- Cloudflare confirmado como runtime canónico de produção e preview
-- `netlify/` mantido apenas como compatibilidade local legada
-- novas alterações backend devem concentrar-se em `functions/api/*`
+- Cloudflare confirmado como runtime canónico de produção, preview e estratégia local suportada
+- `npm run dev` migrado para `vite` com proxy `/api/*` para origem Cloudflare configurável
+- legado Netlify removido do fluxo local e do repositório
 
 ### Sprint C4 | Dados, Import/Export e Snapshots
 
