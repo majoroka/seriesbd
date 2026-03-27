@@ -22,6 +22,7 @@ import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookI
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
+    resendSignupConfirmationEmail,
     signInWithPassword,
     signOutCurrentUser,
     signUpWithPassword,
@@ -86,6 +87,7 @@ const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
 let authFormMode: 'login' | 'signup' = 'login';
 let authFormBusy = false;
+let pendingConfirmationEmail: string | null = null;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let librarySyncTimer: number | null = null;
@@ -1458,6 +1460,13 @@ function setAuthInlineFeedback(message: string, mode: 'error' | 'info' = 'error'
     DOM.authInlineFeedback.classList.toggle('info', mode === 'info');
 }
 
+function setPendingConfirmationEmail(email: string | null) {
+    pendingConfirmationEmail = email?.trim() || null;
+    const shouldShowResend = Boolean(pendingConfirmationEmail) && authFormMode === 'login';
+    DOM.authResendConfirmationBtn.hidden = !shouldShowResend;
+    DOM.authResendConfirmationBtn.disabled = authFormBusy || !shouldShowResend;
+}
+
 function clearProfileInlineFeedback() {
     DOM.profileInlineFeedback.hidden = true;
     DOM.profileInlineFeedback.textContent = '';
@@ -1507,6 +1516,7 @@ function setAuthFormLoadingState(isBusy: boolean) {
     DOM.authPasswordInput.disabled = isBusy;
     DOM.authDisplayNameInput.disabled = isBusy;
     DOM.authToggleModeBtn.disabled = isBusy;
+    DOM.authResendConfirmationBtn.disabled = isBusy || DOM.authResendConfirmationBtn.hidden;
 }
 
 function setAuthModalMode(mode: 'login' | 'signup') {
@@ -1524,12 +1534,18 @@ function setAuthModalMode(mode: 'login' | 'signup') {
     DOM.authToggleModeBtn.textContent = isSignup
         ? 'Já tens conta? Entrar'
         : 'Ainda não tens conta? Registar';
+    if (isSignup) {
+        setPendingConfirmationEmail(null);
+    } else {
+        setPendingConfirmationEmail(pendingConfirmationEmail);
+    }
     clearAuthInlineFeedback();
 }
 
 function resetAuthForm() {
     DOM.authForm.reset();
     DOM.authDisplayNameInput.value = '';
+    setPendingConfirmationEmail(null);
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
@@ -1544,6 +1560,7 @@ function openAuthModal(mode: 'login' | 'signup') {
 function closeAuthModal() {
     UI.closeAuthModal();
     UI.closeNotificationModal();
+    setPendingConfirmationEmail(null);
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
@@ -4421,20 +4438,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 const requiresConfirmation = !response.data.session;
-                closeAuthModal();
                 if (requiresConfirmation) {
-                    UI.showNotification('Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link pode expirar ao fim de algum tempo. Se isso acontecer, poderá pedir um novo envio.');
+                    setPendingConfirmationEmail(email);
+                    setAuthModalMode('login');
+                    DOM.authEmailInput.value = email;
+                    DOM.authPasswordInput.value = '';
+                    setAuthInlineFeedback(
+                        'Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link pode expirar ao fim de algum tempo. Se isso acontecer, pode pedir novo envio abaixo.',
+                        'info'
+                    );
+                    setAuthFormLoadingState(false);
+                    DOM.authPasswordInput.focus();
                 } else {
+                    closeAuthModal();
                     UI.showNotification('Conta criada e sessão iniciada.');
                 }
             } else {
                 await signInWithPassword(email, password);
+                setPendingConfirmationEmail(null);
                 closeAuthModal();
             }
         } catch (error) {
             const message = getErrorMessage(error);
             console.error('[auth] Erro no submit de autenticação.', error);
             setAuthInlineFeedback(`Falha na autenticação: ${message}`);
+            setAuthFormLoadingState(false);
+        }
+    });
+    DOM.authResendConfirmationBtn?.addEventListener('click', async () => {
+        if (authFormBusy || !isSupabaseConfigured() || !pendingConfirmationEmail) return;
+
+        setAuthFormLoadingState(true);
+        clearAuthInlineFeedback();
+        try {
+            await resendSignupConfirmationEmail(pendingConfirmationEmail);
+            setAuthInlineFeedback(
+                'Enviámos um novo email de confirmação. Verifique também a pasta de spam/lixo.',
+                'info'
+            );
+        } catch (error) {
+            const message = getErrorMessage(error);
+            console.error('[auth] Erro ao reenviar email de confirmação.', error);
+            setAuthInlineFeedback(`Não foi possível reenviar o email de confirmação: ${message}`);
+        } finally {
             setAuthFormLoadingState(false);
         }
     });
