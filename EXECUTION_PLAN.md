@@ -235,6 +235,7 @@ Objetivo:
 Estado atual:
 - `npm run verify:release` formaliza a validação mínima (`test:run` + `build`)
 - `npm run bundle:audit` gera um zip limpo a partir do `HEAD`
+- o bundle auditável passa a incluir checksum SHA-256 e metadata com `commit SHA`
 - artefactos locais passam a ficar fora do pacote por construção
 - `artifacts/` fica ignorado no repositório
 
