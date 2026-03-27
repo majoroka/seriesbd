@@ -227,6 +227,23 @@ Critério de fecho:
 - pacote limpo e reproduzível sem `node_modules`, `dist` ou lixo local
 - checklist de release alinhada com esse processo
 
+### H6 | Governação Server-Side de Snapshots
+
+Objetivo:
+- reduzir dependência excessiva do cliente na integridade de `library_snapshots`.
+
+Estado atual:
+- nova migration para endurecer `public.library_snapshots`
+- payload passa a ser validado server-side por tipo/estrutura mínima/tamanho
+- `schema_version` fica limitado por constraint
+- escrita autenticada deixa de ser `upsert` direto na tabela
+- cliente passa a usar a RPC `public.upsert_library_snapshot(...)`
+
+Critério de fecho:
+- writes dos snapshots passam por validação server-side
+- privilégios diretos de `insert/update` na tabela deixam de ser necessários ao cliente
+- documentação Supabase alinhada com a nova migration
+
 ### F1 | Fallback Editorial de Livros
 
 Objetivo:

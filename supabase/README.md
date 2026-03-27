@@ -20,6 +20,7 @@ No painel Supabase:
 `supabase/migrations/20260307_000002_init_library_snapshots.sql`
 `supabase/migrations/20260307_000003_init_system_heartbeat.sql`
 `supabase/migrations/20260326_000004_harden_display_name_uniqueness.sql`
+`supabase/migrations/20260327_000005_harden_library_snapshots.sql`
 
 Isto cria:
 
@@ -29,6 +30,7 @@ Isto cria:
 - `public.system_heartbeat`
 - trigger automática em `auth.users` para criar linhas iniciais
 - políticas RLS para acesso apenas ao próprio utilizador autenticado
+- validação server-side e RPC controlada para `public.library_snapshots`
 
 ## 3) Variáveis para a app
 

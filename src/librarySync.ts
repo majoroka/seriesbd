@@ -133,19 +133,15 @@ async function fetchRemoteLibrarySnapshot(userId: string): Promise<RemoteLibrary
   return (data as RemoteLibrarySnapshotRow | null) || null;
 }
 
-export async function pushLocalLibrarySnapshot(userId: string): Promise<void> {
+export async function pushLocalLibrarySnapshot(_userId: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const client = getSupabaseClient();
   const payload = normalizeLibraryPayload(buildLocalLibrarySnapshot());
   assertSerializedJsonLimit(payload, MAX_LIBRARY_SNAPSHOT_SIZE_BYTES, 'O snapshot da biblioteca');
-  const { error } = await client.from('library_snapshots').upsert(
-    {
-      user_id: userId,
-      schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
-      payload,
-    },
-    { onConflict: 'user_id' }
-  );
+  const { error } = await client.rpc('upsert_library_snapshot', {
+    p_schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
+    p_payload: payload,
+  });
   if (error) throw error;
 }
 

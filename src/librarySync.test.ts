@@ -33,7 +33,12 @@ const mocked = vi.hoisted(() => {
     }),
   };
 
-  return { db };
+  const supabaseClient = {
+    from: vi.fn(),
+    rpc: vi.fn(),
+  };
+
+  return { db, supabaseClient };
 });
 
 vi.mock('./db', () => ({
@@ -46,10 +51,12 @@ vi.mock('./ui', () => ({
 
 vi.mock('./supabase', () => ({
   isSupabaseConfigured: vi.fn(() => false),
-  getSupabaseClient: vi.fn(),
+  getSupabaseClient: vi.fn(() => mocked.supabaseClient),
 }));
 
-import { applyRemoteLibrarySnapshotToLocal } from './librarySync';
+import * as S from './state';
+import { applyRemoteLibrarySnapshotToLocal, pushLocalLibrarySnapshot } from './librarySync';
+import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 
 function makeBook(id: number, name: string): Series {
   return {
@@ -76,6 +83,9 @@ describe('library snapshot restore', () => {
     mocked.db.watchedState.bulkPut.mockResolvedValue(undefined);
     mocked.db.userData.bulkPut.mockResolvedValue(undefined);
     mocked.db.kvStore.put.mockResolvedValue(undefined);
+    mocked.supabaseClient.rpc.mockResolvedValue({ error: null });
+    mocked.supabaseClient.from.mockReset();
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
   });
 
   it('restores book progress_percent from remote snapshot userData', async () => {
@@ -143,5 +153,41 @@ describe('library snapshot restore', () => {
         progress_percent: 100,
       }),
     ]);
+  });
+
+  it('pushes local snapshot through RPC when Supabase is configured', async () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(getSupabaseClient).mockReturnValue(mocked.supabaseClient as any);
+
+    S.setMyWatchlist([makeBook(789, 'Book RPC')]);
+    S.setMyArchive([]);
+    S.setWatchedState({});
+    S.setUserData({
+      'book:789': {
+        rating: 8,
+        notes: 'rpc test',
+        progress_percent: 34,
+      },
+    });
+
+    await pushLocalLibrarySnapshot('user-id-ignored-by-rpc');
+
+    expect(mocked.supabaseClient.rpc).toHaveBeenCalledWith(
+      'upsert_library_snapshot',
+      expect.objectContaining({
+        p_schema_version: 2,
+        p_payload: expect.objectContaining({
+          version: 2,
+          watchlist: [expect.objectContaining({ id: 789, media_type: 'book' })],
+          userData: expect.objectContaining({
+            'book:789': expect.objectContaining({
+              rating: 8,
+              notes: 'rpc test',
+              progress_percent: 34,
+            }),
+          }),
+        }),
+      }),
+    );
   });
 });
