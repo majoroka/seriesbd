@@ -4521,6 +4521,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         'info'
                     );
                     setAuthFormLoadingState(false);
+                    UI.showNotification('Enviámos um email de confirmação. Verifique também a pasta de spam/lixo. O link expira normalmente ao fim de 1 hora.');
                     DOM.authPasswordInput.focus();
                 } else {
                     closeAuthModal();
