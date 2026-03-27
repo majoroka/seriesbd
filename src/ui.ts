@@ -6,7 +6,6 @@ import {
     formatCertification,
     animateValue,
     animateDuration,
-    formatDuration,
     translateGenreName,
     clearElementChildren,
     setElementMessage,
@@ -987,34 +986,6 @@ function getItemStatusClass(item: Series, progress: number): 'is-complete' | 'is
     return 'is-pending';
 }
 
-function getItemConsumedHours(item: Series): number {
-    const mediaType = item.media_type || 'series';
-    if (mediaType === 'series') {
-        const watchedCount = S.watchedState[item.id]?.length || 0;
-        const totalEpisodes = item.total_episodes || 0;
-        const runtimeMinutes = typeof item.episode_run_time === 'number' && item.episode_run_time > 0
-            ? item.episode_run_time
-            : 30;
-        if (watchedCount > 0) {
-            return (watchedCount * runtimeMinutes) / 60;
-        }
-        if (isItemArchived(item) && totalEpisodes > 0) {
-            return (totalEpisodes * runtimeMinutes) / 60;
-        }
-        return 0;
-    }
-
-    const baseProgress = resolveDashboardProgress(item);
-    const progressPercent = isItemArchived(item) && baseProgress <= 0 ? 100 : baseProgress;
-    if (mediaType === 'movie') {
-        const runtimeMinutes = getMovieRuntimeMinutes(item) || 110;
-        return (runtimeMinutes * Math.max(0, Math.min(100, progressPercent))) / 100 / 60;
-    }
-
-    const estimatedBookHours = 8;
-    return (estimatedBookHours * Math.max(0, Math.min(100, progressPercent))) / 100;
-}
-
 function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics {
     const allLibraryItems = [...S.myWatchlist, ...S.myArchive];
     const mediaItems = mediaType === 'all'
@@ -1095,211 +1066,6 @@ function getDashboardMetricLabel(mediaType: DashboardCardType, metricKey: string
         return 'Total';
     }
     return metricKey;
-}
-
-function getLastTwelveMonthTimeline(): { labels: string[]; keys: string[] } {
-    const labels: string[] = [];
-    const keys: string[] = [];
-    const now = new Date();
-    for (let offset = 11; offset >= 0; offset -= 1) {
-        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-        const shortMonth = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '');
-        const yearShort = date.getFullYear().toString().slice(-2);
-        labels.push(`${shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1)} ${yearShort}`);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        keys.push(monthKey);
-    }
-    return { labels, keys };
-}
-
-function renderDashboardEvolutionChart(): void {
-    if (!DOM.dashboardEvolutionChart) return;
-    const ctx = DOM.dashboardEvolutionChart.getContext('2d');
-    if (!ctx) return;
-
-    const { labels, keys } = getLastTwelveMonthTimeline();
-    const keyToIndex = new Map<string, number>(keys.map((key, index) => [key, index]));
-    const evolutionBuckets: Record<MediaType, number[]> = {
-        series: new Array(labels.length).fill(0),
-        movie: new Array(labels.length).fill(0),
-        book: new Array(labels.length).fill(0),
-    };
-
-    const allItems = [...S.myWatchlist, ...S.myArchive];
-    allItems.forEach((item) => {
-        const mediaType = item.media_type || 'series';
-        const consumedHours = getItemConsumedHours(item);
-        if (!Number.isFinite(consumedHours) || consumedHours <= 0) return;
-        const anchorDateRaw = item._lastUpdated || item.first_air_date || '';
-        const anchorDate = new Date(anchorDateRaw);
-        if (Number.isNaN(anchorDate.getTime())) return;
-        const monthKey = `${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, '0')}`;
-        const bucketIndex = keyToIndex.get(monthKey);
-        if (typeof bucketIndex !== 'number') return;
-        evolutionBuckets[mediaType][bucketIndex] += consumedHours;
-    });
-
-    if (S.charts.dashboardEvolution) {
-        S.charts.dashboardEvolution.destroy();
-    }
-
-    const seriesPalette = getMediaPalette('series');
-    const moviePalette = getMediaPalette('movie');
-    const bookPalette = getMediaPalette('book');
-
-    S.charts.dashboardEvolution = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Séries',
-                    data: evolutionBuckets.series.map((value) => Number(value.toFixed(1))),
-                    borderColor: seriesPalette.base,
-                    backgroundColor: `rgba(${seriesPalette.rgb}, 0.12)`,
-                    borderWidth: 4,
-                    tension: 0.35,
-                    fill: true,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
-                    pointStyle: 'line',
-                },
-                {
-                    label: 'Filmes',
-                    data: evolutionBuckets.movie.map((value) => Number(value.toFixed(1))),
-                    borderColor: moviePalette.base,
-                    backgroundColor: `rgba(${moviePalette.rgb}, 0.12)`,
-                    borderWidth: 4,
-                    tension: 0.35,
-                    fill: true,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
-                    pointStyle: 'line',
-                },
-                {
-                    label: 'Livros',
-                    data: evolutionBuckets.book.map((value) => Number(value.toFixed(1))),
-                    borderColor: bookPalette.base,
-                    backgroundColor: `rgba(${bookPalette.rgb}, 0.12)`,
-                    borderWidth: 4,
-                    tension: 0.35,
-                    fill: true,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
-                    pointStyle: 'line',
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
-                        usePointStyle: true,
-                        pointStyle: 'line',
-                        pointStyleWidth: 46,
-                        boxWidth: 52,
-                        boxHeight: 10,
-                        padding: 16,
-                    },
-                },
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
-                        autoSkip: true,
-                        maxRotation: 0,
-                    },
-                    grid: {
-                        color: getComputedStyle(document.body).getPropertyValue('--chart-grid-color').trim(),
-                    },
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim(),
-                        callback: (value: string | number) => `${value}h`,
-                    },
-                    grid: {
-                        color: getComputedStyle(document.body).getPropertyValue('--chart-grid-color').trim(),
-                    },
-                },
-            },
-        } as any,
-    });
-}
-
-function renderDashboardGenresChart(): void {
-    if (!DOM.dashboardGenresLegend) return;
-
-    const allItems = [...S.myWatchlist, ...S.myArchive];
-    const genreCounts: Record<string, number> = {};
-    allItems.forEach((item) => {
-        (item.genres || []).forEach((genre) => {
-            const translated = translateGenreName(genre.name) || genre.name;
-            if (!translated) return;
-            genreCounts[translated] = (genreCounts[translated] || 0) + 1;
-        });
-    });
-
-    const sortedGenres = Object.entries(genreCounts).sort(([, a], [, b]) => b - a);
-    const topGenres = sortedGenres.slice(0, 5);
-    const otherCount = sortedGenres.slice(5).reduce((sum, [, count]) => sum + count, 0);
-    if (otherCount > 0) topGenres.push(['Outros', otherCount]);
-
-    const values = topGenres.map(([, count]) => count);
-    const hasData = values.length > 0;
-    const total = values.reduce((sum, value) => sum + value, 0);
-    const seriesPalette = getMediaPalette('series');
-    const moviePalette = getMediaPalette('movie');
-    const bookPalette = getMediaPalette('book');
-    const palette = [
-        seriesPalette.base,
-        moviePalette.base,
-        bookPalette.base,
-        seriesPalette.soft,
-        moviePalette.soft,
-        bookPalette.soft,
-    ];
-
-    if (S.charts.dashboardGenres) {
-        S.charts.dashboardGenres.destroy();
-        delete S.charts.dashboardGenres;
-    }
-
-    clearElementChildren(DOM.dashboardGenresLegend);
-    if (!hasData) {
-        setElementMessage(DOM.dashboardGenresLegend, 'Sem dados de género suficientes.', {
-            className: 'dashboard-legend-empty',
-            tagName: 'li',
-        });
-        return;
-    }
-
-    topGenres.forEach(([name, count], index) => {
-        const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-        const item = el('li', { class: 'dashboard-legend-item' }, [
-            el('div', { class: 'dashboard-legend-head' }, [
-                el('span', {
-                    class: 'dashboard-legend-color',
-                    style: `background-color: ${palette[index % palette.length]}`,
-                }),
-                el('span', { class: 'dashboard-legend-label', text: name }),
-                el('span', { class: 'dashboard-legend-value', text: `${percentage}%` }),
-            ]),
-            el('div', { class: 'dashboard-legend-track' }, [
-                el('span', {
-                    class: 'dashboard-legend-fill',
-                    style: `width:${percentage}%;background-color:${palette[index % palette.length]}`,
-                }),
-            ]),
-        ]);
-        DOM.dashboardGenresLegend.appendChild(item);
-    });
 }
 
 function formatDashboardNewsDate(value: string | null): string {
@@ -2875,7 +2641,6 @@ export function renderMediaDetails(
     const progressPercent = Math.max(0, Math.min(100, Math.round(options.progressPercent || 0)));
     const genres = (media.genres || []).map((g) => g?.name).filter(Boolean).join(', ') || 'N/A';
     const publicRatingValue = typeof media.vote_average === 'number' ? media.vote_average : 0;
-    const publicRating = publicRatingValue > 0 ? publicRatingValue.toFixed(1) : 'N/A';
     const mediaStateKey = getMediaStateKey(media);
     const currentUserData = S.userData[mediaStateKey] || {};
     const currentUserRating = Math.max(0, Math.min(10, currentUserData.rating || 0));
@@ -3686,11 +3451,6 @@ function getStatsMediaVisual(mediaType: MediaType): StatsMediaVisual {
     return { mediaType, label: 'Séries', accent: palette.base, progress: palette.soft, completed: palette.strong };
 }
 
-function rgbaFromMedia(mediaType: MediaType, alpha: number): string {
-    const palette = getMediaPalette(mediaType);
-    return `rgba(${palette.rgb}, ${alpha})`;
-}
-
 function getStatsUiMeta(context: StatsMediaContext): StatsUiMeta {
     if (context === 'movie') {
         return {
@@ -4019,7 +3779,6 @@ function renderStatsGlobalOverview(summary: StatsSummary, cache?: StatsComputati
 
     DOM.statsGlobalSummaryGrid.replaceChildren(
         ...metricCards.map((metric, metricIndex) => {
-            const values = mediaSummaries.map(({ summary: mediaSummary }) => metric.getValue({ summary: mediaSummary }));
             const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
             card.innerHTML = `
                 <h4 class="stats-global-summary-card-title">${metric.title}</h4>
@@ -4222,62 +3981,6 @@ function renderGlobalCompletionPanel(summary: StatsSummary, cache?: StatsComputa
     DOM.statsGlobalCompletionLegend.replaceChildren();
 }
 
-function renderGlobalGenresPanel(stats: StatsSummary, cache?: StatsComputationCache): void {
-    if (!DOM.statsGlobalGenresList) return;
-    if (stats.context !== 'all') return;
-
-    const genreMap = new Map<string, Record<MediaType, number>>();
-    (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
-        getContextItems(mediaType, cache).forEach((item) => {
-            if (!Array.isArray(item.genres)) return;
-            item.genres.forEach((genre: Genre) => {
-                const genreName = translateGenreName(genre.name) || genre.name;
-                if (!genreName) return;
-                if (!genreMap.has(genreName)) {
-                    genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
-                }
-                genreMap.get(genreName)![mediaType] += 1;
-            });
-        });
-    });
-
-    const topGenres = Array.from(genreMap.entries())
-        .map(([name, counts]) => ({ name, counts, total: counts.series + counts.movie + counts.book }))
-        .filter((entry) => entry.total > 0)
-        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-        .slice(0, 8);
-
-    if (topGenres.length === 0) {
-        setElementMessage(DOM.statsGlobalGenresList, 'Sem dados de género suficientes.', { className: 'stats-global-empty-state' });
-        return;
-    }
-
-    const visuals = {
-        series: getStatsMediaVisual('series'),
-        movie: getStatsMediaVisual('movie'),
-        book: getStatsMediaVisual('book'),
-    };
-
-    DOM.statsGlobalGenresList.replaceChildren(
-        ...topGenres.map((entry) => {
-            const maxValue = Math.max(entry.counts.series, entry.counts.movie, entry.counts.book, 1);
-            return el('article', { class: 'stats-global-genre-row' }, [
-                el('div', { class: 'stats-global-genre-title' }, [
-                    el('strong', { text: entry.name }),
-                ]),
-                el('div', { class: 'stats-global-genre-bars' }, (['series', 'movie', 'book'] as MediaType[]).map((mediaType) =>
-                    el('div', { class: `stats-global-genre-track stats-global-genre-track--${mediaType}` }, [
-                        el('span', {
-                            class: `stats-global-genre-fill stats-global-genre-fill--${mediaType}`,
-                            style: `width:${(entry.counts[mediaType] / maxValue) * 100}%;background:${visuals[mediaType].progress};`,
-                        }),
-                    ]),
-                )),
-            ]);
-        }),
-    );
-}
-
 function renderWatchedUnwatchedChart(stats: StatsSummary, cache?: StatsComputationCache) {
     const canvas = document.getElementById('watched-unwatched-chart') as HTMLCanvasElement;
     if (!canvas) return;
@@ -4471,7 +4174,7 @@ function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
                     },
                     tooltip: {
                         callbacks: {
-                            label: (context) => `${context.dataset.label}: ${context.raw}`,
+                            label: (context: { dataset: { label?: string }; raw: unknown }) => `${context.dataset.label}: ${context.raw}`,
                         },
                     },
                 },
