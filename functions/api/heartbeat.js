@@ -120,16 +120,10 @@ export async function onRequest(context) {
     return applyRateLimitHeaders(response, rateLimit);
   }
 
-  const expectedToken = env.HEARTBEAT_TOKEN;
-
   if (method === 'GET') {
     const response = addCorsHeaders(jsonResponse({
       ok: true,
-      source: 'cloudflare-pages-function',
       timestamp: new Date().toISOString(),
-      method,
-      tokenConfigured: hasConfiguredToken(expectedToken),
-      persisted: false,
       health: 'ok',
     }), corsConfig);
     addProxyHeaders(response, {
@@ -139,6 +133,8 @@ export async function onRequest(context) {
     });
     return applyRateLimitHeaders(response, rateLimit);
   }
+
+  const expectedToken = env.HEARTBEAT_TOKEN;
 
   if (!hasConfiguredToken(expectedToken)) {
     const response = addCorsHeaders(jsonResponse({
