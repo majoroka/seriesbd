@@ -53,6 +53,37 @@ describe('books ISBN mapping', () => {
     expect(result.isbn_10).toBe('989925427X');
   });
 
+  it('builds deterministic ids for google books without a stable upstream id', () => {
+    const input = {
+      volumeInfo: {
+        title: 'Quartzo Fumado',
+        authors: ['Autor Teste'],
+        publishedDate: '2024-01-01',
+      },
+    };
+
+    const a = mapGoogleBook(input);
+    const b = mapGoogleBook(input);
+
+    expect(a.id).toBe(b.id);
+    expect(a.source_id).toBe(b.source_id);
+  });
+
+  it('builds deterministic ids for open library without a stable upstream id', () => {
+    const input = {
+      title: 'Livro Sem Chave',
+      author_name: ['Autora Exemplo'],
+      first_publish_year: 2020,
+      isbn: ['9789899254275'],
+    };
+
+    const a = mapOpenLibraryBook(input);
+    const b = mapOpenLibraryBook(input);
+
+    expect(a.id).toBe(b.id);
+    expect(a.source_id).toBe(b.source_id);
+  });
+
   it('replaces weak Google Books content cover URLs with stronger fallback covers', () => {
     const merged = mergeBookMetadata(
       {

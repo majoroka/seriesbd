@@ -196,9 +196,45 @@ const toGoogleIsbnFields = (industryIdentifiers) =>
 
 const toOpenLibraryIsbnFields = (isbnList) => extractIsbnFields(isbnList);
 
+const normalizeBookIdSeedPart = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .trim();
+
+const hashDeterministicBookId = (value) => {
+  let hash = 2166136261;
+  const input = String(value || '');
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+const buildDeterministicBookSourceId = (provider, values) => {
+  const normalizedParts = (Array.isArray(values) ? values : [values])
+    .map((value) => normalizeBookIdSeedPart(value))
+    .filter(Boolean);
+  if (normalizedParts.length === 0) return `${provider}:unknown`;
+  const seed = `${provider}|${normalizedParts.join('|')}`;
+  return `${provider}:${hashDeterministicBookId(seed)}`;
+};
+
 export const mapGoogleBook = (item) => {
   const info = item?.volumeInfo || {};
-  const sourceId = String(item?.id || info?.canonicalVolumeLink || info?.title || Math.random());
+  const sourceId = String(
+    item?.id
+    || info?.canonicalVolumeLink
+    || buildDeterministicBookSourceId('google', [
+      info?.title,
+      Array.isArray(info?.authors) ? info.authors.join(', ') : '',
+      info?.publishedDate,
+      JSON.stringify(info?.industryIdentifiers || []),
+    ]),
+  );
   const description = typeof info.description === 'string' ? info.description : '';
   const publishedDate = typeof info.publishedDate === 'string' ? info.publishedDate : '';
   const rating = typeof info.averageRating === 'number' ? Number((info.averageRating * 2).toFixed(1)) : undefined;
@@ -223,7 +259,17 @@ export const mapGoogleBook = (item) => {
 };
 
 export const mapOpenLibraryBook = (doc) => {
-  const sourceId = String(doc?.key || doc?.cover_edition_key || doc?.edition_key?.[0] || doc?.title || Math.random());
+  const sourceId = String(
+    doc?.key
+    || doc?.cover_edition_key
+    || doc?.edition_key?.[0]
+    || buildDeterministicBookSourceId('openlibrary', [
+      doc?.title,
+      Array.isArray(doc?.author_name) ? doc.author_name.join(', ') : '',
+      doc?.first_publish_year,
+      Array.isArray(doc?.isbn) ? doc.isbn.join(',') : '',
+    ]),
+  );
   const firstSentence = Array.isArray(doc?.first_sentence) ? doc.first_sentence[0] : doc?.first_sentence;
   const overview = typeof firstSentence === 'string' ? firstSentence : '';
   const firstPublishYear = Number(doc?.first_publish_year);
@@ -248,7 +294,12 @@ export const mapOpenLibraryBook = (doc) => {
 };
 
 const mapGoodreadsSearchResult = (entry) => ({
-  id: toScopedBookId(`goodreads:${entry?.productUrl || entry?.title || Math.random()}`),
+  id: toScopedBookId(
+    String(
+      entry?.productUrl
+      || buildDeterministicBookSourceId('goodreads', [entry?.title, entry?.author]),
+    ),
+  ),
   media_type: 'book',
   source_provider: 'goodreads',
   source_id: String(entry?.productUrl || '').trim(),
