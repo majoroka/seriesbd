@@ -1871,7 +1871,7 @@ function handleAuthCallbackFeedback() {
     }
 
     const message = (params.get('error_description') || params.get('error') || '').replace(/\+/g, ' ').trim()
-        ? `O link de confirmação já não é válido ou expirou. ${pendingConfirmationEmail ? 'Pode pedir um novo envio abaixo.' : 'Volte a iniciar o registo para receber novo email.'}`
+        ? `O link de confirmação já não é válido ou expirou. Estes links expiram normalmente ao fim de 1 hora. ${pendingConfirmationEmail ? 'Pode pedir um novo envio abaixo.' : 'Volte a iniciar o registo para receber novo email.'}`
         : 'O link de confirmação já não é válido ou expirou.';
 
     cleanAuthCallbackUrl();
@@ -4517,7 +4517,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     DOM.authEmailInput.value = email;
                     DOM.authPasswordInput.value = '';
                     setAuthInlineFeedback(
-                        'Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link pode expirar ao fim de algum tempo. Se isso acontecer, pode pedir novo envio abaixo.',
+                        'Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link expira normalmente ao fim de 1 hora. Se isso acontecer, pode pedir novo envio abaixo.',
                         'info'
                     );
                     setAuthFormLoadingState(false);
