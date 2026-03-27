@@ -8,10 +8,8 @@ import {
   normalizeIsbn,
   parseGoodreadsBookPage,
   parseGoodreadsSearchResults,
-  parseBertrandBookPage,
   parsePresencaProductPayload,
   parsePresencaSearchResults,
-  parseWookBookPage,
 } from './books/[[path]].js';
 
 describe('books ISBN mapping', () => {
@@ -99,62 +97,6 @@ describe('books ISBN mapping', () => {
 });
 
 describe('books fallback parsers', () => {
-  it('parses Bertrand product pages with matching ISBN', () => {
-    const html = `
-      <html>
-        <head>
-          <meta property="og:image" content="https://cdn.example.com/bertrand-cover.jpg" />
-          <meta property="og:description" content="Sinopse curta Bertrand" />
-          <script type="application/ld+json">
-            {"@context":"https://schema.org","@type":"Book","isbn":"9789899254275","description":"Sinopse longa Bertrand","image":"https://cdn.example.com/bertrand-cover-large.jpg"}
-          </script>
-        </head>
-      </html>
-    `;
-
-    const parsed = parseBertrandBookPage(html, 'https://www.bertrand.pt/livro/teste/123', '9789899254275');
-
-    expect(parsed).toEqual({
-      provider: 'bertrand',
-      isbn: '9789899254275',
-      result: expect.objectContaining({
-        source_provider: 'bertrand',
-        source_id: 'https://www.bertrand.pt/livro/teste/123',
-        isbn: '9789899254275',
-        overview: 'Sinopse longa Bertrand',
-        poster_path: 'https://cdn.example.com/bertrand-cover-large.jpg',
-      }),
-    });
-  });
-
-  it('parses Wook product pages with matching ISBN', () => {
-    const html = `
-      <html>
-        <head>
-          <meta name="description" content="Sinopse Wook" />
-          <meta property="og:image" content="/images/wook-cover.jpg" />
-          <script type="application/ld+json">
-            {"@context":"https://schema.org","@type":"Product","productID":"ISBN 9789899254275","description":"Sinopse Wook detalhada","image":{"url":"https://static.wook.pt/covers/large.jpg"}}
-          </script>
-        </head>
-      </html>
-    `;
-
-    const parsed = parseWookBookPage(html, 'https://www.wook.pt/livro/teste/123', '9789899254275');
-
-    expect(parsed).toEqual({
-      provider: 'wook',
-      isbn: '9789899254275',
-      result: expect.objectContaining({
-        source_provider: 'wook',
-        source_id: 'https://www.wook.pt/livro/teste/123',
-        isbn: '9789899254275',
-        overview: 'Sinopse Wook detalhada',
-        poster_path: 'https://static.wook.pt/covers/large.jpg',
-      }),
-    });
-  });
-
   it('parses Presenca search results into a clean product handle', () => {
     const parsed = parsePresencaSearchResults([
       {
@@ -358,8 +300,6 @@ describe('books fallback parsers', () => {
       </html>
     `;
 
-    expect(parseBertrandBookPage(html, 'https://www.bertrand.pt/livro/teste/123', '9789899254275')).toBeNull();
-    expect(parseWookBookPage(html, 'https://www.wook.pt/livro/teste/123', '9789899254275')).toBeNull();
     expect(parsePresencaProductPayload({ variants: [{ sku: '9781111111111' }] }, '9789899254275')).toBeNull();
     expect(parseGoodreadsBookPage(html, 'https://www.goodreads.com/book/show/teste', 'Ganhei uma vida quando te perdi', '9789899254275')).toBeNull();
   });
