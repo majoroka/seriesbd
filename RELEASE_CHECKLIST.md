@@ -18,7 +18,10 @@
   - [ ] `__MACOSX`
 - [ ] `npm run bundle:audit`
 - [ ] zip gerado em `artifacts/`
+- [ ] ficheiro `.sha256` gerado em `artifacts/`
+- [ ] ficheiro `.metadata.txt` gerado em `artifacts/`
 - [ ] pacote criado a partir do `HEAD` commitado
+- [ ] `commit SHA` do pacote verificado
 
 ### UAT em staging
 - [ ] `Dashboard`

@@ -17,7 +17,8 @@ Objetivo:
 - Dashboard V2 concluída no escopo atual
 - Consolidação `C1-C7` concluída
 - Hardening pós-reauditoria `H1-H6` concluído
-- Fase atual: **consolidação concluída e evolução funcional controlada**
+- Hardening final `R1-R5` concluído
+- Fase atual: **estabilização concluída e manutenção evolutiva controlada**
 
 ## Resumo executivo
 
@@ -64,12 +65,18 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 - `H4` limpeza explícita de dados locais do dispositivo concluída
 - `H5` processo reprodutível e bundle auditável concluídos
 - `H6` governação server-side de `library_snapshots` concluída
+- `R1` hardening final do proxy `news-image` concluído
+- `R2` `heartbeat` GET reduzido a health mínimo concluído
+- `R3` redução de sinal e aperto do endpoint de `display_name` concluídos
+- `R4` bundle auditável com checksum e metadata de commit concluído
+- `R5` remoção da regra ampla de cache remota no service worker concluída
 
 ## Em aberto real
 
 1. monitorização pós-release
 2. melhorias futuras opcionais
 3. evolução funcional controlada
+4. disciplina operacional no bundle de auditoria sempre que houver nova entrega externa
 
 ## Plano de consolidação
 
@@ -227,6 +234,46 @@ Estado atual do sprint:
 Estado do bloco:
 - `H1-H6` concluídos
 
+## Hardening final
+
+Estado do bloco:
+- `R1-R5` concluídos
+
+### R1 | Endurecimento de `news-image`
+
+Estado atual:
+- bloqueio explícito de IPs privados, loopback e link-local
+- redirects tratados manualmente com revalidação do destino final
+- allowlist explícita de hosts reais usados pela app para imagens
+- CORS do proxy restringido ao domínio principal da app
+
+### R2 | Simplificação do `heartbeat` público
+
+Estado atual:
+- `GET /api/heartbeat` reduzido a resposta mínima de health
+- removidos campos públicos desnecessários de configuração/operação
+
+### R3 | Redução de enumeração em `display-name-available`
+
+Estado atual:
+- rate limit mais conservador
+- resposta pública mais mínima
+- CORS restringido ao domínio principal
+- índice único na base de dados mantido como autoridade final
+
+### R4 | Rigor do bundle auditável
+
+Estado atual:
+- bundle auditável passa a incluir checksum SHA-256
+- metadata inclui `commit SHA`, timestamp UTC e ref/branch
+- checklist e documentação alinhadas com o processo correto de entrega
+
+### R5 | Service worker mais restrito
+
+Estado atual:
+- removida a regra ampla de cache para imagens HTTPS remotas
+- mantidas apenas regras específicas e previsíveis para origens suportadas
+
 ### H5 | Processo Reprodutível / Artefacto Limpo
 
 Objetivo:
@@ -235,6 +282,7 @@ Objetivo:
 Estado atual:
 - `npm run verify:release` formaliza a validação mínima (`test:run` + `build`)
 - `npm run bundle:audit` gera um zip limpo a partir do `HEAD`
+- o bundle auditável passa a incluir checksum SHA-256 e metadata com `commit SHA`
 - artefactos locais passam a ficar fora do pacote por construção
 - `artifacts/` fica ignorado no repositório
 
@@ -338,6 +386,14 @@ Só avançar se:
 - validar eventual integração útil com Trakt
 - reviews internas de utilizadores da app
 - reviews por episódio ficam para fase posterior
+
+### Conta e onboarding
+
+- clarificar onboarding de confirmação de email com feedback visível, reenvio e branding já melhorados
+- validar mais tarde se o fluxo de confirmação precisa de refinamento adicional após uso real
+- quando uma conta nova entra com cloud vazia e o dispositivo já tem biblioteca local, substituir o push automático por decisão explícita:
+  - usar biblioteca deste dispositivo
+  - começar com biblioteca vazia
 
 ### Livros
 

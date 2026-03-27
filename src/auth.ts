@@ -160,6 +160,19 @@ export async function signUpWithPassword(input: SignUpInput): Promise<AuthRespon
   return { data, error: null };
 }
 
+export async function resendSignupConfirmationEmail(email: string): Promise<void> {
+  const client = getSupabaseClient();
+  const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { error } = await client.auth.resend({
+    type: 'signup',
+    email,
+    options: {
+      emailRedirectTo,
+    },
+  });
+  if (error) throw error;
+}
+
 export async function signOutCurrentUser(): Promise<void> {
   const client = getSupabaseClient();
   const { error } = await client.auth.signOut();

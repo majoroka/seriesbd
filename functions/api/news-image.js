@@ -14,6 +14,26 @@ import {
 const ROUTE_KEY = 'news-image';
 const IMAGE_FETCH_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 3;
+const ALLOWED_IMAGE_HOST_PATTERNS = [
+  /(^|\.)image\.tmdb\.org$/i,
+  /(^|\.)trakt\.tv$/i,
+  /^covers\.openlibrary\.org$/i,
+  /^books\.google\.com$/i,
+  /(^|\.)googleusercontent\.com$/i,
+  /(^|\.)gstatic\.com$/i,
+  /(^|\.)presenca\.pt$/i,
+  /(^|\.)shopify\.com$/i,
+  /(^|\.)media-amazon\.com$/i,
+  /(^|\.)gr-assets\.com$/i,
+  /(^|\.)goodreads\.com$/i,
+  /(^|\.)screenrant\.com$/i,
+  /(^|\.)srcdn\.com$/i,
+  /(^|\.)movieweb\.com$/i,
+  /(^|\.)moviewebimages\.com$/i,
+  /(^|\.)deadline\.com$/i,
+  /(^|\.)bookriot\.com$/i,
+  /(^|\.)publishersweekly\.com$/i,
+];
 
 const isAllowedProtocol = (url) => url.protocol === 'https:' || url.protocol === 'http:';
 
@@ -73,6 +93,11 @@ const isBlockedHostname = (hostname) => {
   );
 };
 
+const isAllowlistedHostname = (hostname) => {
+  const normalized = normalizeHostname(hostname);
+  return ALLOWED_IMAGE_HOST_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
 class BlockedImageUrlError extends Error {
   constructor(message) {
     super(message);
@@ -81,7 +106,7 @@ class BlockedImageUrlError extends Error {
 }
 
 const assertAllowedTargetUrl = (targetUrl, errorMessage = 'Blocked image url') => {
-  if (!isAllowedProtocol(targetUrl) || isBlockedHostname(targetUrl.hostname)) {
+  if (!isAllowedProtocol(targetUrl) || isBlockedHostname(targetUrl.hostname) || !isAllowlistedHostname(targetUrl.hostname)) {
     throw new BlockedImageUrlError(errorMessage);
   }
 };
@@ -130,7 +155,7 @@ export async function onRequest(context) {
   const { request } = context;
   const requestId = createRequestId(ROUTE_KEY);
   const startedAt = Date.now();
-  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type' };
+  const corsConfig = { origin: 'https://mediadex.app', methods: 'GET, OPTIONS', headers: 'Content-Type' };
 
   const optionsResponse = handleOptions(request, requestId, corsConfig);
   if (optionsResponse) return optionsResponse;

@@ -51,7 +51,7 @@ describe('news-image function', () => {
     }));
 
     const response = await onRequest({
-      request: new Request('https://example.com/api/news-image?url=https://cdn.example.com/poster.jpg', {
+      request: new Request('https://example.com/api/news-image?url=https://image.tmdb.org/t/p/w500/poster.jpg', {
         method: 'GET',
         headers: { 'cf-connecting-ip': '1.1.1.3' },
       }),
@@ -69,7 +69,7 @@ describe('news-image function', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(null, {
         status: 302,
-        headers: { location: 'https://images.examplecdn.com/poster-final.jpg' },
+        headers: { location: 'https://m.media-amazon.com/images/I/poster-final.jpg' },
       }))
       .mockResolvedValueOnce(new Response('image-bytes', {
         status: 200,
@@ -77,7 +77,7 @@ describe('news-image function', () => {
       }));
 
     const response = await onRequest({
-      request: new Request('https://example.com/api/news-image?url=https://cdn.example.com/poster.jpg', {
+      request: new Request('https://example.com/api/news-image?url=https://image.tmdb.org/t/p/w500/poster.jpg', {
         method: 'GET',
         headers: { 'cf-connecting-ip': '1.1.1.4' },
       }),
@@ -87,5 +87,24 @@ describe('news-image function', () => {
     expect(response.headers.get('content-type')).toBe('image/jpeg');
     expect(await response.text()).toBe('image-bytes');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks public hosts that are not on the allowlist', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const response = await onRequest({
+      request: new Request('https://example.com/api/news-image?url=https://cdn.example.com/poster.jpg', {
+        method: 'GET',
+        headers: { 'cf-connecting-ip': '1.1.1.5' },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'Blocked image url',
+    });
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://mediadex.app');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

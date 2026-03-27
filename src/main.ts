@@ -22,6 +22,7 @@ import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookI
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
+    resendSignupConfirmationEmail,
     signInWithPassword,
     signOutCurrentUser,
     signUpWithPassword,
@@ -37,6 +38,7 @@ import {
 import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
+const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
 type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
 type FailureMetric = {
@@ -86,6 +88,7 @@ const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
 let authFormMode: 'login' | 'signup' = 'login';
 let authFormBusy = false;
+let pendingConfirmationEmail: string | null = null;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let librarySyncTimer: number | null = null;
@@ -143,6 +146,54 @@ function getErrorMessage(error: unknown): string {
         }
     }
     return String(error);
+}
+
+function cleanAuthCallbackUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_code');
+    url.searchParams.delete('error_description');
+    url.searchParams.delete('error_description_code');
+    url.searchParams.delete('code');
+    url.searchParams.delete('token');
+    url.searchParams.delete('token_hash');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+function getAuthCallbackParams(): URLSearchParams {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
+    const merged = new URLSearchParams(searchParams);
+    hashParams.forEach((value, key) => {
+        if (!merged.has(key)) {
+            merged.set(key, value);
+        }
+    });
+    return merged;
+}
+
+function isConfirmationLinkFailure(params: URLSearchParams): boolean {
+    const joined = [
+        params.get('error') || '',
+        params.get('error_code') || '',
+        params.get('error_description') || '',
+        params.get('error_description_code') || '',
+    ]
+        .join(' ')
+        .toLowerCase();
+
+    return /otp_expired|token_expired|expired|invalid|access_denied|token|otp/.test(joined);
+}
+
+function openAuthModalForPendingConfirmation(message: string) {
+    openAuthModal('login');
+    if (pendingConfirmationEmail) {
+        DOM.authEmailInput.value = pendingConfirmationEmail;
+    }
+    setPendingConfirmationEmail(pendingConfirmationEmail);
+    setAuthInlineFeedback(message, 'info');
+    DOM.authPasswordInput.focus();
 }
 
 function isBenignMissingRefreshTokenError(error: unknown): boolean {
@@ -1458,6 +1509,18 @@ function setAuthInlineFeedback(message: string, mode: 'error' | 'info' = 'error'
     DOM.authInlineFeedback.classList.toggle('info', mode === 'info');
 }
 
+function setPendingConfirmationEmail(email: string | null) {
+    pendingConfirmationEmail = email?.trim() || null;
+    if (pendingConfirmationEmail) {
+        window.localStorage.setItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY, pendingConfirmationEmail);
+    } else {
+        window.localStorage.removeItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY);
+    }
+    const shouldShowResend = Boolean(pendingConfirmationEmail) && authFormMode === 'login';
+    DOM.authResendConfirmationBtn.hidden = !shouldShowResend;
+    DOM.authResendConfirmationBtn.disabled = authFormBusy || !shouldShowResend;
+}
+
 function clearProfileInlineFeedback() {
     DOM.profileInlineFeedback.hidden = true;
     DOM.profileInlineFeedback.textContent = '';
@@ -1507,6 +1570,7 @@ function setAuthFormLoadingState(isBusy: boolean) {
     DOM.authPasswordInput.disabled = isBusy;
     DOM.authDisplayNameInput.disabled = isBusy;
     DOM.authToggleModeBtn.disabled = isBusy;
+    DOM.authResendConfirmationBtn.disabled = isBusy || DOM.authResendConfirmationBtn.hidden;
 }
 
 function setAuthModalMode(mode: 'login' | 'signup') {
@@ -1524,12 +1588,18 @@ function setAuthModalMode(mode: 'login' | 'signup') {
     DOM.authToggleModeBtn.textContent = isSignup
         ? 'Já tens conta? Entrar'
         : 'Ainda não tens conta? Registar';
+    if (isSignup) {
+        setPendingConfirmationEmail(null);
+    } else {
+        setPendingConfirmationEmail(pendingConfirmationEmail);
+    }
     clearAuthInlineFeedback();
 }
 
 function resetAuthForm() {
     DOM.authForm.reset();
     DOM.authDisplayNameInput.value = '';
+    setPendingConfirmationEmail(pendingConfirmationEmail);
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
@@ -1725,6 +1795,7 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
     if (event === 'SIGNED_IN' && user?.email) {
+        setPendingConfirmationEmail(null);
         onUserActivityForSessionTimeout();
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
@@ -1787,6 +1858,24 @@ async function initializeAuthState() {
     subscribeToAuthState((event, session) => {
         handleAuthStateChange(event, session?.user ?? null);
     });
+}
+
+function handleAuthCallbackFeedback() {
+    const params = getAuthCallbackParams();
+    if (!params.has('error') && !params.has('error_description') && !params.has('error_code')) {
+        return;
+    }
+
+    if (!isConfirmationLinkFailure(params)) {
+        return;
+    }
+
+    const message = (params.get('error_description') || params.get('error') || '').replace(/\+/g, ' ').trim()
+        ? `O link de confirmação já não é válido ou expirou. Estes links expiram normalmente ao fim de 1 hora. ${pendingConfirmationEmail ? 'Pode pedir um novo envio abaixo.' : 'Volte a iniciar o registo para receber novo email.'}`
+        : 'O link de confirmação já não é válido ou expirou.';
+
+    cleanAuthCallbackUrl();
+    openAuthModalForPendingConfirmation(message);
 }
 
 function isMediaInLibrary(mediaType: MediaType, mediaId: number): boolean {
@@ -3598,6 +3687,7 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
 }
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    setPendingConfirmationEmail(window.localStorage.getItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY));
     UI.initModalAccessibility();
     document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
         scheduleLibrarySnapshotSyncFromLocalMutation();
@@ -4421,20 +4511,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 const requiresConfirmation = !response.data.session;
-                closeAuthModal();
                 if (requiresConfirmation) {
-                    UI.showNotification('Se o email for novo, foi enviado um link de confirmação. Se já existir, use Entrar.');
+                    setPendingConfirmationEmail(email);
+                    setAuthModalMode('login');
+                    DOM.authEmailInput.value = email;
+                    DOM.authPasswordInput.value = '';
+                    setAuthInlineFeedback(
+                        'Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link expira normalmente ao fim de 1 hora. Se isso acontecer, pode pedir novo envio abaixo.',
+                        'info'
+                    );
+                    setAuthFormLoadingState(false);
+                    UI.showNotification('Enviámos um email de confirmação. Verifique também a pasta de spam/lixo. O link expira normalmente ao fim de 1 hora.');
+                    DOM.authPasswordInput.focus();
                 } else {
+                    closeAuthModal();
                     UI.showNotification('Conta criada e sessão iniciada.');
                 }
             } else {
                 await signInWithPassword(email, password);
+                setPendingConfirmationEmail(null);
                 closeAuthModal();
             }
         } catch (error) {
             const message = getErrorMessage(error);
             console.error('[auth] Erro no submit de autenticação.', error);
             setAuthInlineFeedback(`Falha na autenticação: ${message}`);
+            setAuthFormLoadingState(false);
+        }
+    });
+    DOM.authResendConfirmationBtn?.addEventListener('click', async () => {
+        if (authFormBusy || !isSupabaseConfigured() || !pendingConfirmationEmail) return;
+
+        setAuthFormLoadingState(true);
+        clearAuthInlineFeedback();
+        try {
+            await resendSignupConfirmationEmail(pendingConfirmationEmail);
+            setAuthInlineFeedback(
+                'Enviámos um novo email de confirmação. Verifique também a pasta de spam/lixo.',
+                'info'
+            );
+        } catch (error) {
+            const message = getErrorMessage(error);
+            console.error('[auth] Erro ao reenviar email de confirmação.', error);
+            setAuthInlineFeedback(`Não foi possível reenviar o email de confirmação: ${message}`);
+        } finally {
             setAuthFormLoadingState(false);
         }
     });
@@ -4584,6 +4704,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }) as EventListener);
 
     void (async () => {
+        handleAuthCallbackFeedback();
         await initializeAuthState();
         await initializeApp();
     })();

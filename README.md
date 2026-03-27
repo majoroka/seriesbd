@@ -91,7 +91,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - `npm run coverage` – Vitest em modo cobertura.
 - `npm run test:ui` – runner interactivo da Testing Library.
 - `npm run verify:release` – validação reprodutível mínima (`test:run` + `build`).
-- `npm run bundle:audit` – gera um zip limpo do `HEAD` em `artifacts/`, sem `node_modules`, `dist` nem artefactos locais.
+- `npm run bundle:audit` – gera um zip limpo do `HEAD` em `artifacts/`, com checksum SHA-256 e metadata do commit, sem `node_modules`, `dist` nem artefactos locais.
 
 ## Estrutura relevante
 
@@ -152,6 +152,8 @@ Para gerar um pacote limpo para auditoria ou partilha:
 
 Resultado:
 - o zip é criado em `artifacts/`
+- o checksum SHA-256 é criado ao lado do zip
+- a metadata do bundle inclui `commit SHA`, timestamp UTC e branch/ref atual
 - contém apenas ficheiros tracked no `HEAD`
 - exclui automaticamente:
   - `node_modules`

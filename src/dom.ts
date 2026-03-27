@@ -103,6 +103,7 @@ export const authDisplayNameInput = document.getElementById('auth-display-name')
 export const authEmailInput = document.getElementById('auth-email') as HTMLInputElement;
 export const authPasswordInput = document.getElementById('auth-password') as HTMLInputElement;
 export const authSubmitBtn = document.getElementById('auth-submit-btn') as HTMLButtonElement;
+export const authResendConfirmationBtn = document.getElementById('auth-resend-confirmation-btn') as HTMLButtonElement;
 export const authToggleModeBtn = document.getElementById('auth-toggle-mode-btn') as HTMLButtonElement;
 export const profileModal = document.getElementById('profile-modal') as HTMLDivElement;
 export const profileModalCloseBtn = document.getElementById('profile-modal-close-btn') as HTMLButtonElement;
