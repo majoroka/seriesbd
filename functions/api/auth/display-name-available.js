@@ -10,6 +10,7 @@ import {
 } from '../_shared/security.js';
 
 const ROUTE_KEY = 'auth.display_name_available';
+const DISPLAY_NAME_RATE_LIMIT = 10;
 
 function normalizeDisplayName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -59,7 +60,7 @@ export async function onRequest(context) {
   const method = request.method.toUpperCase();
   const requestId = createRequestId('auth');
   const startedAt = Date.now();
-  const corsConfig = { methods: 'GET, OPTIONS', headers: 'Content-Type' };
+  const corsConfig = { origin: 'https://mediadex.app', methods: 'GET, OPTIONS', headers: 'Content-Type' };
 
   const optionsResponse = handleOptions(request, requestId, corsConfig);
   if (optionsResponse) return optionsResponse;
@@ -75,7 +76,7 @@ export async function onRequest(context) {
     });
   }
 
-  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: 20, windowMs: 60_000 });
+  const rateLimit = enforceRateLimit(request, { routeKey: ROUTE_KEY, limit: DISPLAY_NAME_RATE_LIMIT, windowMs: 60_000 });
   if (!rateLimit.allowed) {
     const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429), corsConfig);
     addProxyHeaders(response, {
@@ -123,7 +124,6 @@ export async function onRequest(context) {
     const rows = await fetchMatchingProfiles(env, normalizedName);
     const response = addCorsHeaders(jsonResponse({
       ok: true,
-      normalizedName,
       available: rows.length === 0,
     }), corsConfig);
     addProxyHeaders(response, {

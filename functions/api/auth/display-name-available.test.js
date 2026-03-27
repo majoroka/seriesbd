@@ -33,9 +33,11 @@ describe('display-name-available function', () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.available).toBe(true);
+    expect(body).not.toHaveProperty('normalizedName');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const requestUrl = fetchSpy.mock.calls[0][0];
     expect(String(requestUrl)).toContain('display_name_normalized=eq.majoroka');
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://mediadex.app');
   });
 
   it('returns 429 when per-IP rate limit is exceeded', async () => {
@@ -52,7 +54,7 @@ describe('display-name-available function', () => {
     };
 
     let response = null;
-    for (let i = 0; i < 21; i += 1) {
+    for (let i = 0; i < 11; i += 1) {
       response = await onRequest({
         request: new Request(`https://example.com/api/auth/display-name-available?name=User${i}`, {
           method: 'GET',
