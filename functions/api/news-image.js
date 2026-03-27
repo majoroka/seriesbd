@@ -13,18 +13,117 @@ import {
 
 const ROUTE_KEY = 'news-image';
 const IMAGE_FETCH_TIMEOUT_MS = 10_000;
+const MAX_REDIRECTS = 3;
 
 const isAllowedProtocol = (url) => url.protocol === 'https:' || url.protocol === 'http:';
 
+const normalizeHostname = (hostname) => String(hostname || '')
+  .trim()
+  .replace(/^\[(.*)\]$/, '$1')
+  .replace(/\.$/, '')
+  .toLowerCase();
+
+const parseIpv4Literal = (hostname) => {
+  const normalized = normalizeHostname(hostname);
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized)) return null;
+  const parts = normalized.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) return null;
+  return parts;
+};
+
+const isBlockedIpv4Literal = (hostname) => {
+  const parts = parseIpv4Literal(hostname);
+  if (!parts) return false;
+  const [a, b] = parts;
+  return (
+    a === 0
+    || a === 10
+    || a === 127
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 198 && (b === 18 || b === 19))
+    || a >= 224
+  );
+};
+
+const isBlockedIpv6Literal = (hostname) => {
+  const normalized = normalizeHostname(hostname);
+  if (!normalized.includes(':')) return false;
+  if (normalized === '::' || normalized === '::1') return true;
+  if (normalized.startsWith('::ffff:')) {
+    return isBlockedIpv4Literal(normalized.slice('::ffff:'.length));
+  }
+  return (
+    /^fc/i.test(normalized)
+    || /^fd/i.test(normalized)
+    || /^fe[89ab]/i.test(normalized)
+  );
+};
+
 const isBlockedHostname = (hostname) => {
-  const normalized = String(hostname || '').toLowerCase();
+  const normalized = normalizeHostname(hostname);
   return (
     normalized === 'localhost'
     || normalized.endsWith('.localhost')
-    || normalized === '127.0.0.1'
-    || normalized === '0.0.0.0'
     || normalized.endsWith('.internal')
+    || isBlockedIpv4Literal(normalized)
+    || isBlockedIpv6Literal(normalized)
   );
+};
+
+class BlockedImageUrlError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'BlockedImageUrlError';
+  }
+}
+
+const assertAllowedTargetUrl = (targetUrl, errorMessage = 'Blocked image url') => {
+  if (!isAllowedProtocol(targetUrl) || isBlockedHostname(targetUrl.hostname)) {
+    throw new BlockedImageUrlError(errorMessage);
+  }
+};
+
+const fetchWithValidatedRedirects = async (targetUrl, controller) => {
+  let currentUrl = new URL(targetUrl.toString());
+
+  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+    const response = await fetch(currentUrl.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+      redirect: 'manual',
+      signal: controller.signal,
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      return response;
+    }
+
+    if (redirectCount === MAX_REDIRECTS) {
+      throw new Error('Too many image redirects');
+    }
+
+    const location = response.headers.get('location');
+    if (!location) {
+      throw new Error('Redirected image response is missing a location header');
+    }
+
+    let redirectUrl;
+    try {
+      redirectUrl = new URL(location, currentUrl);
+    } catch {
+      throw new Error('Redirected image location is invalid');
+    }
+
+    assertAllowedTargetUrl(redirectUrl, 'Blocked image redirect');
+    currentUrl = redirectUrl;
+  }
+
+  throw new Error('Too many image redirects');
 };
 
 export async function onRequest(context) {
@@ -94,14 +193,8 @@ export async function onRequest(context) {
   const timeoutId = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
 
   try {
-    const upstreamResponse = await fetch(targetUrl.toString(), {
-      method: 'GET',
-      headers: {
-        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-      redirect: 'follow',
-      signal: controller.signal,
-    });
+    assertAllowedTargetUrl(targetUrl);
+    const upstreamResponse = await fetchWithValidatedRedirects(targetUrl, controller);
 
     const durationMs = Date.now() - startedAt;
     if (!upstreamResponse.ok) {
@@ -142,6 +235,14 @@ export async function onRequest(context) {
       durationMs,
     });
   } catch (error) {
+    if (error instanceof BlockedImageUrlError) {
+      const response = addCorsHeaders(jsonResponse({ ok: false, error: error.message }, 400), corsConfig);
+      return applyRateLimitHeaders(addProxyHeaders(response, {
+        requestId,
+        upstreamStatus: 400,
+        durationMs: Date.now() - startedAt,
+      }), rateLimit);
+    }
     const response = addCorsHeaders(jsonResponse({ ok: false, error: 'Unable to fetch image' }, 502), corsConfig);
     logEvent('warn', 'news.image.fetch_failed', {
       requestId,

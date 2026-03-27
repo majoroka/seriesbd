@@ -16,13 +16,16 @@ describe('heartbeat function', () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       ok: true,
-      method: 'GET',
-      persisted: false,
       health: 'ok',
-      tokenConfigured: false,
     });
+    expect(typeof body.timestamp).toBe('string');
+    expect(body).not.toHaveProperty('method');
+    expect(body).not.toHaveProperty('persisted');
+    expect(body).not.toHaveProperty('tokenConfigured');
+    expect(body).not.toHaveProperty('source');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

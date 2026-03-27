@@ -99,6 +99,8 @@ export interface Series {
     vote_average?: number;
     total_episodes?: number;
     episode_run_time?: number;
+    production_companies?: { id?: number; name: string }[];
+    production_countries?: { iso_3166_1?: string; name: string }[];
     _details?: {
         next_episode_to_air: Episode | null;
         status: string;

@@ -14,15 +14,13 @@ const supabaseClient =
       })
     : null;
 
-export const supabase: SupabaseClient | null = supabaseClient;
-
 export function isSupabaseConfigured(): boolean {
-  return Boolean(supabase);
+  return Boolean(supabaseClient);
 }
 
 export function getSupabaseClient(): SupabaseClient {
-  if (!supabase) {
+  if (!supabaseClient) {
     throw new Error('Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
   }
-  return supabase;
+  return supabaseClient;
 }

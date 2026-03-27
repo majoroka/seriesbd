@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const DEV_CSP = [
@@ -16,16 +16,29 @@ const DEV_CSP = [
   "worker-src 'self' blob:",
 ].join('; ');
 
-export default defineConfig(({ command }) => ({
-  server: {
-    headers: command === 'serve'
-      ? {
-          'Content-Security-Policy': DEV_CSP,
-        }
-      : undefined,
-  },
-  plugins: [
-    VitePWA({
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const localApiOrigin = (env.VITE_LOCAL_API_ORIGIN || 'https://mediadex.app').replace(/\/+$/, '');
+
+  return {
+    server: {
+      headers: command === 'serve'
+        ? {
+            'Content-Security-Policy': DEV_CSP,
+          }
+        : undefined,
+      proxy: command === 'serve'
+        ? {
+            '/api': {
+              target: localApiOrigin,
+              changeOrigin: true,
+              secure: localApiOrigin.startsWith('https://'),
+            },
+          }
+        : undefined,
+    },
+    plugins: [
+      VitePWA({
       registerType: 'autoUpdate',
       // Ficheiros a serem incluídos no precache, além dos gerados pelo build.
       includeAssets: [
@@ -104,11 +117,12 @@ export default defineConfig(({ command }) => ({
           },
         ],
       },
-    }),
-  ],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './vitest.setup.ts',
-  },
-}));
+      }),
+    ],
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: './vitest.setup.ts',
+    },
+  };
+});

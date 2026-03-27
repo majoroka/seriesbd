@@ -542,24 +542,6 @@ const collectJsonLdIsbns = (node) => {
   return [direct.isbn_13, direct.isbn_10, direct.isbn].filter(Boolean);
 };
 
-const extractFallbackProductLinks = (html, baseUrl, isbn) => {
-  const matches = html.matchAll(/href=["']([^"']*(?:\/livro\/|\/wook\/i\/)[^"']+)["']/gi);
-  const candidates = [];
-  for (const match of matches) {
-    const href = absolutizeUrl(match[1], baseUrl);
-    if (!href) continue;
-    const rawIndex = typeof match.index === 'number' ? match.index : 0;
-    const context = html.slice(Math.max(0, rawIndex - 350), rawIndex + 900);
-    const score = context.includes(isbn) ? 2 : 1;
-    candidates.push({ href, score });
-  }
-  return [...new Map(
-    candidates
-      .sort((left, right) => right.score - left.score)
-      .map((entry) => [entry.href, entry]),
-  ).values()].map((entry) => entry.href);
-};
-
 const buildFallbackResult = ({ provider, isbn, productUrl, imageUrl, overview, name = '', author = '' }) => ({
   provider,
   isbn,
@@ -767,50 +749,6 @@ export const parseGoodreadsBookPage = (html, pageUrl, expectedTitle, expectedIsb
   });
 };
 
-export const parseBertrandBookPage = (html, pageUrl, expectedIsbn) => {
-  const jsonLdBlocks = parseJsonLdBlocks(html);
-  const matchedJsonLd = jsonLdBlocks.find((entry) => collectJsonLdIsbns(entry).includes(expectedIsbn));
-  const metaImage = extractMetaContent(html, 'property', 'og:image') || extractMetaContent(html, 'name', 'twitter:image');
-  const metaDescription = extractMetaContent(html, 'property', 'og:description') || extractMetaContent(html, 'name', 'description');
-
-  if (!matchedJsonLd && !html.includes(expectedIsbn)) return null;
-
-  const imageUrl = absolutizeUrl(
-    matchedJsonLd?.image?.url || matchedJsonLd?.image?.contentUrl || matchedJsonLd?.image || metaImage,
-    pageUrl,
-  );
-  const overview = matchedJsonLd?.description || metaDescription;
-  return buildFallbackResult({
-    provider: 'bertrand',
-    isbn: expectedIsbn,
-    productUrl: pageUrl,
-    imageUrl,
-    overview,
-  });
-};
-
-export const parseWookBookPage = (html, pageUrl, expectedIsbn) => {
-  const jsonLdBlocks = parseJsonLdBlocks(html);
-  const matchedJsonLd = jsonLdBlocks.find((entry) => collectJsonLdIsbns(entry).includes(expectedIsbn));
-  const metaImage = extractMetaContent(html, 'property', 'og:image') || extractMetaContent(html, 'name', 'twitter:image');
-  const metaDescription = extractMetaContent(html, 'property', 'og:description') || extractMetaContent(html, 'name', 'description');
-
-  if (!matchedJsonLd && !html.includes(expectedIsbn)) return null;
-
-  const imageUrl = absolutizeUrl(
-    matchedJsonLd?.image?.url || matchedJsonLd?.image?.contentUrl || matchedJsonLd?.image || metaImage,
-    pageUrl,
-  );
-  const overview = matchedJsonLd?.description || metaDescription;
-  return buildFallbackResult({
-    provider: 'wook',
-    isbn: expectedIsbn,
-    productUrl: pageUrl,
-    imageUrl,
-    overview,
-  });
-};
-
 const fetchHtmlPage = async (url) => {
   const response = await fetch(url, {
     method: 'GET',
@@ -823,67 +761,6 @@ const fetchHtmlPage = async (url) => {
     status: response.status,
     url: response.url || url,
     html,
-  };
-};
-
-const resolveBertrandProductUrlByIsbn = async (isbn) => {
-  const searchPage = await fetchHtmlPage(`https://www.bertrand.pt/pesquisa?query=${encodeURIComponent(isbn)}`);
-  if (!searchPage.ok) {
-    return { ok: false, status: searchPage.status, url: null, reason: 'search_failed' };
-  }
-  const links = extractFallbackProductLinks(searchPage.html, searchPage.url, isbn);
-  return { ok: links.length > 0, status: searchPage.status, url: links[0] || null, reason: links.length > 0 ? null : 'no_product_link' };
-};
-
-const resolveWookProductUrlByIsbn = async (isbn) => {
-  const candidateUrls = [
-    `https://www.wook.pt/pesquisa/${encodeURIComponent(isbn)}`,
-    `https://www.wook.pt/pesquisa?query=${encodeURIComponent(isbn)}`,
-  ];
-
-  for (const candidateUrl of candidateUrls) {
-    const searchPage = await fetchHtmlPage(candidateUrl);
-    if (!searchPage.ok) continue;
-    const links = extractFallbackProductLinks(searchPage.html, searchPage.url, isbn);
-    if (links.length > 0) {
-      return { ok: true, status: searchPage.status, url: links[0], reason: null };
-    }
-  }
-
-  return { ok: false, status: 404, url: null, reason: 'no_product_link' };
-};
-
-const fetchBertrandFallbackByIsbn = async (isbn) => {
-  const resolved = await resolveBertrandProductUrlByIsbn(isbn);
-  if (!resolved.ok || !resolved.url) return { ok: false, status: resolved.status, provider: 'bertrand', result: null, reason: resolved.reason };
-
-  const productPage = await fetchHtmlPage(resolved.url);
-  if (!productPage.ok) return { ok: false, status: productPage.status, provider: 'bertrand', result: null, reason: 'product_fetch_failed' };
-
-  const parsed = parseBertrandBookPage(productPage.html, productPage.url, isbn);
-  return {
-    ok: Boolean(parsed),
-    status: productPage.status,
-    provider: 'bertrand',
-    result: parsed?.result || null,
-    reason: parsed ? null : 'isbn_not_confirmed',
-  };
-};
-
-const fetchWookFallbackByIsbn = async (isbn) => {
-  const resolved = await resolveWookProductUrlByIsbn(isbn);
-  if (!resolved.ok || !resolved.url) return { ok: false, status: resolved.status, provider: 'wook', result: null, reason: resolved.reason };
-
-  const productPage = await fetchHtmlPage(resolved.url);
-  if (!productPage.ok) return { ok: false, status: productPage.status, provider: 'wook', result: null, reason: 'product_fetch_failed' };
-
-  const parsed = parseWookBookPage(productPage.html, productPage.url, isbn);
-  return {
-    ok: Boolean(parsed),
-    status: productPage.status,
-    provider: 'wook',
-    result: parsed?.result || null,
-    reason: parsed ? null : 'isbn_not_confirmed',
   };
 };
 
@@ -1330,17 +1207,13 @@ export async function onRequest(context) {
       }
 
       const providers =
-        providerParam === 'bertrand'
-          ? ['bertrand']
-          : providerParam === 'wook'
-            ? ['wook']
-            : providerParam === 'presenca'
-              ? ['presenca']
-              : providerParam === 'goodreads'
-                ? ['goodreads']
-                : normalizedIsbn
-                  ? ['presenca', 'goodreads']
-                  : ['goodreads'];
+        providerParam === 'presenca'
+          ? ['presenca']
+          : providerParam === 'goodreads'
+            ? ['goodreads']
+            : normalizedIsbn
+              ? ['presenca', 'goodreads']
+              : ['goodreads'];
 
       const attempts = [];
       let result = null;
@@ -1348,15 +1221,11 @@ export async function onRequest(context) {
       let provider = null;
 
       for (const fallbackProvider of providers) {
-        const fallbackResponse = fallbackProvider === 'bertrand'
-          ? await fetchBertrandFallbackByIsbn(normalizedIsbn)
-          : fallbackProvider === 'wook'
-            ? await fetchWookFallbackByIsbn(normalizedIsbn)
-            : fallbackProvider === 'goodreads'
-              ? await fetchGoodreadsFallbackByTitle(title, normalizedIsbn)
-              : normalizedIsbn
-                ? await fetchPresencaFallbackByIsbn(normalizedIsbn)
-                : { ok: false, status: 400, provider: 'presenca', result: null, reason: 'missing_isbn' };
+        const fallbackResponse = fallbackProvider === 'goodreads'
+          ? await fetchGoodreadsFallbackByTitle(title, normalizedIsbn)
+          : normalizedIsbn
+            ? await fetchPresencaFallbackByIsbn(normalizedIsbn)
+            : { ok: false, status: 400, provider: 'presenca', result: null, reason: 'missing_isbn' };
         upstreamStatus = fallbackResponse.status || upstreamStatus;
         attempts.push({
           provider: fallbackProvider,

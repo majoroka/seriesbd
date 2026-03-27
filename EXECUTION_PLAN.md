@@ -15,6 +15,8 @@ Objetivo:
 - Sprint 1 a Sprint 13 concluídos no escopo previsto
 - Cutover DNS (`S6-T06`) concluído
 - Dashboard V2 concluída no escopo atual
+- Consolidação `C1-C7` concluída
+- Hardening pós-reauditoria `H1-H6` concluído
 - Fase atual: **consolidação concluída e evolução funcional controlada**
 
 ## Resumo executivo
@@ -50,6 +52,18 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
   - séries
   - filmes
   - livros com estado vazio honesto
+
+### Consolidação e hardening
+
+- `C1-C7` concluídos
+- `F1` fallback editorial de livros concluído no escopo atual
+- `H1` heartbeat fail-closed concluído
+- `H2` unicidade estrutural de `display_name` concluída
+- `H3` hardening do legado Netlify concluído
+- `H3.1` remoção do runtime Netlify e migração do fluxo local para `Vite` concluída
+- `H4` limpeza explícita de dados locais do dispositivo concluída
+- `H5` processo reprodutível e bundle auditável concluídos
+- `H6` governação server-side de `library_snapshots` concluída
 
 ## Em aberto real
 
@@ -110,9 +124,9 @@ Critério de fecho:
 - sem quebra de `staging` ou `main`
 
 Estado atual do sprint:
-- Cloudflare confirmado como runtime canónico de produção e preview
-- `netlify/` mantido apenas como compatibilidade local legada
-- novas alterações backend devem concentrar-se em `functions/api/*`
+- Cloudflare confirmado como runtime canónico de produção, preview e estratégia local suportada
+- `npm run dev` migrado para `vite` com proxy `/api/*` para origem Cloudflare configurável
+- legado Netlify removido do fluxo local e do repositório
 
 ### Sprint C4 | Dados, Import/Export e Snapshots
 
@@ -207,6 +221,43 @@ Estado atual do sprint:
 6. `C6 Performance`
 7. `C7 Design System mínimo`
 8. `F1 Fallback Editorial de Livros`
+
+## Hardening pós-reauditoria
+
+Estado do bloco:
+- `H1-H6` concluídos
+
+### H5 | Processo Reprodutível / Artefacto Limpo
+
+Objetivo:
+- tornar auditoria e validação externas realmente reproduzíveis.
+
+Estado atual:
+- `npm run verify:release` formaliza a validação mínima (`test:run` + `build`)
+- `npm run bundle:audit` gera um zip limpo a partir do `HEAD`
+- artefactos locais passam a ficar fora do pacote por construção
+- `artifacts/` fica ignorado no repositório
+
+Critério de fecho:
+- pacote limpo e reproduzível sem `node_modules`, `dist` ou lixo local
+- checklist de release alinhada com esse processo
+
+### H6 | Governação Server-Side de Snapshots
+
+Objetivo:
+- reduzir dependência excessiva do cliente na integridade de `library_snapshots`.
+
+Estado atual:
+- nova migration para endurecer `public.library_snapshots`
+- payload passa a ser validado server-side por tipo/estrutura mínima/tamanho
+- `schema_version` fica limitado por constraint
+- escrita autenticada deixa de ser `upsert` direto na tabela
+- cliente passa a usar a RPC `public.upsert_library_snapshot(...)`
+
+Critério de fecho:
+- writes dos snapshots passam por validação server-side
+- privilégios diretos de `insert/update` na tabela deixam de ser necessários ao cliente
+- documentação Supabase alinhada com a nova migration
 
 ## Fase seguinte
 

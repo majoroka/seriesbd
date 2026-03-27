@@ -4,21 +4,21 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run dev:netlify",
-    "dev:netlify": "netlify dev",
-    "dev:vite": "vite",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "cron:deploy": "npx wrangler deploy --config workers/heartbeat-cron/wrangler.toml",
     "test": "vitest",
+    "test:run": "vitest run",
     "coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "verify:release": "npm run test:run && npm run build",
+    "bundle:audit": "sh scripts/create-audit-bundle.sh"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.1.0",
     "@types/node": "^20.19.17",
     "jsdom": "^24.1.0",
-    "netlify-cli": "^23.15.1",
     "typescript": "^5.2.2",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
