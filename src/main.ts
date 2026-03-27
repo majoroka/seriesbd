@@ -38,6 +38,7 @@ import {
 import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
+const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
 type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
 type FailureMetric = {
@@ -145,6 +146,54 @@ function getErrorMessage(error: unknown): string {
         }
     }
     return String(error);
+}
+
+function cleanAuthCallbackUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_code');
+    url.searchParams.delete('error_description');
+    url.searchParams.delete('error_description_code');
+    url.searchParams.delete('code');
+    url.searchParams.delete('token');
+    url.searchParams.delete('token_hash');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+function getAuthCallbackParams(): URLSearchParams {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
+    const merged = new URLSearchParams(searchParams);
+    hashParams.forEach((value, key) => {
+        if (!merged.has(key)) {
+            merged.set(key, value);
+        }
+    });
+    return merged;
+}
+
+function isConfirmationLinkFailure(params: URLSearchParams): boolean {
+    const joined = [
+        params.get('error') || '',
+        params.get('error_code') || '',
+        params.get('error_description') || '',
+        params.get('error_description_code') || '',
+    ]
+        .join(' ')
+        .toLowerCase();
+
+    return /otp_expired|token_expired|expired|invalid|access_denied|token|otp/.test(joined);
+}
+
+function openAuthModalForPendingConfirmation(message: string) {
+    openAuthModal('login');
+    if (pendingConfirmationEmail) {
+        DOM.authEmailInput.value = pendingConfirmationEmail;
+    }
+    setPendingConfirmationEmail(pendingConfirmationEmail);
+    setAuthInlineFeedback(message, 'info');
+    DOM.authPasswordInput.focus();
 }
 
 function isBenignMissingRefreshTokenError(error: unknown): boolean {
@@ -1462,6 +1511,11 @@ function setAuthInlineFeedback(message: string, mode: 'error' | 'info' = 'error'
 
 function setPendingConfirmationEmail(email: string | null) {
     pendingConfirmationEmail = email?.trim() || null;
+    if (pendingConfirmationEmail) {
+        window.localStorage.setItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY, pendingConfirmationEmail);
+    } else {
+        window.localStorage.removeItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY);
+    }
     const shouldShowResend = Boolean(pendingConfirmationEmail) && authFormMode === 'login';
     DOM.authResendConfirmationBtn.hidden = !shouldShowResend;
     DOM.authResendConfirmationBtn.disabled = authFormBusy || !shouldShowResend;
@@ -1545,7 +1599,7 @@ function setAuthModalMode(mode: 'login' | 'signup') {
 function resetAuthForm() {
     DOM.authForm.reset();
     DOM.authDisplayNameInput.value = '';
-    setPendingConfirmationEmail(null);
+    setPendingConfirmationEmail(pendingConfirmationEmail);
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
@@ -1560,7 +1614,6 @@ function openAuthModal(mode: 'login' | 'signup') {
 function closeAuthModal() {
     UI.closeAuthModal();
     UI.closeNotificationModal();
-    setPendingConfirmationEmail(null);
     clearAuthInlineFeedback();
     setAuthFormLoadingState(false);
 }
@@ -1742,6 +1795,7 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
     if (event === 'SIGNED_IN' && user?.email) {
+        setPendingConfirmationEmail(null);
         onUserActivityForSessionTimeout();
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
@@ -1804,6 +1858,24 @@ async function initializeAuthState() {
     subscribeToAuthState((event, session) => {
         handleAuthStateChange(event, session?.user ?? null);
     });
+}
+
+function handleAuthCallbackFeedback() {
+    const params = getAuthCallbackParams();
+    if (!params.has('error') && !params.has('error_description') && !params.has('error_code')) {
+        return;
+    }
+
+    if (!isConfirmationLinkFailure(params)) {
+        return;
+    }
+
+    const message = (params.get('error_description') || params.get('error') || '').replace(/\+/g, ' ').trim()
+        ? `O link de confirmação já não é válido ou expirou. ${pendingConfirmationEmail ? 'Pode pedir um novo envio abaixo.' : 'Volte a iniciar o registo para receber novo email.'}`
+        : 'O link de confirmação já não é válido ou expirou.';
+
+    cleanAuthCallbackUrl();
+    openAuthModalForPendingConfirmation(message);
 }
 
 function isMediaInLibrary(mediaType: MediaType, mediaId: number): boolean {
@@ -3615,6 +3687,7 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
 }
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    setPendingConfirmationEmail(window.localStorage.getItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY));
     UI.initModalAccessibility();
     document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
         scheduleLibrarySnapshotSyncFromLocalMutation();
@@ -4630,6 +4703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }) as EventListener);
 
     void (async () => {
+        handleAuthCallbackFeedback();
         await initializeAuthState();
         await initializeApp();
     })();
