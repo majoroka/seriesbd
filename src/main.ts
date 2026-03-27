@@ -4423,7 +4423,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const requiresConfirmation = !response.data.session;
                 closeAuthModal();
                 if (requiresConfirmation) {
-                    UI.showNotification('Se o email for novo, foi enviado um link de confirmação. Se já existir, use Entrar.');
+                    UI.showNotification('Enviámos um email de confirmação para o endereço indicado. Verifique também a pasta de spam/lixo. O link pode expirar ao fim de algum tempo. Se isso acontecer, poderá pedir um novo envio.');
                 } else {
                     UI.showNotification('Conta criada e sessão iniciada.');
                 }
