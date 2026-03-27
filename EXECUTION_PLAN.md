@@ -387,6 +387,14 @@ Só avançar se:
 - reviews internas de utilizadores da app
 - reviews por episódio ficam para fase posterior
 
+### Conta e onboarding
+
+- clarificar onboarding de confirmação de email com feedback visível, reenvio e branding já melhorados
+- validar mais tarde se o fluxo de confirmação precisa de refinamento adicional após uso real
+- quando uma conta nova entra com cloud vazia e o dispositivo já tem biblioteca local, substituir o push automático por decisão explícita:
+  - usar biblioteca deste dispositivo
+  - começar com biblioteca vazia
+
 ### Livros
 
 - melhorias incrementais de capas/sinopses dentro da lógica atual
