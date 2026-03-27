@@ -103,6 +103,7 @@ let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
 let mobileTopbarPanelOpen = false;
+let clearingLocalDeviceData = false;
 const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -1605,6 +1606,96 @@ function renderLibraryStateFromMemory() {
     }
     UI.updateKeyStats();
     void refreshNotificationsCenter();
+}
+
+function resetNotificationStateInMemory() {
+    notificationReadState = {};
+    notificationDismissedState = {};
+    notificationReadStateLoaded = false;
+    notificationsCenterEntries = [];
+    renderNotificationsMenu();
+}
+
+function clearSeriesDbWebStorage() {
+    const clearMatchingKeys = (storage: Storage) => {
+        const keysToRemove: string[] = [];
+        for (let index = 0; index < storage.length; index += 1) {
+            const key = storage.key(index);
+            if (!key) continue;
+            if (key.startsWith('seriesdb.')) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach((key) => storage.removeItem(key));
+    };
+
+    clearMatchingKeys(window.localStorage);
+    clearMatchingKeys(window.sessionStorage);
+}
+
+async function clearLocalDeviceData() {
+    if (clearingLocalDeviceData) return;
+
+    const confirmationMessage = currentAuthenticatedUserId
+        ? 'Isto irá terminar a sessão atual e limpar a biblioteca, notas, progresso, notificações e cache guardados neste dispositivo. Os dados sincronizados na cloud não serão apagados. Deseja continuar?'
+        : 'Isto irá limpar a biblioteca, notas, progresso, notificações e cache guardados neste dispositivo. Deseja continuar?';
+
+    const confirmed = await UI.showConfirmationModal(confirmationMessage);
+    if (!confirmed) return;
+
+    clearingLocalDeviceData = true;
+    setSettingsMenuOpen(false);
+    if (isMobileViewport()) {
+        closeMobileTopbarPanel();
+    }
+    closeProfileModal();
+
+    try {
+        if (librarySyncTimer) {
+            clearTimeout(librarySyncTimer);
+            librarySyncTimer = null;
+        }
+
+        if (isSupabaseConfigured() && currentAuthenticatedUserId) {
+            try {
+                lastSignOutReason = 'manual';
+                await signOutCurrentUser();
+            } catch (error) {
+                if (isBenignMissingRefreshTokenError(error)) {
+                    console.warn('[auth] Refresh token ausente ao limpar dados locais. A continuar com limpeza local.', error);
+                    handleAuthStateChange('SIGNED_OUT', null);
+                } else {
+                    throw error;
+                }
+            }
+        } else {
+            setAuthenticatedUi(null);
+        }
+
+        await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData, db.kvStore, db.seasonCache], async () => {
+            await db.watchlist.clear();
+            await db.archive.clear();
+            await db.watchedState.clear();
+            await db.userData.clear();
+            await db.kvStore.clear();
+            await db.seasonCache.clear();
+        });
+
+        clearSeriesDbWebStorage();
+        clearInMemoryLibraryState();
+        resetNotificationStateInMemory();
+        applySettingsMapToUi(new Map());
+        renderLibraryStateFromMemory();
+        UI.showSection('media-dashboard-section');
+        updateMainMenuActiveState('dashboard');
+        UI.showNotification('Os dados locais deste dispositivo foram removidos.');
+    } catch (error) {
+        const message = getErrorMessage(error);
+        console.error('[privacy] Erro ao limpar dados locais do dispositivo.', error);
+        UI.showNotification(`Não foi possível limpar os dados deste dispositivo: ${message}`);
+    } finally {
+        clearingLocalDeviceData = false;
+    }
 }
 
 function setAuthenticatedUi(user: User | null) {
@@ -4235,6 +4326,9 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.accountProfileBtn?.addEventListener('click', () => {
         void openProfileModal();
     });
+    DOM.clearLocalDeviceDataBtn?.addEventListener('click', () => {
+        void clearLocalDeviceData();
+    });
     DOM.authLogoutBtn?.addEventListener('click', async () => {
         setSettingsMenuOpen(false);
         if (isMobileViewport()) {
@@ -4406,6 +4500,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     DOM.profileModalCloseBtn?.addEventListener('click', closeProfileModal);
+    DOM.profileClearLocalDeviceDataBtn?.addEventListener('click', () => {
+        void clearLocalDeviceData();
+    });
     DOM.profileModal?.addEventListener('click', (event: MouseEvent) => {
         if (event.target === DOM.profileModal) closeProfileModal();
     });

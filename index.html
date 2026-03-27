@@ -140,6 +140,9 @@
                                 <li><button id="account-profile-btn" role="menuitem" hidden><i class="fas fa-user-gear"></i> Perfil</button></li>
                                 <li><button id="auth-logout-btn" role="menuitem" hidden><i class="fas fa-right-from-bracket"></i> Terminar sessão</button></li>
                                 <li class="separator"></li>
+                                <li><button id="clear-local-device-data-btn" role="menuitem" class="danger-action"><i class="fas fa-broom"></i> Limpar dados deste dispositivo</button></li>
+                                <li class="account-menu-note"><p>Terminar sessão não apaga a biblioteca local deste dispositivo.</p></li>
+                                <li class="separator"></li>
                                 <li><button id="theme-toggle-btn" role="menuitem"><i class="fas fa-sun"></i> Mudar para tema claro</button></li>
                                 <li><button id="export-data-btn" role="menuitem"><i class="fas fa-file-export"></i> Exportar Media</button></li>
                                 <li><button id="import-data-btn" role="menuitem"><i class="fas fa-file-import"></i> Importar Media</button></li>
@@ -639,6 +642,10 @@
                 </div>
                 <button id="profile-submit-btn" type="submit" class="search-bar-button">Guardar perfil</button>
             </form>
+            <div class="profile-device-privacy">
+                <p class="profile-device-privacy-note">Terminar sessão não apaga a biblioteca guardada neste dispositivo. Use a limpeza local se quiser remover biblioteca, notas, progresso e cache deste browser.</p>
+                <button id="profile-clear-local-device-data-btn" type="button" class="search-bar-button secondary danger-outline">Limpar dados deste dispositivo</button>
+            </div>
         </div>
     </div>
 
