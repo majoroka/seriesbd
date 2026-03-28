@@ -1555,6 +1555,12 @@ function setProfileInlineFeedback(message: string, mode: 'error' | 'info' = 'err
 
 function updateAuthActionButtons(user: User | null) {
     const hasSession = Boolean(user);
+    document.querySelectorAll<HTMLElement>('.account-menu-guest-only').forEach((item) => {
+        item.hidden = hasSession;
+    });
+    document.querySelectorAll<HTMLElement>('.account-menu-session-only').forEach((item) => {
+        item.hidden = !hasSession;
+    });
     DOM.authLoginBtn.hidden = hasSession;
     DOM.authSignupBtn.hidden = hasSession;
     DOM.accountProfileBtn.hidden = !hasSession;
