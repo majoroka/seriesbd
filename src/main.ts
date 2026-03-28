@@ -39,6 +39,7 @@ import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
+const GUEST_ADD_WARNING_SHOWN_STORAGE_KEY = 'seriesdb.guestAddWarningShown.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
 type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
 type FailureMetric = {
@@ -2000,9 +2001,24 @@ async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promis
     UI.updateKeyStats();
 }
 
-async function addMediaToWatchlist(media: Series | TMDbSeriesDetails) {
+function showGuestAddWarningIfNeeded(): void {
+    if (currentAuthenticatedUserId) return;
+    if (window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) === '1') return;
+    window.sessionStorage.setItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY, '1');
+    UI.showNotification('Está sem sessão iniciada. Os dados podem ficar apenas neste dispositivo. Para guardar e sincronizar a sua biblioteca, notas e progresso com segurança, crie conta ou entre.');
+}
+
+async function addMediaToWatchlist(
+    media: Series | TMDbSeriesDetails,
+    options: { showGuestWarning?: boolean } = {}
+) {
+    const { showGuestWarning = true } = options;
     const normalizedMedia = normalizeSeriesCollection([media])[0];
     if (!normalizedMedia) return;
+
+    if (showGuestWarning) {
+        showGuestAddWarningIfNeeded();
+    }
 
     const mediaType = normalizedMedia.media_type || 'series';
     const isInLibrary = isMediaInLibrary(mediaType, normalizedMedia.id);
@@ -2609,7 +2625,7 @@ async function ensureSeriesInLibraryForEpisodeProgress(seriesId: number): Promis
             ? currentDetailedSeriesData
             : await API.fetchSeriesDetails(seriesId, null);
 
-    await addMediaToWatchlist(detailSeries);
+    await addMediaToWatchlist(detailSeries, { showGuestWarning: false });
     return true;
 }
 
