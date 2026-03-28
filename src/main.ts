@@ -1559,15 +1559,36 @@ function updateAuthActionButtons(user: User | null) {
     DOM.authSignupBtn.hidden = hasSession;
     DOM.accountProfileBtn.hidden = !hasSession;
     DOM.authLogoutBtn.hidden = !hasSession;
+    DOM.clearLocalDeviceDataBtn.hidden = !hasSession;
+    DOM.accountMenuNote.hidden = !hasSession;
+    DOM.exportDataBtn.hidden = !hasSession;
+    DOM.importDataBtn.hidden = !hasSession;
+    DOM.rescanSeriesBtn.hidden = !hasSession;
+    DOM.refetchDataBtn.hidden = !hasSession;
     DOM.exportDataBtn.disabled = !hasSession;
     DOM.importDataBtn.disabled = !hasSession;
+    DOM.rescanSeriesBtn.disabled = !hasSession;
+    DOM.refetchDataBtn.disabled = !hasSession;
+    DOM.clearLocalDeviceDataBtn.disabled = !hasSession;
     DOM.exportDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.importDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.rescanSeriesBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.refetchDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.clearLocalDeviceDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.exportDataBtn.title = hasSession
         ? 'Exportar media'
         : 'Disponível apenas com sessão ativa.';
     DOM.importDataBtn.title = hasSession
         ? 'Importar media'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.rescanSeriesBtn.title = hasSession
+        ? 'Procurar atualizações'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.refetchDataBtn.title = hasSession
+        ? 'Recarregar metadados'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.clearLocalDeviceDataBtn.title = hasSession
+        ? 'Limpar dados deste dispositivo'
         : 'Disponível apenas com sessão ativa.';
 }
 
