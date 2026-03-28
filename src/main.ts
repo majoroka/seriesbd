@@ -91,6 +91,7 @@ let authFormBusy = false;
 let pendingConfirmationEmail: string | null = null;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
+let currentDetailedSeriesData: TMDbSeriesDetails | null = null;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
 let selectedSearchMediaType: MediaType = 'series';
@@ -107,6 +108,7 @@ let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
 let mobileTopbarPanelOpen = false;
 let clearingLocalDeviceData = false;
+let settingsMenuHoverCloseTimer: number | null = null;
 const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -122,6 +124,7 @@ const NEXT_AIRED_BATCH_SIZE = 2;
 const NEXT_AIRED_BATCH_DELAY_MS = 1500;
 const NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const MOBILE_TOPBAR_BREAKPOINT_PX = 768;
+const SETTINGS_MENU_HOVER_CLOSE_DELAY_MS = 180;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -661,6 +664,10 @@ function toggleNotificationsMenu(): void {
 }
 
 function setSettingsMenuOpen(isOpen: boolean): void {
+    if (!isOpen && settingsMenuHoverCloseTimer) {
+        window.clearTimeout(settingsMenuHoverCloseTimer);
+        settingsMenuHoverCloseTimer = null;
+    }
     if (DOM.settingsMenu) {
         DOM.settingsMenu.classList.toggle('visible', isOpen);
         DOM.settingsMenu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -668,6 +675,20 @@ function setSettingsMenuOpen(isOpen: boolean): void {
     if (DOM.settingsBtn) {
         DOM.settingsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     }
+}
+
+function cancelSettingsMenuHoverClose(): void {
+    if (!settingsMenuHoverCloseTimer) return;
+    window.clearTimeout(settingsMenuHoverCloseTimer);
+    settingsMenuHoverCloseTimer = null;
+}
+
+function scheduleSettingsMenuHoverClose(): void {
+    if (isMobileViewport() || !DOM.settingsMenu?.classList.contains('visible')) return;
+    cancelSettingsMenuHoverClose();
+    settingsMenuHoverCloseTimer = window.setTimeout(() => {
+        setSettingsMenuOpen(false);
+    }, SETTINGS_MENU_HOVER_CLOSE_DELAY_MS);
 }
 
 function isMobileViewport(): boolean {
@@ -1535,19 +1556,46 @@ function setProfileInlineFeedback(message: string, mode: 'error' | 'info' = 'err
 
 function updateAuthActionButtons(user: User | null) {
     const hasSession = Boolean(user);
+    document.querySelectorAll<HTMLElement>('.account-menu-guest-only').forEach((item) => {
+        item.hidden = hasSession;
+    });
+    document.querySelectorAll<HTMLElement>('.account-menu-session-only').forEach((item) => {
+        item.hidden = !hasSession;
+    });
     DOM.authLoginBtn.hidden = hasSession;
     DOM.authSignupBtn.hidden = hasSession;
     DOM.accountProfileBtn.hidden = !hasSession;
     DOM.authLogoutBtn.hidden = !hasSession;
+    DOM.clearLocalDeviceDataBtn.hidden = !hasSession;
+    DOM.accountMenuNote.hidden = !hasSession;
+    DOM.exportDataBtn.hidden = !hasSession;
+    DOM.importDataBtn.hidden = !hasSession;
+    DOM.rescanSeriesBtn.hidden = !hasSession;
+    DOM.refetchDataBtn.hidden = !hasSession;
     DOM.exportDataBtn.disabled = !hasSession;
     DOM.importDataBtn.disabled = !hasSession;
+    DOM.rescanSeriesBtn.disabled = !hasSession;
+    DOM.refetchDataBtn.disabled = !hasSession;
+    DOM.clearLocalDeviceDataBtn.disabled = !hasSession;
     DOM.exportDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.importDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.rescanSeriesBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.refetchDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.clearLocalDeviceDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.exportDataBtn.title = hasSession
         ? 'Exportar media'
         : 'Disponível apenas com sessão ativa.';
     DOM.importDataBtn.title = hasSession
         ? 'Importar media'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.rescanSeriesBtn.title = hasSession
+        ? 'Procurar atualizações'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.refetchDataBtn.title = hasSession
+        ? 'Recarregar metadados'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.clearLocalDeviceDataBtn.title = hasSession
+        ? 'Limpar dados deste dispositivo'
         : 'Disponível apenas com sessão ativa.';
 }
 
@@ -2240,6 +2288,7 @@ function navigateBackFromSeriesDetails() {
 
 async function displaySeriesDetails(seriesId: number) {
     S.resetDetailViewAbortController();
+    currentDetailedSeriesData = null;
     const signal = S.detailViewAbortController.signal;
 
     try {
@@ -2379,6 +2428,7 @@ async function displaySeriesDetails(seriesId: number) {
             seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
         });
 
+        currentDetailedSeriesData = seriesData;
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
 
         await setupDetailViewActions(seriesData);
@@ -2549,6 +2599,20 @@ async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonEl
     UI.markButtonAsAdded(button, 'Visto');
 }
 
+async function ensureSeriesInLibraryForEpisodeProgress(seriesId: number): Promise<boolean> {
+    if (isMediaInLibrary('series', seriesId)) {
+        return false;
+    }
+
+    const detailSeries =
+        currentDetailedSeriesData && currentDetailedSeriesData.id === seriesId
+            ? currentDetailedSeriesData
+            : await API.fetchSeriesDetails(seriesId, null);
+
+    await addMediaToWatchlist(detailSeries);
+    return true;
+}
+
 /**
  * Lida com a ação de marcar um episódio como visto.
  * @param seriesId - ID da série.
@@ -2572,6 +2636,7 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
         }
     }
 
+    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
     const isFirstWatched = watchedSet.size === 0;
     await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
 
@@ -2593,6 +2658,13 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
     if (movedToArchive) {
         await setAllSeriesStatusFilterPreference('archive');
         UI.updateActiveNavLink('all-series-section');
+        if (autoAddedToLibrary) {
+            const series = S.getSeries(seriesId);
+            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+        }
+    } else if (autoAddedToLibrary) {
+        const series = S.getSeries(seriesId);
+        UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
     }
 }
 
@@ -4152,6 +4224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const allEpisodeIds = allEpisodes.map(ep => ep.id);
 
                 if (allEpisodeIds.length > 0) {
+                    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, allEpisodeIds);
 
                     document.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
@@ -4168,7 +4241,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         await setAllSeriesStatusFilterPreference('archive');
                         UI.updateActiveNavLink('all-series-section');
                     }
-                    UI.showNotification('Todos os episódios foram marcados como vistos.');
+                    if (autoAddedToLibrary) {
+                        const series = S.getSeries(seriesId);
+                        UI.showNotification(
+                            movedToArchive
+                                ? `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em Concluídas.`
+                                : `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em A Ver.`
+                        );
+                    } else {
+                        UI.showNotification('Todos os episódios foram marcados como vistos.');
+                    }
                 } else {
                     UI.showNotification('Não foram encontrados episódios para marcar.');
                 }
@@ -4214,6 +4296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.updateActiveNavLink('unseen-section');
                     }
                 } else { // A marcar
+                    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, seasonEpisodeIds);
                     seasonDetailsElement.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
 
@@ -4221,9 +4304,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (movedToArchive) {
                         await setAllSeriesStatusFilterPreference('archive');
                         UI.updateActiveNavLink('all-series-section');
+                        if (autoAddedToLibrary) {
+                            const series = S.getSeries(seriesId);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+                        }
                     } else {
                         UI.renderWatchlist();
                         UI.renderUnseen();
+                        if (autoAddedToLibrary) {
+                            const series = S.getSeries(seriesId);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
+                        }
                     }
                 }
 
@@ -4363,9 +4454,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.settingsBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
+        cancelSettingsMenuHoverClose();
         closeNotificationsMenu();
         const shouldOpen = !DOM.settingsMenu?.classList.contains('visible');
         setSettingsMenuOpen(shouldOpen);
+    });
+    DOM.accountMenuWrapper?.addEventListener('mouseenter', () => {
+        cancelSettingsMenuHoverClose();
+    });
+    DOM.accountMenuWrapper?.addEventListener('mouseleave', () => {
+        scheduleSettingsMenuHoverClose();
     });
     document.addEventListener('click', (e: MouseEvent) => {
         const target = e.target as Node;

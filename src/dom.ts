@@ -92,6 +92,7 @@ export const authSignupBtn = document.getElementById('auth-signup-btn') as HTMLB
 export const accountProfileBtn = document.getElementById('account-profile-btn') as HTMLButtonElement;
 export const authLogoutBtn = document.getElementById('auth-logout-btn') as HTMLButtonElement;
 export const clearLocalDeviceDataBtn = document.getElementById('clear-local-device-data-btn') as HTMLButtonElement;
+export const accountMenuNote = document.querySelector('.account-menu-note') as HTMLLIElement;
 export const authModal = document.getElementById('auth-modal') as HTMLDivElement;
 export const authModalCloseBtn = document.getElementById('auth-modal-close-btn') as HTMLButtonElement;
 export const authModalTitle = document.getElementById('auth-modal-title') as HTMLHeadingElement;

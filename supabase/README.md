@@ -2,6 +2,10 @@
 
 Este diretório guarda as migrations SQL do projeto.
 
+Documentação complementar:
+
+- `supabase/AUTH_EMAIL_SETUP.md` para SMTP custom, branding e template do email de confirmação
+
 ## 1) Criar projeto
 
 No painel Supabase:
