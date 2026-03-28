@@ -91,6 +91,7 @@ let authFormBusy = false;
 let pendingConfirmationEmail: string | null = null;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
+let currentDetailedSeriesData: TMDbSeriesDetails | null = null;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
 let selectedSearchMediaType: MediaType = 'series';
@@ -2287,6 +2288,7 @@ function navigateBackFromSeriesDetails() {
 
 async function displaySeriesDetails(seriesId: number) {
     S.resetDetailViewAbortController();
+    currentDetailedSeriesData = null;
     const signal = S.detailViewAbortController.signal;
 
     try {
@@ -2426,6 +2428,7 @@ async function displaySeriesDetails(seriesId: number) {
             seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
         });
 
+        currentDetailedSeriesData = seriesData;
         UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
 
         await setupDetailViewActions(seriesData);
@@ -2596,6 +2599,20 @@ async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonEl
     UI.markButtonAsAdded(button, 'Visto');
 }
 
+async function ensureSeriesInLibraryForEpisodeProgress(seriesId: number): Promise<boolean> {
+    if (isMediaInLibrary('series', seriesId)) {
+        return false;
+    }
+
+    const detailSeries =
+        currentDetailedSeriesData && currentDetailedSeriesData.id === seriesId
+            ? currentDetailedSeriesData
+            : await API.fetchSeriesDetails(seriesId, null);
+
+    await addMediaToWatchlist(detailSeries);
+    return true;
+}
+
 /**
  * Lida com a ação de marcar um episódio como visto.
  * @param seriesId - ID da série.
@@ -2619,6 +2636,7 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
         }
     }
 
+    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
     const isFirstWatched = watchedSet.size === 0;
     await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
 
@@ -2640,6 +2658,13 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
     if (movedToArchive) {
         await setAllSeriesStatusFilterPreference('archive');
         UI.updateActiveNavLink('all-series-section');
+        if (autoAddedToLibrary) {
+            const series = S.getSeries(seriesId);
+            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+        }
+    } else if (autoAddedToLibrary) {
+        const series = S.getSeries(seriesId);
+        UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
     }
 }
 
@@ -4199,6 +4224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const allEpisodeIds = allEpisodes.map(ep => ep.id);
 
                 if (allEpisodeIds.length > 0) {
+                    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, allEpisodeIds);
 
                     document.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
@@ -4215,7 +4241,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         await setAllSeriesStatusFilterPreference('archive');
                         UI.updateActiveNavLink('all-series-section');
                     }
-                    UI.showNotification('Todos os episódios foram marcados como vistos.');
+                    if (autoAddedToLibrary) {
+                        const series = S.getSeries(seriesId);
+                        UI.showNotification(
+                            movedToArchive
+                                ? `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em Concluídas.`
+                                : `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em A Ver.`
+                        );
+                    } else {
+                        UI.showNotification('Todos os episódios foram marcados como vistos.');
+                    }
                 } else {
                     UI.showNotification('Não foram encontrados episódios para marcar.');
                 }
@@ -4261,6 +4296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.updateActiveNavLink('unseen-section');
                     }
                 } else { // A marcar
+                    const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, seasonEpisodeIds);
                     seasonDetailsElement.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
 
@@ -4268,9 +4304,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (movedToArchive) {
                         await setAllSeriesStatusFilterPreference('archive');
                         UI.updateActiveNavLink('all-series-section');
+                        if (autoAddedToLibrary) {
+                            const series = S.getSeries(seriesId);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+                        }
                     } else {
                         UI.renderWatchlist();
                         UI.renderUnseen();
+                        if (autoAddedToLibrary) {
+                            const series = S.getSeries(seriesId);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
+                        }
                     }
                 }
 
