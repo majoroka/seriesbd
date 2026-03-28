@@ -107,6 +107,7 @@ let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
 let mobileTopbarPanelOpen = false;
 let clearingLocalDeviceData = false;
+let settingsMenuHoverCloseTimer: number | null = null;
 const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -122,6 +123,7 @@ const NEXT_AIRED_BATCH_SIZE = 2;
 const NEXT_AIRED_BATCH_DELAY_MS = 1500;
 const NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const MOBILE_TOPBAR_BREAKPOINT_PX = 768;
+const SETTINGS_MENU_HOVER_CLOSE_DELAY_MS = 180;
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -661,6 +663,10 @@ function toggleNotificationsMenu(): void {
 }
 
 function setSettingsMenuOpen(isOpen: boolean): void {
+    if (!isOpen && settingsMenuHoverCloseTimer) {
+        window.clearTimeout(settingsMenuHoverCloseTimer);
+        settingsMenuHoverCloseTimer = null;
+    }
     if (DOM.settingsMenu) {
         DOM.settingsMenu.classList.toggle('visible', isOpen);
         DOM.settingsMenu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -668,6 +674,20 @@ function setSettingsMenuOpen(isOpen: boolean): void {
     if (DOM.settingsBtn) {
         DOM.settingsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     }
+}
+
+function cancelSettingsMenuHoverClose(): void {
+    if (!settingsMenuHoverCloseTimer) return;
+    window.clearTimeout(settingsMenuHoverCloseTimer);
+    settingsMenuHoverCloseTimer = null;
+}
+
+function scheduleSettingsMenuHoverClose(): void {
+    if (isMobileViewport() || !DOM.settingsMenu?.classList.contains('visible')) return;
+    cancelSettingsMenuHoverClose();
+    settingsMenuHoverCloseTimer = window.setTimeout(() => {
+        setSettingsMenuOpen(false);
+    }, SETTINGS_MENU_HOVER_CLOSE_DELAY_MS);
 }
 
 function isMobileViewport(): boolean {
@@ -4363,9 +4383,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.settingsBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
+        cancelSettingsMenuHoverClose();
         closeNotificationsMenu();
         const shouldOpen = !DOM.settingsMenu?.classList.contains('visible');
         setSettingsMenuOpen(shouldOpen);
+    });
+    DOM.accountMenuWrapper?.addEventListener('mouseenter', () => {
+        cancelSettingsMenuHoverClose();
+    });
+    DOM.accountMenuWrapper?.addEventListener('mouseleave', () => {
+        scheduleSettingsMenuHoverClose();
     });
     document.addEventListener('click', (e: MouseEvent) => {
         const target = e.target as Node;
