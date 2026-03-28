@@ -2001,11 +2001,16 @@ async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promis
     UI.updateKeyStats();
 }
 
-function showGuestAddWarningIfNeeded(): void {
-    if (currentAuthenticatedUserId) return;
-    if (window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) === '1') return;
+function getGuestAddWarningMessage(): string {
+    return 'Está sem sessão iniciada. Os dados podem ficar apenas neste dispositivo. Para guardar e sincronizar a sua biblioteca, notas e progresso com segurança, crie conta ou entre.';
+}
+
+function showGuestAddWarningIfNeeded(): boolean {
+    if (currentAuthenticatedUserId) return false;
+    if (window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) === '1') return false;
     window.sessionStorage.setItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY, '1');
-    UI.showNotification('Está sem sessão iniciada. Os dados podem ficar apenas neste dispositivo. Para guardar e sincronizar a sua biblioteca, notas e progresso com segurança, crie conta ou entre.');
+    UI.showNotification(getGuestAddWarningMessage());
+    return true;
 }
 
 async function addMediaToWatchlist(
@@ -2577,8 +2582,13 @@ async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
 async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
-        await addMediaToWatchlist(seriesData);
-        UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
+        const shouldWarnGuest = !currentAuthenticatedUserId && window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) !== '1';
+        await addMediaToWatchlist(seriesData, { showGuestWarning: !shouldWarnGuest });
+        UI.showNotification(
+            shouldWarnGuest
+                ? `"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'. ${getGuestAddWarningMessage()}`
+                : `"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`
+        );
         await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
     } catch (error) {
         console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
@@ -2590,8 +2600,16 @@ async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButton
 async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
+        const shouldWarnGuest = !currentAuthenticatedUserId && window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) !== '1';
         await addAndMarkAllAsSeen(seriesData);
-        UI.showNotification(`"${seriesData.name}" foi adicionada e marcada como vista.`);
+        if (shouldWarnGuest) {
+            window.sessionStorage.setItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY, '1');
+        }
+        UI.showNotification(
+            shouldWarnGuest
+                ? `"${seriesData.name}" foi adicionada e marcada como vista. ${getGuestAddWarningMessage()}`
+                : `"${seriesData.name}" foi adicionada e marcada como vista.`
+        );
         await displaySeriesDetails(seriesData.id);
     } catch (error) {
         console.error("Erro ao adicionar e marcar série como vista:", error);
@@ -4064,8 +4082,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 UI.showNotification('Não foi possível localizar o conteúdo para adicionar.');
                 return;
             }
-            await addMediaToWatchlist(media);
-            UI.showNotification(`"${media.name}" foi adicionado à biblioteca.`);
+            const shouldWarnGuest = !currentAuthenticatedUserId && window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) !== '1';
+            await addMediaToWatchlist(media, { showGuestWarning: !shouldWarnGuest });
+            UI.showNotification(
+                shouldWarnGuest
+                    ? `"${media.name}" foi adicionado à biblioteca. ${getGuestAddWarningMessage()}`
+                    : `"${media.name}" foi adicionado à biblioteca.`
+            );
             await refreshLibraryViewsAfterMediaChange(mediaType);
             await displayMediaDetails(mediaType, mediaId);
             return;
