@@ -2364,136 +2364,153 @@ async function displaySeriesDetails(seriesId: number) {
             () => API.fetchSeriesDetails(seriesId, signal),
             { seriesId }
         );
-        const creditsData = await runObservedSection(
-            'series-details',
-            `/api/tmdb/tv/${seriesId}/aggregate_credits`,
-            () => API.fetchSeriesCredits(seriesId, signal),
-            { seriesId, optional: 'credits' }
-        ).catch((error) => {
-            if (error instanceof Error && error.name === 'AbortError') throw error;
-            console.warn('Falha ao carregar créditos da série. A vista de detalhes continuará sem elenco.', error);
-            return { cast: [] };
-        });
+        currentDetailedSeriesData = seriesData;
+        S.setDetailViewData({ allEpisodes: [], episodeMap: {}, seasons: [] });
+        UI.renderSeriesDetails(seriesData, [], { cast: [] }, null, null, null, []);
+        await setupDetailViewActions(seriesData);
+
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
         const fallbackOriginalTitle = seriesData.original_name && seriesData.original_name !== seriesData.name
             ? seriesData.original_name
             : undefined;
-        const traktSeriesData = await API.fetchTraktData(
-            seriesId,
-            signal,
-            seriesData.name,
-            fallbackYear,
-            fallbackOriginalTitle,
-            seriesData.external_ids?.imdb_id
-        );
-        if (traktSeriesData?.traktId) {
-            console.info('[match][details] Trakt match resolvido.', {
-                seriesId,
-                traktId: traktSeriesData.traktId,
-            });
-        } else {
-            console.warn('[match][details] Trakt sem match confiável. Seguir com fontes restantes.', {
-                seriesId,
-                imdbId: seriesData.external_ids?.imdb_id || null,
-                year: fallbackYear ?? null,
-            });
-        }
-        const aggregatedMetadataPromise = runObservedSection(
-            'series-details',
-            `/api/aggregate/series/${seriesId}`,
-            () => API.fetchAggregatedSeriesMetadata({
-                seriesId,
-                signal,
-                tmdbOverviewPt: seriesData.overview,
-                traktData: traktSeriesData,
-                fallbackTitle: seriesData.name,
-                fallbackYear,
-                fallbackImdbId: seriesData.external_ids?.imdb_id,
-            }),
-            { seriesId, phase: 'aggregation' }
-        ).catch((error) => {
-            if (error instanceof Error && error.name === 'AbortError') throw error;
-            console.warn('Falha na agregação de metadados (P3-02). A continuar com dados base.', error);
-            return null;
-        });
 
-        // Fallback para trailer: se Trakt falhar e TMDb(pt-PT) não tiver vídeos,
-        // tenta vídeos TMDb em en-US para recuperar o botão "Ver Trailer".
-        const hasYouTubeVideo = Array.isArray(seriesData.videos?.results)
-            && seriesData.videos.results.some(video => video.site === 'YouTube');
-        if (!traktSeriesData?.trailerKey && !hasYouTubeVideo) {
+        void (async () => {
             try {
-                const fallbackVideos = await runObservedSection(
-                    'series-details',
-                    `/api/tmdb/tv/${seriesId}/videos?language=en-US`,
-                    () => API.fetchSeriesVideos(seriesId, signal, 'en-US'),
-                    { seriesId, fallbackLanguage: 'en-US' }
-                );
-                if (Array.isArray(fallbackVideos?.results) && fallbackVideos.results.length > 0) {
-                    const currentVideos = seriesData.videos?.results || [];
-                    const mergedVideos = [...currentVideos, ...fallbackVideos.results].filter((video, index, arr) =>
-                        arr.findIndex(v => v.key === video.key) === index
-                    );
-                    seriesData.videos = { results: mergedVideos };
+                const creditsPromise = API.fetchSeriesCredits(seriesId, signal).catch((error) => {
+                    if (error instanceof Error && error.name === 'AbortError') throw error;
+                    console.warn('Falha ao carregar créditos da série. A vista de detalhes continuará sem elenco.', error);
+                    return { cast: [] };
+                });
+
+                const traktPromise = API.fetchTraktData(
+                    seriesId,
+                    signal,
+                    seriesData.name,
+                    fallbackYear,
+                    fallbackOriginalTitle,
+                    seriesData.external_ids?.imdb_id
+                ).catch((error) => {
+                    if (error instanceof Error && error.name === 'AbortError') throw error;
+                    console.warn('Falha ao carregar dados Trakt da série.', error);
+                    return null;
+                });
+
+                const creditsData = await creditsPromise;
+                if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
+                UI.renderSeriesDetails(seriesData, [], creditsData, null, null, null, []);
+                await setupDetailViewActions(seriesData);
+
+                const traktSeriesData = await traktPromise;
+                if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
+
+                if (traktSeriesData?.traktId) {
+                    console.info('[match][details] Trakt match resolvido.', {
+                        seriesId,
+                        traktId: traktSeriesData.traktId,
+                    });
+                } else {
+                    console.warn('[match][details] Trakt sem match confiável. Seguir com fontes restantes.', {
+                        seriesId,
+                        imdbId: seriesData.external_ids?.imdb_id || null,
+                        year: fallbackYear ?? null,
+                    });
                 }
+
+                const hasYouTubeVideo = Array.isArray(seriesData.videos?.results)
+                    && seriesData.videos.results.some(video => video.site === 'YouTube');
+                if (!traktSeriesData?.trailerKey && !hasYouTubeVideo) {
+                    try {
+                        const fallbackVideos = await API.fetchSeriesVideos(seriesId, signal, 'en-US');
+                        if (Array.isArray(fallbackVideos?.results) && fallbackVideos.results.length > 0) {
+                            const currentVideos = seriesData.videos?.results || [];
+                            const mergedVideos = [...currentVideos, ...fallbackVideos.results].filter((video, index, arr) =>
+                                arr.findIndex(v => v.key === video.key) === index
+                            );
+                            seriesData.videos = { results: mergedVideos };
+                        }
+                    } catch (error) {
+                        if (!(error instanceof Error && error.name === 'AbortError')) {
+                            console.warn('Falha ao carregar fallback de vídeos TMDb (en-US):', error);
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
+
+                const traktId = traktSeriesData?.traktId as number | undefined;
+                const aggregatedMetadataPromise = API.fetchAggregatedSeriesMetadata({
+                    seriesId,
+                    signal,
+                    tmdbOverviewPt: seriesData.overview,
+                    traktData: traktSeriesData,
+                    fallbackTitle: seriesData.name,
+                    fallbackYear,
+                    fallbackImdbId: seriesData.external_ids?.imdb_id,
+                }).catch((error) => {
+                    if (error instanceof Error && error.name === 'AbortError') throw error;
+                    console.warn('Falha na agregação de metadados (P3-02). A continuar com dados base.', error);
+                    return null;
+                });
+                const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
+                const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
+                const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
+                const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
+                    if (error instanceof Error && error.name === 'AbortError') throw error;
+                    console.warn('Falha ao carregar reviews externas da série.', error);
+                    return [];
+                });
+
+                const [seasonResults, traktSeasonsData, aggregatedSeriesData, externalReviews] = await Promise.all([
+                    Promise.allSettled(seasonPromises),
+                    traktSeasonPromise,
+                    aggregatedMetadataPromise,
+                    externalReviewsPromise,
+                ]);
+                if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
+
+                if (aggregatedSeriesData?.tvmazeData?.show?.id) {
+                    console.info('[match][details] TVMaze match resolvido.', {
+                        seriesId,
+                        tvmazeId: aggregatedSeriesData.tvmazeData.show.id,
+                        method: aggregatedSeriesData.tvmazeData.match?.method,
+                        score: aggregatedSeriesData.tvmazeData.match?.score,
+                    });
+                } else {
+                    console.warn('[match][details] TVMaze sem match confiável.', { seriesId });
+                }
+
+                const allTMDbSeasonsData = seasonResults
+                    .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
+                    .map(res => res.value);
+
+                const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
+                const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
+                    id: ep.id,
+                    season_number: ep.season_number,
+                    episode_number: ep.episode_number,
+                }));
+
+                const episodeToSeasonMap: { [key: number]: number } = {};
+                allTMDbSeasonsData.forEach(season => {
+                    season.episodes.forEach((episode: Episode) => {
+                        episodeToSeasonMap[episode.id] = season.season_number!;
+                    });
+                });
+
+                const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
+                S.setDetailViewData({
+                    allEpisodes: allEpisodesMeta,
+                    episodeMap: episodeToSeasonMap,
+                    seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
+                });
+
+                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
+                await setupDetailViewActions(seriesData);
             } catch (error) {
-                console.warn('Falha ao carregar fallback de vídeos TMDb (en-US):', error);
+                if (error instanceof Error && error.name === 'AbortError') return;
+                console.warn('Falha ao enriquecer progressivamente o detalhe da série.', error);
             }
-        }
-
-        const traktId = traktSeriesData?.traktId as number | undefined;
-        const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
-        const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
-        const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
-        const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
-            if (error instanceof Error && error.name === 'AbortError') throw error;
-            console.warn('Falha ao carregar reviews externas da série.', error);
-            return [];
-        });
-
-        const [seasonResults, traktSeasonsData, aggregatedSeriesData, externalReviews] = await Promise.all([
-            Promise.allSettled(seasonPromises),
-            traktSeasonPromise,
-            aggregatedMetadataPromise,
-            externalReviewsPromise,
-        ]);
-        if (aggregatedSeriesData?.tvmazeData?.show?.id) {
-            console.info('[match][details] TVMaze match resolvido.', {
-                seriesId,
-                tvmazeId: aggregatedSeriesData.tvmazeData.show.id,
-                method: aggregatedSeriesData.tvmazeData.match?.method,
-                score: aggregatedSeriesData.tvmazeData.match?.score,
-            });
-        } else {
-            console.warn('[match][details] TVMaze sem match confiável.', { seriesId });
-        }
-        const allTMDbSeasonsData = seasonResults.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled').map(res => res.value);
-
-        const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
-        const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
-            id: ep.id,
-            season_number: ep.season_number,
-            episode_number: ep.episode_number,
-        }));
-
-        const episodeToSeasonMap: { [key: number]: number } = {};
-        allTMDbSeasonsData.forEach(season => {
-            season.episodes.forEach((episode: Episode) => {
-                episodeToSeasonMap[episode.id] = season.season_number!;
-            });
-        });
-
-        const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
-        S.setDetailViewData({
-            allEpisodes: allEpisodesMeta,
-            episodeMap: episodeToSeasonMap,
-            seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
-        });
-
-        currentDetailedSeriesData = seriesData;
-        UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
-
-        await setupDetailViewActions(seriesData);
+        })();
 
     } catch (error) {
         const typedError = error as Error;
