@@ -439,6 +439,18 @@ Só avançar se:
   - usar biblioteca deste dispositivo
   - começar com biblioteca vazia
 
+### Internacionalização
+
+- plano futuro documentado em [I18N_ROADMAP.md](./I18N_ROADMAP.md)
+- ordem recomendada para implementação:
+  - `I1` UI bilingue `pt/en`
+  - `I2` providers locale-aware
+  - `I3` fallback ao idioma original
+  - `I4` tradução automática apenas de sinopses, com cache
+- decisão atual:
+  - não iniciar pela tradução automática
+  - lançar primeiro a infraestrutura i18n e o consumo locale-aware de metadados externos
+
 ### Livros
 
 - melhorias incrementais de capas/sinopses dentro da lógica atual
