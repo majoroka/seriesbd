@@ -18,6 +18,7 @@ const ALLOWED_IMAGE_HOST_PATTERNS = [
   /(^|\.)image\.tmdb\.org$/i,
   /(^|\.)trakt\.tv$/i,
   /^covers\.openlibrary\.org$/i,
+  /(^|\.)archive\.org$/i,
   /^books\.google\.[a-z.]+$/i,
   /^books\.googleusercontent\.com$/i,
   /(^|\.)googleusercontent\.com$/i,
