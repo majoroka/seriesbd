@@ -2004,6 +2004,22 @@ function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
         || S.dashboardSuggestedMedia.find((item) => item.media_type === mediaType && item.id === mediaId);
 }
 
+function updateCurrentSearchResultMedia(media: Series): void {
+    const hasMatch = S.currentSearchResults.some((item) => item.media_type === media.media_type && item.id === media.id);
+    if (!hasMatch) return;
+    const nextResults = S.currentSearchResults.map((item) => {
+        if (item.media_type !== media.media_type || item.id !== media.id) return item;
+        return {
+            ...item,
+            ...media,
+            id: item.id,
+            media_type: item.media_type,
+        };
+    });
+    S.setCurrentSearchResults(nextResults);
+    UI.renderSearchResults(nextResults);
+}
+
 async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promise<void> {
     if (mediaType === 'series') {
         await updateNextAired();
@@ -2572,7 +2588,34 @@ async function displayBookDetails(media: Series): Promise<void> {
         { mediaType: 'book', mediaId: media.id }
     );
 
+    updateCurrentSearchResultMedia(bookDetails);
+
     const isInLibrary = isMediaInLibrary('book', bookDetails.id);
+    if (isInLibrary) {
+        const storedBook = S.getMediaItem('book', bookDetails.id);
+        const mergedBook = storedBook
+            ? {
+                ...storedBook,
+                ...bookDetails,
+                id: storedBook.id,
+                media_type: 'book' as const,
+            }
+            : bookDetails;
+        const storedPoster = String(storedBook?.poster_path || '').trim();
+        const freshPoster = String(bookDetails.poster_path || '').trim();
+        const storedOverview = String(storedBook?.overview || '').trim();
+        const freshOverview = String(bookDetails.overview || '').trim();
+        const storedAuthor = String(storedBook?.author || '').trim();
+        const freshAuthor = String(bookDetails.author || '').trim();
+        const shouldPersistBookRefresh = !storedBook
+            || freshPoster !== storedPoster
+            || (freshOverview.length > storedOverview.length && freshOverview !== storedOverview)
+            || freshAuthor !== storedAuthor;
+        if (shouldPersistBookRefresh) {
+            await S.updateSeries(mergedBook);
+        }
+    }
+
     const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
     const progressPercent = getMediaProgressPercent('book', bookDetails.id);
     UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived }, []);
