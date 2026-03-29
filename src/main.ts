@@ -39,6 +39,7 @@ import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
+const GUEST_ADD_WARNING_SHOWN_STORAGE_KEY = 'seriesdb.guestAddWarningShown.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
 type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
 type FailureMetric = {
@@ -106,6 +107,7 @@ let notificationReadStateLoaded = false;
 let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
+let notificationsMenuHoverCloseTimer: number | null = null;
 let mobileTopbarPanelOpen = false;
 let clearingLocalDeviceData = false;
 let settingsMenuHoverCloseTimer: number | null = null;
@@ -634,6 +636,7 @@ function getNotificationMediaLabel(mediaType: MediaType): string {
 }
 
 function closeNotificationsMenu(): void {
+    cancelNotificationsMenuHoverClose();
     notificationsMenuOpen = false;
     if (DOM.notificationsMenu) {
         DOM.notificationsMenu.classList.remove('visible');
@@ -661,6 +664,20 @@ function toggleNotificationsMenu(): void {
         return;
     }
     openNotificationsMenu();
+}
+
+function cancelNotificationsMenuHoverClose(): void {
+    if (!notificationsMenuHoverCloseTimer) return;
+    window.clearTimeout(notificationsMenuHoverCloseTimer);
+    notificationsMenuHoverCloseTimer = null;
+}
+
+function scheduleNotificationsMenuHoverClose(): void {
+    if (isMobileViewport() || !notificationsMenuOpen) return;
+    cancelNotificationsMenuHoverClose();
+    notificationsMenuHoverCloseTimer = window.setTimeout(() => {
+        closeNotificationsMenu();
+    }, SETTINGS_MENU_HOVER_CLOSE_DELAY_MS);
 }
 
 function setSettingsMenuOpen(isOpen: boolean): void {
@@ -2000,9 +2017,38 @@ async function refreshLibraryViewsAfterMediaChange(mediaType: MediaType): Promis
     UI.updateKeyStats();
 }
 
-async function addMediaToWatchlist(media: Series | TMDbSeriesDetails) {
+function getGuestAddWarningMessage(): string {
+    return 'Está sem sessão iniciada. Os dados podem ficar apenas neste dispositivo. Para guardar e sincronizar a sua biblioteca, notas e progresso com segurança, crie conta ou entre.';
+}
+
+function shouldShowGuestMutationWarning(): boolean {
+    return !currentAuthenticatedUserId && window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) !== '1';
+}
+
+function showGuestAddWarningIfNeeded(): boolean {
+    if (currentAuthenticatedUserId) return false;
+    if (window.sessionStorage.getItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY) === '1') return false;
+    window.sessionStorage.setItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY, '1');
+    UI.showNotification(getGuestAddWarningMessage());
+    return true;
+}
+
+function markGuestMutationWarningAsShown(): void {
+    if (currentAuthenticatedUserId) return;
+    window.sessionStorage.setItem(GUEST_ADD_WARNING_SHOWN_STORAGE_KEY, '1');
+}
+
+async function addMediaToWatchlist(
+    media: Series | TMDbSeriesDetails,
+    options: { showGuestWarning?: boolean } = {}
+) {
+    const { showGuestWarning = true } = options;
     const normalizedMedia = normalizeSeriesCollection([media])[0];
     if (!normalizedMedia) return;
+
+    if (showGuestWarning) {
+        showGuestAddWarningIfNeeded();
+    }
 
     const mediaType = normalizedMedia.media_type || 'series';
     const isInLibrary = isMediaInLibrary(mediaType, normalizedMedia.id);
@@ -2561,8 +2607,16 @@ async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
 async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
-        await addMediaToWatchlist(seriesData);
-        UI.showNotification(`"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`);
+        const shouldWarnGuest = shouldShowGuestMutationWarning();
+        await addMediaToWatchlist(seriesData, { showGuestWarning: !shouldWarnGuest });
+        if (shouldWarnGuest) {
+            markGuestMutationWarningAsShown();
+        }
+        UI.showNotification(
+            shouldWarnGuest
+                ? `"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'. ${getGuestAddWarningMessage()}`
+                : `"${seriesData.name}" foi adicionada à sua lista 'Quero Ver'.`
+        );
         await displaySeriesDetails(seriesData.id); // Recarrega a vista de detalhes
     } catch (error) {
         console.error("Erro ao adicionar série à lista 'Quero Ver':", error);
@@ -2574,8 +2628,16 @@ async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButton
 async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
     if (button) button.disabled = true;
     try {
+        const shouldWarnGuest = shouldShowGuestMutationWarning();
         await addAndMarkAllAsSeen(seriesData);
-        UI.showNotification(`"${seriesData.name}" foi adicionada e marcada como vista.`);
+        if (shouldWarnGuest) {
+            markGuestMutationWarningAsShown();
+        }
+        UI.showNotification(
+            shouldWarnGuest
+                ? `"${seriesData.name}" foi adicionada e marcada como vista. ${getGuestAddWarningMessage()}`
+                : `"${seriesData.name}" foi adicionada e marcada como vista.`
+        );
         await displaySeriesDetails(seriesData.id);
     } catch (error) {
         console.error("Erro ao adicionar e marcar série como vista:", error);
@@ -2609,7 +2671,7 @@ async function ensureSeriesInLibraryForEpisodeProgress(seriesId: number): Promis
             ? currentDetailedSeriesData
             : await API.fetchSeriesDetails(seriesId, null);
 
-    await addMediaToWatchlist(detailSeries);
+    await addMediaToWatchlist(detailSeries, { showGuestWarning: false });
     return true;
 }
 
@@ -2636,9 +2698,13 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
         }
     }
 
+    const shouldWarnGuest = shouldShowGuestMutationWarning();
     const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
     const isFirstWatched = watchedSet.size === 0;
     await S.markEpisodesAsWatched(seriesId, episodesToMarkAsSeen);
+    if (shouldWarnGuest) {
+        markGuestMutationWarningAsShown();
+    }
 
     episodesToMarkAsSeen.forEach(idToMark => {
         const elementToMark = document.querySelector<HTMLElement>(`.episode-item[data-episode-id="${idToMark}"]`);
@@ -2660,11 +2726,13 @@ async function handleMarkAsSeen(seriesId: number, episodeId: number): Promise<vo
         UI.updateActiveNavLink('all-series-section');
         if (autoAddedToLibrary) {
             const series = S.getSeries(seriesId);
-            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`);
         }
     } else if (autoAddedToLibrary) {
         const series = S.getSeries(seriesId);
-        UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
+        UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`);
+    } else if (shouldWarnGuest) {
+        UI.showNotification(getGuestAddWarningMessage());
     }
 }
 
@@ -4048,8 +4116,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 UI.showNotification('Não foi possível localizar o conteúdo para adicionar.');
                 return;
             }
-            await addMediaToWatchlist(media);
-            UI.showNotification(`"${media.name}" foi adicionado à biblioteca.`);
+            const shouldWarnGuest = shouldShowGuestMutationWarning();
+            await addMediaToWatchlist(media, { showGuestWarning: !shouldWarnGuest });
+            if (shouldWarnGuest) {
+                markGuestMutationWarningAsShown();
+            }
+            UI.showNotification(
+                shouldWarnGuest
+                    ? `"${media.name}" foi adicionado à biblioteca. ${getGuestAddWarningMessage()}`
+                    : `"${media.name}" foi adicionado à biblioteca.`
+            );
             await refreshLibraryViewsAfterMediaChange(mediaType);
             await displayMediaDetails(mediaType, mediaId);
             return;
@@ -4100,14 +4176,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
             const currentProgress = getMediaProgressPercent('movie', mediaId);
             const nextProgress = currentProgress >= 100 ? 0 : 100;
+            const shouldWarnGuest = shouldShowGuestMutationWarning();
             await S.updateMediaProgress('movie', mediaId, nextProgress);
             const moveResult = await syncMediaLibrarySectionWithProgress('movie', mediaId, nextProgress);
+            if (shouldWarnGuest) {
+                markGuestMutationWarningAsShown();
+            }
             if (moveResult === 'archived') {
-                UI.showNotification('Filme marcado como visto e movido para Arquivo.');
+                UI.showNotification(shouldWarnGuest ? `Filme marcado como visto e movido para Arquivo. ${getGuestAddWarningMessage()}` : 'Filme marcado como visto e movido para Arquivo.');
             } else if (moveResult === 'watchlist') {
-                UI.showNotification('Filme marcado como não visto e movido para Quero Ver.');
+                UI.showNotification(shouldWarnGuest ? `Filme marcado como não visto e movido para Quero Ver. ${getGuestAddWarningMessage()}` : 'Filme marcado como não visto e movido para Quero Ver.');
             } else {
-                UI.showNotification(nextProgress >= 100 ? 'Filme marcado como visto.' : 'Filme marcado como não visto.');
+                UI.showNotification(
+                    shouldWarnGuest
+                        ? `${nextProgress >= 100 ? 'Filme marcado como visto.' : 'Filme marcado como não visto.'} ${getGuestAddWarningMessage()}`
+                        : (nextProgress >= 100 ? 'Filme marcado como visto.' : 'Filme marcado como não visto.')
+                );
             }
             await refreshLibraryViewsAfterMediaChange('movie');
             await displayMediaDetails('movie', mediaId);
@@ -4119,14 +4203,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const mediaId = parseInt(DOM.seriesViewSection.dataset.mediaId || '', 10);
             const progressInput = DOM.seriesViewSection.querySelector<HTMLInputElement>('#book-progress-range');
             const progressValue = progressInput ? parseInt(progressInput.value, 10) : 0;
+            const shouldWarnGuest = shouldShowGuestMutationWarning();
             await S.updateMediaProgress('book', mediaId, progressValue);
             const moveResult = await syncMediaLibrarySectionWithProgress('book', mediaId, progressValue);
+            if (shouldWarnGuest) {
+                markGuestMutationWarningAsShown();
+            }
             if (moveResult === 'archived') {
-                UI.showNotification('Livro concluído e movido para Arquivo.');
+                UI.showNotification(shouldWarnGuest ? `Livro concluído e movido para Arquivo. ${getGuestAddWarningMessage()}` : 'Livro concluído e movido para Arquivo.');
             } else if (moveResult === 'watchlist') {
-                UI.showNotification('Livro movido para Quero Ver.');
+                UI.showNotification(shouldWarnGuest ? `Livro movido para Quero Ver. ${getGuestAddWarningMessage()}` : 'Livro movido para Quero Ver.');
             } else {
-                UI.showNotification('Progresso de leitura atualizado.');
+                UI.showNotification(shouldWarnGuest ? `Progresso de leitura atualizado. ${getGuestAddWarningMessage()}` : 'Progresso de leitura atualizado.');
             }
             await refreshLibraryViewsAfterMediaChange('book');
             await displayMediaDetails('book', mediaId);
@@ -4224,8 +4312,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const allEpisodeIds = allEpisodes.map(ep => ep.id);
 
                 if (allEpisodeIds.length > 0) {
+                    const shouldWarnGuest = shouldShowGuestMutationWarning();
                     const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, allEpisodeIds);
+                    if (shouldWarnGuest) {
+                        markGuestMutationWarningAsShown();
+                    }
 
                     document.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
                     
@@ -4245,11 +4337,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const series = S.getSeries(seriesId);
                         UI.showNotification(
                             movedToArchive
-                                ? `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em Concluídas.`
-                                : `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em A Ver.`
+                                ? `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em Concluídas.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`
+                                : `Todos os episódios foram marcados como vistos e "${series?.name || 'a série'}" foi adicionada à biblioteca em A Ver.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`
                         );
                     } else {
-                        UI.showNotification('Todos os episódios foram marcados como vistos.');
+                        UI.showNotification(shouldWarnGuest ? `Todos os episódios foram marcados como vistos. ${getGuestAddWarningMessage()}` : 'Todos os episódios foram marcados como vistos.');
                     }
                 } else {
                     UI.showNotification('Não foram encontrados episódios para marcar.');
@@ -4296,8 +4388,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.updateActiveNavLink('unseen-section');
                     }
                 } else { // A marcar
+                    const shouldWarnGuest = shouldShowGuestMutationWarning();
                     const autoAddedToLibrary = await ensureSeriesInLibraryForEpisodeProgress(seriesId);
                     await S.markEpisodesAsWatched(seriesId, seasonEpisodeIds);
+                    if (shouldWarnGuest) {
+                        markGuestMutationWarningAsShown();
+                    }
                     seasonDetailsElement.querySelectorAll('.episode-item').forEach(el => UI.markEpisodeAsSeen(el as HTMLElement));
 
                     const movedToArchive = await checkSeriesCompletion(seriesId);
@@ -4306,14 +4402,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.updateActiveNavLink('all-series-section');
                         if (autoAddedToLibrary) {
                             const series = S.getSeries(seriesId);
-                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.`);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em Concluídas.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`);
                         }
                     } else {
                         UI.renderWatchlist();
                         UI.renderUnseen();
                         if (autoAddedToLibrary) {
                             const series = S.getSeries(seriesId);
-                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.`);
+                            UI.showNotification(`"${series?.name || 'A série'}" foi adicionada à biblioteca em A Ver.${shouldWarnGuest ? ` ${getGuestAddWarningMessage()}` : ''}`);
+                        } else if (shouldWarnGuest) {
+                            UI.showNotification(getGuestAddWarningMessage());
                         }
                     }
                 }
@@ -4353,11 +4451,18 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.notificationModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.notificationModal && UI.closeNotificationModal());
     DOM.notificationsBtn?.addEventListener('click', async (event) => {
         event.stopPropagation();
+        cancelNotificationsMenuHoverClose();
         if (!notificationsMenuOpen) {
             DOM.settingsMenu?.classList.remove('visible');
             await refreshNotificationsCenter();
         }
         toggleNotificationsMenu();
+    });
+    DOM.notificationsMenuWrapper?.addEventListener('mouseenter', () => {
+        cancelNotificationsMenuHoverClose();
+    });
+    DOM.notificationsMenuWrapper?.addEventListener('mouseleave', () => {
+        scheduleNotificationsMenuHoverClose();
     });
     DOM.notificationsMenu?.addEventListener('click', (event) => {
         event.stopPropagation();

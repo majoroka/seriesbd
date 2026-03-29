@@ -838,6 +838,10 @@ type DashboardSuggestionEntry = {
     item: Series;
     reason: string;
 };
+type DashboardSuggestionHistoryEntry = {
+    key: string;
+    shownAt: number;
+};
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
 type DashboardContentFilter = 'all' | 'series' | 'movie' | 'book';
 type DashboardPanelKey = 'news' | 'upcoming' | 'recent' | 'suggestions';
@@ -846,6 +850,7 @@ type DashboardTopGenre = {
     label: string;
     normalized: string;
     count: number;
+    seriesGenreId: number | null;
     movieGenreId: number | null;
     bookQuery: string;
 };
@@ -862,9 +867,13 @@ const DASHBOARD_UPCOMING_MAX_BOOK_SUGGESTIONS = 4;
 const DASHBOARD_UPCOMING_RECENT_BOOK_DAYS = 365;
 const DASHBOARD_UPCOMING_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_MAX_PER_MEDIA = 4;
+const DASHBOARD_SUGGESTED_POOL_PER_MEDIA = 8;
 const DASHBOARD_SUGGESTED_MAX_TOTAL = 12;
 const DASHBOARD_SUGGESTED_CACHE_TTL_MS = 20 * 60 * 1000;
 const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
+const DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS = 6 * 60 * 60 * 1000;
+const DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT = 24;
+const DASHBOARD_SUGGESTED_RECENT_STORAGE_KEY = 'seriesdb.dashboardSuggestions.recent.v1';
 const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
 const DASHBOARD_NEWS_BOOK_MIN_VISIBLE = 1;
@@ -930,6 +939,40 @@ const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     thriller: 53,
     war: 10752,
     guerra: 10752,
+    western: 37,
+    faroeste: 37,
+};
+
+const SERIES_GENRE_ID_BY_KEY: Record<string, number> = {
+    'action adventure': 10759,
+    acao: 10759,
+    aventura: 10759,
+    animation: 16,
+    animacao: 16,
+    comedy: 35,
+    comedia: 35,
+    crime: 80,
+    documentary: 99,
+    documentario: 99,
+    drama: 18,
+    family: 10751,
+    familia: 10751,
+    kids: 10762,
+    mystery: 9648,
+    misterio: 9648,
+    news: 10763,
+    reality: 10764,
+    romance: 18,
+    'science fiction': 10765,
+    'science fiction fantasy': 10765,
+    'ficcao cientifica': 10765,
+    'ficcao cientifica e fantasia': 10765,
+    soap: 10766,
+    talk: 10767,
+    thriller: 9648,
+    war: 10768,
+    guerra: 10768,
+    politics: 10768,
     western: 37,
     faroeste: 37,
 };
@@ -1655,9 +1698,36 @@ function resolveMovieGenreId(normalizedGenre: string): number | null {
     return typeof value === 'number' ? value : null;
 }
 
+function resolveSeriesGenreId(normalizedGenre: string): number | null {
+    if (!normalizedGenre) return null;
+    const direct = SERIES_GENRE_ID_BY_KEY[normalizedGenre];
+    if (typeof direct === 'number') return direct;
+    const matchedKey = Object.keys(SERIES_GENRE_ID_BY_KEY).find((key) =>
+        normalizedGenre.includes(key) || key.includes(normalizedGenre)
+    );
+    if (!matchedKey) return null;
+    const value = SERIES_GENRE_ID_BY_KEY[matchedKey];
+    return typeof value === 'number' ? value : null;
+}
+
+function pickDominantGenreId(counts: Map<number, number>): number | null {
+    if (counts.size === 0) return null;
+    return Array.from(counts.entries())
+        .sort((left, right) => {
+            if (right[1] !== left[1]) return right[1] - left[1];
+            return left[0] - right[0];
+        })[0]?.[0] ?? null;
+}
+
 function buildTopDashboardGenres(): DashboardTopGenre[] {
-    const counts = new Map<string, { label: string; count: number }>();
+    const counts = new Map<string, {
+        label: string;
+        count: number;
+        seriesGenreIds: Map<number, number>;
+        movieGenreIds: Map<number, number>;
+    }>();
     [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const mediaType = item.media_type || 'series';
         (item.genres || []).forEach((genre) => {
             const rawLabel = translateGenreName(genre?.name) || genre?.name || '';
             const label = String(rawLabel).trim();
@@ -1666,9 +1736,23 @@ function buildTopDashboardGenres(): DashboardTopGenre[] {
             const current = counts.get(normalized);
             if (current) {
                 current.count += 1;
+                if (mediaType === 'series' && typeof genre?.id === 'number') {
+                    current.seriesGenreIds.set(genre.id, (current.seriesGenreIds.get(genre.id) || 0) + 1);
+                }
+                if (mediaType === 'movie' && typeof genre?.id === 'number') {
+                    current.movieGenreIds.set(genre.id, (current.movieGenreIds.get(genre.id) || 0) + 1);
+                }
                 return;
             }
-            counts.set(normalized, { label, count: 1 });
+            const seriesGenreIds = new Map<number, number>();
+            const movieGenreIds = new Map<number, number>();
+            if (mediaType === 'series' && typeof genre?.id === 'number') {
+                seriesGenreIds.set(genre.id, 1);
+            }
+            if (mediaType === 'movie' && typeof genre?.id === 'number') {
+                movieGenreIds.set(genre.id, 1);
+            }
+            counts.set(normalized, { label, count: 1, seriesGenreIds, movieGenreIds });
         });
     });
 
@@ -1679,7 +1763,8 @@ function buildTopDashboardGenres(): DashboardTopGenre[] {
             label: data.label,
             normalized,
             count: data.count,
-            movieGenreId: resolveMovieGenreId(normalized),
+            seriesGenreId: pickDominantGenreId(data.seriesGenreIds) ?? resolveSeriesGenreId(normalized),
+            movieGenreId: pickDominantGenreId(data.movieGenreIds) ?? resolveMovieGenreId(normalized),
             bookQuery: data.label,
         }));
 }
@@ -1723,6 +1808,89 @@ function pickSuggestionItems(
     return picked;
 }
 
+function getDashboardSuggestionRotationBucket(): number {
+    return Math.floor(Date.now() / DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS);
+}
+
+function hashDashboardSuggestionSeed(value: string): number {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash * 31) + value.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+}
+
+function readDashboardSuggestionHistory(): DashboardSuggestionHistoryEntry[] {
+    try {
+        const raw = window.localStorage.getItem(DASHBOARD_SUGGESTED_RECENT_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const key = String((entry as { key?: unknown }).key || '').trim();
+                const shownAt = Number((entry as { shownAt?: unknown }).shownAt);
+                if (!key || !Number.isFinite(shownAt) || shownAt <= 0) return null;
+                return { key, shownAt };
+            })
+            .filter((entry): entry is DashboardSuggestionHistoryEntry => Boolean(entry))
+            .sort((left, right) => right.shownAt - left.shownAt)
+            .slice(0, DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT);
+    } catch {
+        return [];
+    }
+}
+
+function writeDashboardSuggestionHistory(entries: DashboardSuggestionHistoryEntry[]): void {
+    try {
+        window.localStorage.setItem(
+            DASHBOARD_SUGGESTED_RECENT_STORAGE_KEY,
+            JSON.stringify(entries.slice(0, DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT))
+        );
+    } catch {
+        // Ignora falhas de persistência local; a rotação continua funcional.
+    }
+}
+
+function rankDashboardSuggestionPool(
+    entries: DashboardSuggestionEntry[],
+    recentHistoryMap: Map<string, number>,
+    rotationSeed: string
+): DashboardSuggestionEntry[] {
+    return [...entries].sort((left, right) => {
+        const leftKey = getDashboardMediaKey(left.item);
+        const rightKey = getDashboardMediaKey(right.item);
+        const leftSeenAt = recentHistoryMap.get(leftKey) || 0;
+        const rightSeenAt = recentHistoryMap.get(rightKey) || 0;
+        const leftSeen = leftSeenAt > 0 ? 1 : 0;
+        const rightSeen = rightSeenAt > 0 ? 1 : 0;
+        if (leftSeen !== rightSeen) return leftSeen - rightSeen;
+        if (leftSeenAt !== rightSeenAt) return leftSeenAt - rightSeenAt;
+
+        const leftScore = hashDashboardSuggestionSeed(`${rotationSeed}:${leftKey}`);
+        const rightScore = hashDashboardSuggestionSeed(`${rotationSeed}:${rightKey}`);
+        if (leftScore !== rightScore) return leftScore - rightScore;
+        return left.item.name.localeCompare(right.item.name, 'pt-PT');
+    });
+}
+
+function updateDashboardSuggestionHistory(entries: DashboardSuggestionEntry[]): void {
+    const now = Date.now();
+    const merged = new Map<string, number>();
+    readDashboardSuggestionHistory().forEach((entry) => {
+        merged.set(entry.key, entry.shownAt);
+    });
+    entries.forEach((entry) => {
+        merged.set(getDashboardMediaKey(entry.item), now);
+    });
+    const nextEntries = Array.from(merged.entries())
+        .map(([key, shownAt]) => ({ key, shownAt }))
+        .sort((left, right) => right.shownAt - left.shownAt)
+        .slice(0, DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT);
+    writeDashboardSuggestionHistory(nextEntries);
+}
+
 function buildDashboardSuggestedMediaPayload(): Series[] {
     const allItems = [
         ...dashboardSuggestedUpcomingEntries.map((entry) => entry.item),
@@ -1741,10 +1909,20 @@ async function fetchSuggestedSeriesEntries(
     preferHistory: boolean
 ): Promise<DashboardSuggestionEntry[]> {
     const candidates: Series[] = [];
-    if (preferHistory) {
-        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+    const genreIds = Array.from(
+        new Set(
+            topGenres
+                .map((genre) => genre.seriesGenreId)
+                .filter((genreId): genreId is number => Number.isFinite(genreId) && genreId > 0)
+        )
+    ).slice(0, 2);
+
+    if (preferHistory && genreIds.length > 0) {
         const searchResults = await Promise.allSettled(
-            queries.map((query) => API.searchSeries(query, new AbortController().signal))
+            genreIds.flatMap((genreId) => ([
+                API.fetchDiscoverCatalog(1, new AbortController().signal, 'series', { genreIds: [genreId] }),
+                API.fetchDiscoverCatalog(2, new AbortController().signal, 'series', { genreIds: [genreId] }),
+            ]))
         );
         searchResults.forEach((result) => {
             if (result.status !== 'fulfilled') return;
@@ -1752,7 +1930,7 @@ async function fetchSuggestedSeriesEntries(
         });
     }
 
-    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+    if (candidates.length < DASHBOARD_SUGGESTED_POOL_PER_MEDIA) {
         try {
             const trending = await API.fetchTrending('week', new AbortController().signal, 'series');
             candidates.push(...trending.results);
@@ -1761,7 +1939,7 @@ async function fetchSuggestedSeriesEntries(
         }
     }
 
-    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+    if (candidates.length < DASHBOARD_SUGGESTED_POOL_PER_MEDIA) {
         try {
             const topRated = await API.fetchPopularSeries(1, 'series');
             candidates.push(...topRated.results);
@@ -1772,7 +1950,7 @@ async function fetchSuggestedSeriesEntries(
 
     const dedupedCandidates = dedupeSeriesByMedia(candidates);
     const usedKeys = new Set<string>();
-    const picked = pickSuggestionItems(dedupedCandidates, 'series', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const picked = pickSuggestionItems(dedupedCandidates, 'series', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_POOL_PER_MEDIA);
     const reason = preferHistory && topGenres[0]?.label
         ? `Baseado em ${topGenres[0].label}`
         : 'Baseado nas tendências';
@@ -1785,10 +1963,20 @@ async function fetchSuggestedMovieEntries(
     preferHistory: boolean
 ): Promise<DashboardSuggestionEntry[]> {
     const candidates: Series[] = [];
-    if (preferHistory) {
-        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+    const genreIds = Array.from(
+        new Set(
+            topGenres
+                .map((genre) => genre.movieGenreId)
+                .filter((genreId): genreId is number => Number.isFinite(genreId) && genreId > 0)
+        )
+    ).slice(0, 2);
+
+    if (preferHistory && genreIds.length > 0) {
         const searchResults = await Promise.allSettled(
-            queries.map((query) => API.searchMovies(query, new AbortController().signal))
+            genreIds.flatMap((genreId) => ([
+                API.fetchDiscoverCatalog(1, new AbortController().signal, 'movie', { genreIds: [genreId] }),
+                API.fetchDiscoverCatalog(2, new AbortController().signal, 'movie', { genreIds: [genreId] }),
+            ]))
         );
         searchResults.forEach((result) => {
             if (result.status !== 'fulfilled') return;
@@ -1796,7 +1984,7 @@ async function fetchSuggestedMovieEntries(
         });
     }
 
-    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+    if (candidates.length < DASHBOARD_SUGGESTED_POOL_PER_MEDIA) {
         try {
             const trending = await API.fetchTrending('week', new AbortController().signal, 'movie');
             candidates.push(...trending.results);
@@ -1805,7 +1993,7 @@ async function fetchSuggestedMovieEntries(
         }
     }
 
-    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+    if (candidates.length < DASHBOARD_SUGGESTED_POOL_PER_MEDIA) {
         try {
             const topRated = await API.fetchPopularSeries(1, 'movie');
             candidates.push(...topRated.results);
@@ -1816,7 +2004,7 @@ async function fetchSuggestedMovieEntries(
 
     const dedupedCandidates = dedupeSeriesByMedia(candidates);
     const usedKeys = new Set<string>();
-    const picked = pickSuggestionItems(dedupedCandidates, 'movie', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const picked = pickSuggestionItems(dedupedCandidates, 'movie', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_POOL_PER_MEDIA);
     const reason = preferHistory && topGenres[0]?.label
         ? `Baseado em ${topGenres[0].label}`
         : 'Baseado nas tendências';
@@ -1845,7 +2033,7 @@ async function fetchSuggestedBookEntries(
         candidates.push(...result.value.results);
     });
 
-    if (candidates.length < DASHBOARD_SUGGESTED_MAX_PER_MEDIA) {
+    if (candidates.length < DASHBOARD_SUGGESTED_POOL_PER_MEDIA) {
         try {
             const bestsellers = await API.searchBooks('bestsellers', new AbortController().signal);
             candidates.push(...bestsellers.results);
@@ -1856,7 +2044,7 @@ async function fetchSuggestedBookEntries(
 
     const dedupedCandidates = dedupeSeriesByMedia(candidates);
     const usedKeys = new Set<string>();
-    const picked = pickSuggestionItems(dedupedCandidates, 'book', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_MAX_PER_MEDIA);
+    const picked = pickSuggestionItems(dedupedCandidates, 'book', libraryKeys, usedKeys, DASHBOARD_SUGGESTED_POOL_PER_MEDIA);
     const reason = preferHistory && topGenres[0]?.label
         ? `Baseado em ${topGenres[0].label}`
         : 'Baseado em preferências gerais';
@@ -1866,9 +2054,17 @@ async function fetchSuggestedBookEntries(
 function interleaveSuggestionEntries(
     seriesEntries: DashboardSuggestionEntry[],
     movieEntries: DashboardSuggestionEntry[],
-    bookEntries: DashboardSuggestionEntry[]
+    bookEntries: DashboardSuggestionEntry[],
+    rotationSeed: string
 ): DashboardSuggestionEntry[] {
-    const pools = [seriesEntries, movieEntries, bookEntries];
+    const recentHistoryMap = new Map(
+        readDashboardSuggestionHistory().map((entry) => [entry.key, entry.shownAt] as const)
+    );
+    const pools = [
+        rankDashboardSuggestionPool(seriesEntries, recentHistoryMap, `${rotationSeed}:series`),
+        rankDashboardSuggestionPool(movieEntries, recentHistoryMap, `${rotationSeed}:movie`),
+        rankDashboardSuggestionPool(bookEntries, recentHistoryMap, `${rotationSeed}:book`),
+    ];
     const indexes = [0, 0, 0];
     const picked: DashboardSuggestionEntry[] = [];
     const seenKeys = new Set<string>();
@@ -1896,9 +2092,11 @@ function interleaveSuggestionEntries(
 
 async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): Promise<void> {
     const libraryCount = S.myWatchlist.length + S.myArchive.length;
+    const rotationBucket = getDashboardSuggestionRotationBucket();
     const signature = [
         `watchlist:${S.myWatchlist.length}`,
         `archive:${S.myArchive.length}`,
+        `rotation:${rotationBucket}`,
         ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
     ].join('|');
 
@@ -1925,7 +2123,9 @@ async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): P
         ]);
 
         if (requestVersion !== dashboardSuggestedRequestVersion) return;
-        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries);
+        const rotationSeed = `${signature}:${rotationBucket}`;
+        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries, rotationSeed);
+        updateDashboardSuggestionHistory(dashboardSuggestedRecommendationEntries);
         dashboardSuggestedCacheSignature = signature;
         dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
         syncDashboardSuggestedMediaStore();

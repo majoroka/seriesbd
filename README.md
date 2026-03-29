@@ -7,9 +7,10 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - ## Funcionalidades principais
 
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
-- **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente.
+- **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente. Séries fora da biblioteca podem ser adicionadas automaticamente quando o progresso começa a ser registado.
 - **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações públicas (TMDb + Trakt), trailers e gestão de progresso.
 - **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), Top Rated e próximas estreias.
+- **Sugestões Personalizadas**: O dashboard usa géneros reais da biblioteca para curadoria de séries e filmes, com rotação controlada e menor repetição recente.
 - **Estatísticas Detalhadas**: Visualize o tempo total assistido, número de episódios vistos e analise os seus hábitos com gráficos de géneros, anos de lançamento e muito mais.
 - **Classificação e Notas**: Avalie as suas séries de 1 a 10 estrelas e adicione notas pessoais.
 - **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
@@ -194,11 +195,13 @@ Resultado:
 
 - A secção **Top Rated** usa o endpoint `top_rated` do TMDb para priorizar séries com melhor avaliação pública.
 - O menu de definições inclui um toggle para excluir/incluir animação asiática no Top Rated.
+- Os menus de conta e notificações fecham automaticamente em desktop ao sair da sua área, mantendo clique fora e comportamento mobile.
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - A sinopse dos detalhes usa agregação multi-fonte com prioridade linguística `pt-PT` -> `pt` -> `en`; na ausência de PT, é escolhido o texto em inglês mais completo.
 - O bloco de avaliações dos detalhes mostra 3 fontes quando disponíveis (TMDb, Trakt e TVMaze), com anéis concêntricos mais finos para acomodar a 3.ª métrica.
 - O matching cross-provider prioriza `imdb_id`; quando recorre a nome/ano, aplica score mínimo e descarta matches fracos para evitar dados errados.
 - O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
+- Sem sessão iniciada, a primeira mutação relevante mostra um aviso único por sessão a explicar que os dados podem ficar apenas neste dispositivo até existir conta/sync.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
 - Observabilidade mínima ativa:
   - frontend regista falhas por secção dinâmica com contexto (`secção`, `endpoint`, `status`) e snapshot em `sessionStorage` (`seriesdb.observability.v1`);
