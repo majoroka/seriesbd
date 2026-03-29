@@ -63,9 +63,201 @@ const extractIsbnFields = (inputValues) => {
   };
 };
 
+const BOOK_CANONICAL_GENRE_LABELS = [
+  'Drama',
+  'Crime',
+  'Mistério',
+  'Thriller',
+  'Romance',
+  'Horror/Terror',
+  'Ficção científica',
+  'Fantasia',
+  'Ação e Aventura',
+  'Comédia',
+  'Biografia',
+  'História',
+  'Não-ficção',
+  'Infantil/Juvenil',
+  'Faroeste',
+];
+
+const normalizeBookGenreToken = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/&/g, ' e ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const BOOK_GENRE_NOISE_TOKENS = new Set([
+  'general',
+  'fiction',
+  'general fiction',
+  'nonfiction',
+  'authors',
+  'author',
+  'portuguese',
+  'language',
+  'languages',
+  'literature',
+  'literatura',
+  'books',
+  'book',
+  'reading',
+  'readers',
+  'subjects',
+  'tema geral',
+  'temas gerais',
+]);
+
+const titleCaseGenre = (value) => String(value || '')
+  .toLowerCase()
+  .split(' ')
+  .filter(Boolean)
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(' ');
+
+const mapBookGenreTokenToCanonical = (value) => {
+  const normalized = normalizeBookGenreToken(value);
+  if (!normalized || BOOK_GENRE_NOISE_TOKENS.has(normalized)) return '';
+  if (
+    normalized.includes('true crime')
+    || normalized.includes('crime')
+    || normalized.includes('criminal')
+    || normalized.includes('murder')
+    || normalized.includes('police')
+  ) return 'Crime';
+  if (
+    normalized.includes('thriller')
+    || normalized.includes('suspense')
+    || normalized.includes('psychological')
+    || normalized.includes('psicologico')
+  ) return 'Thriller';
+  if (
+    normalized.includes('mystery')
+    || normalized.includes('misterio')
+    || normalized.includes('detective')
+    || normalized.includes('whodunit')
+  ) return 'Mistério';
+  if (
+    normalized.includes('science fiction')
+    || normalized.includes('sci fi')
+    || normalized.includes('ficcao cientifica')
+    || normalized.includes('dystopian')
+    || normalized.includes('distopia')
+  ) return 'Ficção científica';
+  if (
+    normalized.includes('fantasy')
+    || normalized.includes('fantasia')
+    || normalized.includes('magic')
+    || normalized.includes('magia')
+  ) return 'Fantasia';
+  if (
+    normalized.includes('romance')
+    || normalized.includes('love')
+    || normalized.includes('amor')
+  ) return 'Romance';
+  if (
+    normalized.includes('horror')
+    || normalized.includes('terror')
+    || normalized.includes('ghost')
+    || normalized.includes('haunted')
+    || normalized.includes('supernatural')
+  ) return 'Horror/Terror';
+  if (
+    normalized.includes('adventure')
+    || normalized.includes('aventur')
+    || normalized.includes('action')
+    || normalized.includes('acao')
+  ) return 'Ação e Aventura';
+  if (
+    normalized.includes('comedy')
+    || normalized.includes('comedia')
+    || normalized.includes('humor')
+    || normalized.includes('satire')
+    || normalized.includes('satira')
+  ) return 'Comédia';
+  if (
+    normalized.includes('biography')
+    || normalized.includes('autobiography')
+    || normalized.includes('memoir')
+    || normalized.includes('biografia')
+    || normalized.includes('memorias')
+  ) return 'Biografia';
+  if (
+    normalized.includes('history')
+    || normalized.includes('historical')
+    || normalized.includes('historia')
+  ) return 'História';
+  if (
+    normalized.includes('juvenile')
+    || normalized.includes('young adult')
+    || normalized.includes('children')
+    || normalized.includes('childrens')
+    || normalized.includes('kids')
+    || normalized.includes('infantil')
+    || normalized.includes('juvenil')
+  ) return 'Infantil/Juvenil';
+  if (
+    normalized.includes('western')
+    || normalized.includes('faroeste')
+    || normalized.includes('cowboy')
+  ) return 'Faroeste';
+  if (
+    normalized.includes('drama')
+    || normalized.includes('literary fiction')
+    || normalized.includes('ficcao literaria')
+    || normalized.includes('contemporary')
+    || normalized.includes('contemporaneo')
+  ) return 'Drama';
+  if (
+    normalized.includes('non fiction')
+    || normalized.includes('nao ficcao')
+    || normalized.includes('essay')
+    || normalized.includes('ensaio')
+    || normalized.includes('documentary')
+    || normalized.includes('documentario')
+  ) return 'Não-ficção';
+  return '';
+};
+
+const splitBookGenreCandidates = (input) => {
+  const values = Array.isArray(input) ? input : [input];
+  return values
+    .flatMap((entry) => String(entry || '').split(/[\/,&;|>]+/g))
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+};
+
 const toGenreList = (input) => {
-  if (!Array.isArray(input)) return [];
-  return input.slice(0, 3).map((name, index) => ({ id: index + 1, name: String(name) }));
+  const candidates = splitBookGenreCandidates(input);
+  if (candidates.length === 0) return [];
+
+  const canonical = [];
+  const rawFallback = [];
+  const seenCanonical = new Set();
+  const seenFallback = new Set();
+
+  candidates.forEach((candidate) => {
+    const mapped = mapBookGenreTokenToCanonical(candidate);
+    if (mapped && !seenCanonical.has(mapped)) {
+      seenCanonical.add(mapped);
+      canonical.push(mapped);
+      return;
+    }
+
+    const normalized = normalizeBookGenreToken(candidate);
+    if (!normalized || BOOK_GENRE_NOISE_TOKENS.has(normalized)) return;
+    const fallbackLabel = titleCaseGenre(normalized);
+    if (!fallbackLabel || BOOK_CANONICAL_GENRE_LABELS.includes(fallbackLabel) || seenFallback.has(fallbackLabel)) return;
+    seenFallback.add(fallbackLabel);
+    rawFallback.push(fallbackLabel);
+  });
+
+  return [...canonical, ...rawFallback]
+    .slice(0, 3)
+    .map((name, index) => ({ id: index + 1, name: String(name) }));
 };
 
 const dedupeBookResults = (results) => {
@@ -432,7 +624,7 @@ const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '', fallba
     poster_path: coverId ? `${OPEN_LIBRARY_COVERS_BASE_URL}/${coverId}-L.jpg` : null,
     backdrop_path: null,
     first_air_date: firstPublished,
-    genres: [],
+    genres: toGenreList(payload?.subjects || payload?.subject || []),
     ...isbnFields,
   };
 };
