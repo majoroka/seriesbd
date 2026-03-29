@@ -31,6 +31,12 @@ type DiscoverPremieresOptions = {
     withOriginalLanguage?: boolean;
 };
 
+type DiscoverCatalogOptions = {
+    sortBy?: string;
+    genreIds?: number[];
+    withOriginalLanguage?: boolean;
+};
+
 function extractStatusFromError(error: unknown): number | null {
     if (typeof error === 'object' && error !== null && 'status' in error) {
         const status = Number((error as { status?: unknown }).status);
@@ -313,6 +319,40 @@ export async function fetchTrending(
         return { results: normalized.map((item) => mapMovieSearchResult(item)) };
     }
     return { results: normalized };
+}
+
+export async function fetchDiscoverCatalog(
+    page: number,
+    signal: AbortSignal | null = null,
+    mediaType: 'series' | 'movie' = 'series',
+    options: DiscoverCatalogOptions = {}
+): Promise<{ results: Series[], page: number, total_pages: number }> {
+    const tmdbMediaType = mediaType === 'movie' ? 'movie' : 'tv';
+    const params = new URLSearchParams({
+        language: 'pt-PT',
+        page: String(page),
+        sort_by: options.sortBy || 'popularity.desc',
+    });
+    if (Array.isArray(options.genreIds) && options.genreIds.length > 0) {
+        params.set('with_genres', options.genreIds.join(','));
+    }
+    if (options.withOriginalLanguage === true) {
+        params.set('with_original_language', 'en');
+    }
+    const url = `${API_BASE_TMDB}/discover/${tmdbMediaType}?${params.toString()}`;
+    const response = await fetchWithRetry(url, { signal: signal || undefined }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) {
+        throw new Error(mediaType === 'movie'
+            ? 'Não foi possível buscar os filmes por género.'
+            : 'Não foi possível buscar as séries por género.');
+    }
+    const payload = await response.json() as { results: unknown; page: number; total_pages: number };
+    const normalized = normalizeSeriesCollection(payload.results);
+    return {
+        results: mediaType === 'movie' ? normalized.map((item) => mapMovieSearchResult(item)) : normalized,
+        page: payload.page,
+        total_pages: payload.total_pages,
+    };
 }
 
 /**

@@ -846,6 +846,7 @@ type DashboardTopGenre = {
     label: string;
     normalized: string;
     count: number;
+    seriesGenreId: number | null;
     movieGenreId: number | null;
     bookQuery: string;
 };
@@ -930,6 +931,40 @@ const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     thriller: 53,
     war: 10752,
     guerra: 10752,
+    western: 37,
+    faroeste: 37,
+};
+
+const SERIES_GENRE_ID_BY_KEY: Record<string, number> = {
+    'action adventure': 10759,
+    acao: 10759,
+    aventura: 10759,
+    animation: 16,
+    animacao: 16,
+    comedy: 35,
+    comedia: 35,
+    crime: 80,
+    documentary: 99,
+    documentario: 99,
+    drama: 18,
+    family: 10751,
+    familia: 10751,
+    kids: 10762,
+    mystery: 9648,
+    misterio: 9648,
+    news: 10763,
+    reality: 10764,
+    romance: 18,
+    'science fiction': 10765,
+    'science fiction fantasy': 10765,
+    'ficcao cientifica': 10765,
+    'ficcao cientifica e fantasia': 10765,
+    soap: 10766,
+    talk: 10767,
+    thriller: 9648,
+    war: 10768,
+    guerra: 10768,
+    politics: 10768,
     western: 37,
     faroeste: 37,
 };
@@ -1655,9 +1690,36 @@ function resolveMovieGenreId(normalizedGenre: string): number | null {
     return typeof value === 'number' ? value : null;
 }
 
+function resolveSeriesGenreId(normalizedGenre: string): number | null {
+    if (!normalizedGenre) return null;
+    const direct = SERIES_GENRE_ID_BY_KEY[normalizedGenre];
+    if (typeof direct === 'number') return direct;
+    const matchedKey = Object.keys(SERIES_GENRE_ID_BY_KEY).find((key) =>
+        normalizedGenre.includes(key) || key.includes(normalizedGenre)
+    );
+    if (!matchedKey) return null;
+    const value = SERIES_GENRE_ID_BY_KEY[matchedKey];
+    return typeof value === 'number' ? value : null;
+}
+
+function pickDominantGenreId(counts: Map<number, number>): number | null {
+    if (counts.size === 0) return null;
+    return Array.from(counts.entries())
+        .sort((left, right) => {
+            if (right[1] !== left[1]) return right[1] - left[1];
+            return left[0] - right[0];
+        })[0]?.[0] ?? null;
+}
+
 function buildTopDashboardGenres(): DashboardTopGenre[] {
-    const counts = new Map<string, { label: string; count: number }>();
+    const counts = new Map<string, {
+        label: string;
+        count: number;
+        seriesGenreIds: Map<number, number>;
+        movieGenreIds: Map<number, number>;
+    }>();
     [...S.myWatchlist, ...S.myArchive].forEach((item) => {
+        const mediaType = item.media_type || 'series';
         (item.genres || []).forEach((genre) => {
             const rawLabel = translateGenreName(genre?.name) || genre?.name || '';
             const label = String(rawLabel).trim();
@@ -1666,9 +1728,23 @@ function buildTopDashboardGenres(): DashboardTopGenre[] {
             const current = counts.get(normalized);
             if (current) {
                 current.count += 1;
+                if (mediaType === 'series' && typeof genre?.id === 'number') {
+                    current.seriesGenreIds.set(genre.id, (current.seriesGenreIds.get(genre.id) || 0) + 1);
+                }
+                if (mediaType === 'movie' && typeof genre?.id === 'number') {
+                    current.movieGenreIds.set(genre.id, (current.movieGenreIds.get(genre.id) || 0) + 1);
+                }
                 return;
             }
-            counts.set(normalized, { label, count: 1 });
+            const seriesGenreIds = new Map<number, number>();
+            const movieGenreIds = new Map<number, number>();
+            if (mediaType === 'series' && typeof genre?.id === 'number') {
+                seriesGenreIds.set(genre.id, 1);
+            }
+            if (mediaType === 'movie' && typeof genre?.id === 'number') {
+                movieGenreIds.set(genre.id, 1);
+            }
+            counts.set(normalized, { label, count: 1, seriesGenreIds, movieGenreIds });
         });
     });
 
@@ -1679,7 +1755,8 @@ function buildTopDashboardGenres(): DashboardTopGenre[] {
             label: data.label,
             normalized,
             count: data.count,
-            movieGenreId: resolveMovieGenreId(normalized),
+            seriesGenreId: pickDominantGenreId(data.seriesGenreIds) ?? resolveSeriesGenreId(normalized),
+            movieGenreId: pickDominantGenreId(data.movieGenreIds) ?? resolveMovieGenreId(normalized),
             bookQuery: data.label,
         }));
 }
@@ -1741,10 +1818,20 @@ async function fetchSuggestedSeriesEntries(
     preferHistory: boolean
 ): Promise<DashboardSuggestionEntry[]> {
     const candidates: Series[] = [];
-    if (preferHistory) {
-        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+    const genreIds = Array.from(
+        new Set(
+            topGenres
+                .map((genre) => genre.seriesGenreId)
+                .filter((genreId): genreId is number => Number.isFinite(genreId) && genreId > 0)
+        )
+    ).slice(0, 2);
+
+    if (preferHistory && genreIds.length > 0) {
         const searchResults = await Promise.allSettled(
-            queries.map((query) => API.searchSeries(query, new AbortController().signal))
+            genreIds.flatMap((genreId) => ([
+                API.fetchDiscoverCatalog(1, new AbortController().signal, 'series', { genreIds: [genreId] }),
+                API.fetchDiscoverCatalog(2, new AbortController().signal, 'series', { genreIds: [genreId] }),
+            ]))
         );
         searchResults.forEach((result) => {
             if (result.status !== 'fulfilled') return;
@@ -1785,10 +1872,20 @@ async function fetchSuggestedMovieEntries(
     preferHistory: boolean
 ): Promise<DashboardSuggestionEntry[]> {
     const candidates: Series[] = [];
-    if (preferHistory) {
-        const queries = topGenres.map((genre) => genre.label.trim()).filter((label) => label.length >= 2).slice(0, 2);
+    const genreIds = Array.from(
+        new Set(
+            topGenres
+                .map((genre) => genre.movieGenreId)
+                .filter((genreId): genreId is number => Number.isFinite(genreId) && genreId > 0)
+        )
+    ).slice(0, 2);
+
+    if (preferHistory && genreIds.length > 0) {
         const searchResults = await Promise.allSettled(
-            queries.map((query) => API.searchMovies(query, new AbortController().signal))
+            genreIds.flatMap((genreId) => ([
+                API.fetchDiscoverCatalog(1, new AbortController().signal, 'movie', { genreIds: [genreId] }),
+                API.fetchDiscoverCatalog(2, new AbortController().signal, 'movie', { genreIds: [genreId] }),
+            ]))
         );
         searchResults.forEach((result) => {
             if (result.status !== 'fulfilled') return;
