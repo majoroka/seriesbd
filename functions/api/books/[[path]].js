@@ -81,6 +81,24 @@ const BOOK_CANONICAL_GENRE_LABELS = [
   'Faroeste',
 ];
 
+const BOOK_GENRE_RULES = [
+  { genre: 'Crime', patterns: ['true crime', 'crime', 'criminal', 'murder', 'police', 'noir'] },
+  { genre: 'Thriller', patterns: ['psychological thriller', 'thriller', 'suspense', 'psychological', 'psicologico'] },
+  { genre: 'Mistério', patterns: ['mystery', 'misterio', 'detective', 'whodunit', 'investigation', 'investigacao'] },
+  { genre: 'Ficção científica', patterns: ['science fiction', 'sci fi', 'sci-fi', 'ficcao cientifica', 'dystopian', 'distopia'] },
+  { genre: 'Fantasia', patterns: ['epic fantasy', 'urban fantasy', 'fantasy', 'fantasia', 'magic', 'magia'] },
+  { genre: 'Romance', patterns: ['romance', 'love story', 'amor'] },
+  { genre: 'Horror/Terror', patterns: ['horror', 'terror', 'ghost', 'haunted', 'supernatural'] },
+  { genre: 'Ação e Aventura', patterns: ['action adventure', 'adventure', 'aventura', 'action', 'acao'] },
+  { genre: 'Comédia', patterns: ['comedy', 'comedia', 'humor', 'satire', 'satira'] },
+  { genre: 'Biografia', patterns: ['biography', 'autobiography', 'memoir', 'biografia', 'memorias'] },
+  { genre: 'História', patterns: ['historical fiction', 'historical', 'history', 'historia'] },
+  { genre: 'Infantil/Juvenil', patterns: ['young adult', 'juvenile', 'children', 'childrens', 'kids', 'infantil', 'juvenil'] },
+  { genre: 'Faroeste', patterns: ['western', 'faroeste', 'cowboy'] },
+  { genre: 'Não-ficção', patterns: ['non fiction', 'non-fiction', 'nao ficcao', 'essay', 'ensaio', 'documentary', 'documentario'] },
+  { genre: 'Drama', patterns: ['literary fiction', 'ficcao literaria', 'contemporary', 'contemporaneo', 'drama'] },
+];
+
 const normalizeBookGenreToken = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -95,11 +113,16 @@ const BOOK_GENRE_NOISE_TOKENS = new Set([
   'fiction',
   'general fiction',
   'nonfiction',
+  'non fiction',
   'authors',
   'author',
   'portuguese',
+  'brasil',
+  'brazil',
+  'portugal',
   'language',
   'languages',
+  'literary',
   'literature',
   'literatura',
   'books',
@@ -121,105 +144,10 @@ const titleCaseGenre = (value) => String(value || '')
 const mapBookGenreTokenToCanonical = (value) => {
   const normalized = normalizeBookGenreToken(value);
   if (!normalized || BOOK_GENRE_NOISE_TOKENS.has(normalized)) return '';
-  if (
-    normalized.includes('true crime')
-    || normalized.includes('crime')
-    || normalized.includes('criminal')
-    || normalized.includes('murder')
-    || normalized.includes('police')
-  ) return 'Crime';
-  if (
-    normalized.includes('thriller')
-    || normalized.includes('suspense')
-    || normalized.includes('psychological')
-    || normalized.includes('psicologico')
-  ) return 'Thriller';
-  if (
-    normalized.includes('mystery')
-    || normalized.includes('misterio')
-    || normalized.includes('detective')
-    || normalized.includes('whodunit')
-  ) return 'Mistério';
-  if (
-    normalized.includes('science fiction')
-    || normalized.includes('sci fi')
-    || normalized.includes('ficcao cientifica')
-    || normalized.includes('dystopian')
-    || normalized.includes('distopia')
-  ) return 'Ficção científica';
-  if (
-    normalized.includes('fantasy')
-    || normalized.includes('fantasia')
-    || normalized.includes('magic')
-    || normalized.includes('magia')
-  ) return 'Fantasia';
-  if (
-    normalized.includes('romance')
-    || normalized.includes('love')
-    || normalized.includes('amor')
-  ) return 'Romance';
-  if (
-    normalized.includes('horror')
-    || normalized.includes('terror')
-    || normalized.includes('ghost')
-    || normalized.includes('haunted')
-    || normalized.includes('supernatural')
-  ) return 'Horror/Terror';
-  if (
-    normalized.includes('adventure')
-    || normalized.includes('aventur')
-    || normalized.includes('action')
-    || normalized.includes('acao')
-  ) return 'Ação e Aventura';
-  if (
-    normalized.includes('comedy')
-    || normalized.includes('comedia')
-    || normalized.includes('humor')
-    || normalized.includes('satire')
-    || normalized.includes('satira')
-  ) return 'Comédia';
-  if (
-    normalized.includes('biography')
-    || normalized.includes('autobiography')
-    || normalized.includes('memoir')
-    || normalized.includes('biografia')
-    || normalized.includes('memorias')
-  ) return 'Biografia';
-  if (
-    normalized.includes('history')
-    || normalized.includes('historical')
-    || normalized.includes('historia')
-  ) return 'História';
-  if (
-    normalized.includes('juvenile')
-    || normalized.includes('young adult')
-    || normalized.includes('children')
-    || normalized.includes('childrens')
-    || normalized.includes('kids')
-    || normalized.includes('infantil')
-    || normalized.includes('juvenil')
-  ) return 'Infantil/Juvenil';
-  if (
-    normalized.includes('western')
-    || normalized.includes('faroeste')
-    || normalized.includes('cowboy')
-  ) return 'Faroeste';
-  if (
-    normalized.includes('drama')
-    || normalized.includes('literary fiction')
-    || normalized.includes('ficcao literaria')
-    || normalized.includes('contemporary')
-    || normalized.includes('contemporaneo')
-  ) return 'Drama';
-  if (
-    normalized.includes('non fiction')
-    || normalized.includes('nao ficcao')
-    || normalized.includes('essay')
-    || normalized.includes('ensaio')
-    || normalized.includes('documentary')
-    || normalized.includes('documentario')
-  ) return 'Não-ficção';
-  return '';
+  const matchedRule = BOOK_GENRE_RULES.find((rule) =>
+    rule.patterns.some((pattern) => normalized.includes(pattern))
+  );
+  return matchedRule?.genre || '';
 };
 
 const splitBookGenreCandidates = (input) => {
