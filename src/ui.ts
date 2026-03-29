@@ -2001,9 +2001,80 @@ function syncDashboardSuggestedMediaStore(): void {
 function normalizeGlobalLibraryGenreLabel(value: string): string {
     const normalized = normalizeGenreToken(value);
     if (!normalized) return '';
-    if (normalized === 'terror' || normalized === 'horror' || normalized === 'horror terror') {
-        return 'Horror/Terror';
-    }
+    if (
+        normalized === 'terror'
+        || normalized === 'horror'
+        || normalized === 'horror terror'
+        || normalized.includes('terror')
+        || normalized.includes('horror')
+        || normalized.includes('ghost')
+        || normalized.includes('haunted')
+    ) return 'Horror/Terror';
+    if (
+        normalized.includes('science fiction fantasy')
+        || normalized.includes('ficcao cientifica e fantasia')
+        || (normalized.includes('science fiction') && normalized.includes('fantasy'))
+        || (normalized.includes('ficcao cientifica') && normalized.includes('fantasia'))
+    ) return 'Ficção Científica e Fantasia';
+    if (
+        normalized.includes('science fiction')
+        || normalized.includes('ficcao cientifica')
+        || normalized.includes('sci fi')
+        || normalized.includes('dystopian')
+        || normalized.includes('distopia')
+    ) return 'Ficção científica';
+    if (
+        normalized.includes('fantasy')
+        || normalized.includes('fantasia')
+    ) return 'Ficção Científica e Fantasia';
+    if (
+        normalized.includes('action adventure')
+        || normalized.includes('acao aventura')
+        || normalized.includes('adventure')
+        || normalized.includes('aventura')
+    ) return 'Ação e Aventura';
+    if (
+        normalized === 'acao'
+        || normalized.includes('action')
+    ) return 'Ação';
+    if (
+        normalized.includes('mystery')
+        || normalized.includes('misterio')
+        || normalized.includes('detective')
+        || normalized.includes('suspense')
+    ) return 'Mistério';
+    if (
+        normalized.includes('thriller')
+        || normalized.includes('psychological')
+        || normalized.includes('psicologico')
+    ) return 'Thriller';
+    if (
+        normalized.includes('crime')
+        || normalized.includes('true crime')
+        || normalized.includes('criminal')
+        || normalized.includes('police')
+        || normalized.includes('detective')
+        || normalized.includes('murder')
+    ) return 'Crime';
+    if (
+        normalized.includes('drama')
+        || normalized.includes('literary fiction')
+        || normalized.includes('ficcao literaria')
+        || normalized.includes('contemporary')
+        || normalized.includes('contemporaneo')
+    ) return 'Drama';
+    if (
+        normalized.includes('comedy')
+        || normalized.includes('comedia')
+        || normalized.includes('humor')
+        || normalized.includes('satire')
+        || normalized.includes('satira')
+    ) return 'Comédia';
+    if (
+        normalized.includes('western')
+        || normalized.includes('faroeste')
+        || normalized.includes('cowboy')
+    ) return 'Faroeste';
     const matchedLabel = GLOBAL_LIBRARY_GENRE_ORDER.find((label) => normalizeGenreToken(label) === normalized);
     return matchedLabel || '';
 }
