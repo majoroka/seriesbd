@@ -497,6 +497,9 @@ export async function fetchBookDetails(book: Series, signal: AbortSignal | null)
             });
         }
     } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw error;
+        }
         console.warn('[books] Falha ao carregar detalhe remoto. A usar dados locais.', error);
     }
 

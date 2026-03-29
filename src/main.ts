@@ -41,7 +41,7 @@ const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
 const GUEST_ADD_WARNING_SHOWN_STORAGE_KEY = 'seriesdb.guestAddWarningShown.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
-type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'initialize';
+type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'book-details' | 'initialize';
 type FailureMetric = {
     failCount: number;
     lastFailureAt: string;
@@ -2591,51 +2591,70 @@ async function displayMovieDetails(media: Series): Promise<void> {
     UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived }, externalReviews, movieCredits);
 }
 
+function getMediaDetailObservabilitySection(mediaType: MediaType): ObservabilitySection {
+    return mediaType === 'book' ? 'book-details' : 'series-details';
+}
+
+function persistRefreshedBookDetails(bookDetails: Series): Promise<void> | null {
+    const isInLibrary = isMediaInLibrary('book', bookDetails.id);
+    if (!isInLibrary) return null;
+
+    const storedBook = S.getMediaItem('book', bookDetails.id);
+    const mergedBook = storedBook
+        ? {
+            ...storedBook,
+            ...bookDetails,
+            id: storedBook.id,
+            media_type: 'book' as const,
+        }
+        : bookDetails;
+    const storedPoster = String(storedBook?.poster_path || '').trim();
+    const freshPoster = String(bookDetails.poster_path || '').trim();
+    const storedOverview = String(storedBook?.overview || '').trim();
+    const freshOverview = String(bookDetails.overview || '').trim();
+    const storedAuthor = String(storedBook?.author || '').trim();
+    const freshAuthor = String(bookDetails.author || '').trim();
+    const shouldPersistBookRefresh = !storedBook
+        || freshPoster !== storedPoster
+        || (freshOverview.length > storedOverview.length && freshOverview !== storedOverview)
+        || freshAuthor !== storedAuthor;
+
+    return shouldPersistBookRefresh ? S.updateSeries(mergedBook) : null;
+}
+
+function renderBookDetailView(bookDetails: Series): void {
+    const isInLibrary = isMediaInLibrary('book', bookDetails.id);
+    const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
+    const progressPercent = getMediaProgressPercent('book', bookDetails.id);
+    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived }, []);
+}
+
 async function displayBookDetails(media: Series): Promise<void> {
     S.resetDetailViewAbortController();
     const signal = S.detailViewAbortController.signal;
     captureDetailReturnContext();
-    setElementMessage(DOM.seriesViewSection, 'A carregar detalhes do livro...');
     UI.showSection('series-view-section');
+    renderBookDetailView(media);
 
-    const bookDetails = await runObservedSection(
-        'series-details',
-        `/api/books/details`,
-        () => API.fetchBookDetails(media, signal),
-        { mediaType: 'book', mediaId: media.id }
-    );
+    try {
+        const bookDetails = await runObservedSection(
+            'book-details',
+            `/api/books/details`,
+            () => API.fetchBookDetails(media, signal),
+            { mediaType: 'book', mediaId: media.id }
+        );
 
-    updateCurrentSearchResultMedia(bookDetails);
+        if (signal.aborted) return;
 
-    const isInLibrary = isMediaInLibrary('book', bookDetails.id);
-    if (isInLibrary) {
-        const storedBook = S.getMediaItem('book', bookDetails.id);
-        const mergedBook = storedBook
-            ? {
-                ...storedBook,
-                ...bookDetails,
-                id: storedBook.id,
-                media_type: 'book' as const,
-            }
-            : bookDetails;
-        const storedPoster = String(storedBook?.poster_path || '').trim();
-        const freshPoster = String(bookDetails.poster_path || '').trim();
-        const storedOverview = String(storedBook?.overview || '').trim();
-        const freshOverview = String(bookDetails.overview || '').trim();
-        const storedAuthor = String(storedBook?.author || '').trim();
-        const freshAuthor = String(bookDetails.author || '').trim();
-        const shouldPersistBookRefresh = !storedBook
-            || freshPoster !== storedPoster
-            || (freshOverview.length > storedOverview.length && freshOverview !== storedOverview)
-            || freshAuthor !== storedAuthor;
-        if (shouldPersistBookRefresh) {
-            await S.updateSeries(mergedBook);
-        }
+        updateCurrentSearchResultMedia(bookDetails);
+        await persistRefreshedBookDetails(bookDetails);
+        renderBookDetailView(bookDetails);
+    } catch (error) {
+        const typedError = error as Error;
+        if (typedError.name === 'AbortError') return;
+        console.warn('Falha ao enriquecer o detalhe do livro. A vista base foi mantida.', typedError);
+        UI.showNotification('Alguns detalhes do livro não puderam ser atualizados.');
     }
-
-    const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
-    const progressPercent = getMediaProgressPercent('book', bookDetails.id);
-    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived }, []);
 }
 
 async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
@@ -2663,7 +2682,7 @@ async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
         const typedError = error as Error;
         if (typedError.name === 'AbortError') return;
         recordSectionFailure(
-            'series-details',
+            getMediaDetailObservabilitySection(mediaType),
             `/media-view/${mediaType}/${mediaId}`,
             typedError,
             { phase: 'render', mediaType, mediaId }
