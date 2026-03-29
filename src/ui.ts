@@ -916,6 +916,20 @@ const DASHBOARD_NEWS_STOPWORDS = new Set([
     'series', 'série', 'filme', 'livro', 'media', 'show', 'shows', 'book', 'books', 'movie', 'movies',
 ]);
 
+const GLOBAL_LIBRARY_GENRE_ORDER = [
+    'Drama',
+    'Crime',
+    'Ficção Científica e Fantasia',
+    'Ação e Aventura',
+    'Mistério',
+    'Comédia',
+    'Ação',
+    'Faroeste',
+    'Ficção científica',
+    'Thriller',
+    'Horror/Terror',
+] as const;
+
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
     acao: 28,
@@ -1982,6 +1996,16 @@ function buildDashboardSuggestedMediaPayload(): Series[] {
 
 function syncDashboardSuggestedMediaStore(): void {
     S.setDashboardSuggestedMedia(buildDashboardSuggestedMediaPayload());
+}
+
+function normalizeGlobalLibraryGenreLabel(value: string): string {
+    const normalized = normalizeGenreToken(value);
+    if (!normalized) return '';
+    if (normalized === 'terror' || normalized === 'horror' || normalized === 'horror terror') {
+        return 'Horror/Terror';
+    }
+    const matchedLabel = GLOBAL_LIBRARY_GENRE_ORDER.find((label) => normalizeGenreToken(label) === normalized);
+    return matchedLabel || '';
 }
 
 async function fetchSuggestedSeriesEntries(
@@ -4434,30 +4458,32 @@ function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
             movie: getStatsMediaVisual('movie'),
             book: getStatsMediaVisual('book'),
         };
-        const genreMap = new Map<string, Record<MediaType, number>>();
+        const genreMap = new Map<string, Record<MediaType, number>>(
+            GLOBAL_LIBRARY_GENRE_ORDER.map((label) => [label, { series: 0, movie: 0, book: 0 }])
+        );
         (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
             getContextItems(mediaType, cache).forEach((item) => {
                 if (!Array.isArray(item.genres)) return;
                 item.genres.forEach((genre: Genre) => {
                     const genreName = translateGenreName(genre.name) || genre.name;
-                    if (!genreName) return;
-                    if (!genreMap.has(genreName)) {
-                        genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
-                    }
-                    genreMap.get(genreName)![mediaType] += 1;
+                    const normalizedGenreLabel = normalizeGlobalLibraryGenreLabel(genreName);
+                    if (!normalizedGenreLabel || !genreMap.has(normalizedGenreLabel)) return;
+                    genreMap.get(normalizedGenreLabel)![mediaType] += 1;
                 });
             });
         });
-        const topGenres = Array.from(genreMap.entries())
+        const globalGenres = Array.from(genreMap.entries())
             .map(([name, counts]) => ({
                 name,
                 counts,
                 total: counts.series + counts.movie + counts.book,
             }))
             .filter((entry) => entry.total > 0)
-            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-            .slice(0, 10);
-        const labels = topGenres.map((entry) => entry.name);
+            .sort((left, right) =>
+                GLOBAL_LIBRARY_GENRE_ORDER.indexOf(left.name as typeof GLOBAL_LIBRARY_GENRE_ORDER[number])
+                - GLOBAL_LIBRARY_GENRE_ORDER.indexOf(right.name as typeof GLOBAL_LIBRARY_GENRE_ORDER[number])
+            );
+        const labels = globalGenres.map((entry) => entry.name);
         setCanvasA11yLabel(
             canvas,
             labels.length > 0
@@ -4478,7 +4504,7 @@ function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
                 labels,
                 datasets: (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
                     label: visuals[mediaType].label,
-                    data: topGenres.map((entry) => entry.counts[mediaType]),
+                    data: globalGenres.map((entry) => entry.counts[mediaType]),
                     backgroundColor: visuals[mediaType].accent,
                     borderColor: visuals[mediaType].accent,
                     borderWidth: 1,
