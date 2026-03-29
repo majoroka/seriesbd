@@ -19,7 +19,7 @@ import * as API from './api';
 import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
-import { createMediaKey } from './media';
+import { createMediaKey, normalizeSeriesCollection } from './media';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -842,6 +842,14 @@ type DashboardSuggestionHistoryEntry = {
     key: string;
     shownAt: number;
 };
+type DashboardSuggestionCachePayload = {
+    signature: string;
+    expiresAt: number;
+    entries: Array<{
+        item: Series;
+        reason: string;
+    }>;
+};
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
 type DashboardContentFilter = 'all' | 'series' | 'movie' | 'book';
 type DashboardPanelKey = 'news' | 'upcoming' | 'recent' | 'suggestions';
@@ -874,6 +882,7 @@ const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 const DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS = 6 * 60 * 60 * 1000;
 const DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT = 24;
 const DASHBOARD_SUGGESTED_RECENT_STORAGE_KEY = 'seriesdb.dashboardSuggestions.recent.v1';
+const DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY = 'seriesdb.dashboardSuggestions.cache.v1';
 const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
 const DASHBOARD_NEWS_BOOK_MIN_VISIBLE = 1;
@@ -1592,6 +1601,7 @@ function renderDashboardSuggestionsCarousel(): void {
     if (!DOM.dashboardSuggestionsCarousel) return;
 
     const topGenres = buildTopDashboardGenres();
+    hydrateDashboardSuggestionCache(topGenres);
     void ensureDashboardRecommendations(topGenres);
 
     const filter = dashboardPanelFilters.suggestions;
@@ -1812,6 +1822,18 @@ function getDashboardSuggestionRotationBucket(): number {
     return Math.floor(Date.now() / DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS);
 }
 
+function buildDashboardSuggestionSignature(topGenres: DashboardTopGenre[]): string {
+    const libraryCount = S.myWatchlist.length + S.myArchive.length;
+    const rotationBucket = getDashboardSuggestionRotationBucket();
+    return [
+        `watchlist:${S.myWatchlist.length}`,
+        `archive:${S.myArchive.length}`,
+        `rotation:${rotationBucket}`,
+        `history:${libraryCount >= DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS && topGenres.length > 0 ? 1 : 0}`,
+        ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
+    ].join('|');
+}
+
 function hashDashboardSuggestionSeed(value: string): number {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
@@ -1889,6 +1911,65 @@ function updateDashboardSuggestionHistory(entries: DashboardSuggestionEntry[]): 
         .sort((left, right) => right.shownAt - left.shownAt)
         .slice(0, DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT);
     writeDashboardSuggestionHistory(nextEntries);
+}
+
+function readDashboardSuggestionCache(): DashboardSuggestionCachePayload | null {
+    try {
+        const raw = window.localStorage.getItem(DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return null;
+        const signature = String((parsed as { signature?: unknown }).signature || '').trim();
+        const expiresAt = Number((parsed as { expiresAt?: unknown }).expiresAt);
+        const entriesRaw = (parsed as { entries?: unknown }).entries;
+        if (!signature || !Number.isFinite(expiresAt) || expiresAt <= 0 || !Array.isArray(entriesRaw)) return null;
+        const entries = entriesRaw
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const item = (entry as { item?: unknown }).item;
+                const reason = String((entry as { reason?: unknown }).reason || '').trim();
+                if (!item || typeof item !== 'object' || !reason) return null;
+                const normalized = normalizeSeriesCollection([item as Series])[0];
+                if (!normalized?.id || !normalized?.name) return null;
+                return { item: normalized, reason };
+            })
+            .filter((entry): entry is DashboardSuggestionEntry => Boolean(entry));
+        if (entries.length === 0) return null;
+        return { signature, expiresAt, entries };
+    } catch {
+        return null;
+    }
+}
+
+function writeDashboardSuggestionCache(signature: string, expiresAt: number, entries: DashboardSuggestionEntry[]): void {
+    try {
+        const payload: DashboardSuggestionCachePayload = {
+            signature,
+            expiresAt,
+            entries: entries.slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL).map((entry) => ({
+                item: entry.item,
+                reason: entry.reason,
+            })),
+        };
+        window.localStorage.setItem(DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+        // Ignora falhas de persistência local; as sugestões continuam funcionais.
+    }
+}
+
+function hydrateDashboardSuggestionCache(topGenres: DashboardTopGenre[]): void {
+    const now = Date.now();
+    const signature = buildDashboardSuggestionSignature(topGenres);
+    const cached = readDashboardSuggestionCache();
+    if (!cached) return;
+    if (cached.signature !== signature || cached.expiresAt <= now) return;
+    if (dashboardSuggestedRecommendationEntries.length > 0 && dashboardSuggestedCacheSignature === signature && dashboardSuggestedCacheExpiresAt > now) {
+        return;
+    }
+    dashboardSuggestedRecommendationEntries = cached.entries;
+    dashboardSuggestedCacheSignature = cached.signature;
+    dashboardSuggestedCacheExpiresAt = cached.expiresAt;
+    syncDashboardSuggestedMediaStore();
 }
 
 function buildDashboardSuggestedMediaPayload(): Series[] {
@@ -2092,13 +2173,7 @@ function interleaveSuggestionEntries(
 
 async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): Promise<void> {
     const libraryCount = S.myWatchlist.length + S.myArchive.length;
-    const rotationBucket = getDashboardSuggestionRotationBucket();
-    const signature = [
-        `watchlist:${S.myWatchlist.length}`,
-        `archive:${S.myArchive.length}`,
-        `rotation:${rotationBucket}`,
-        ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
-    ].join('|');
+    const signature = buildDashboardSuggestionSignature(topGenres);
 
     const now = Date.now();
     if (
@@ -2116,18 +2191,31 @@ async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): P
     const preferHistory = libraryCount >= DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS && topGenres.length > 0;
 
     dashboardSuggestedInFlight = (async () => {
-        const [seriesEntries, movieEntries, bookEntries] = await Promise.all([
-            fetchSuggestedSeriesEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-            fetchSuggestedMovieEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-            fetchSuggestedBookEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-        ]);
+        const seriesPromise = fetchSuggestedSeriesEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
+        const moviePromise = fetchSuggestedMovieEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
+        const bookPromise = fetchSuggestedBookEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
 
+        const [seriesEntries, movieEntries] = await Promise.all([seriesPromise, moviePromise]);
         if (requestVersion !== dashboardSuggestedRequestVersion) return;
-        const rotationSeed = `${signature}:${rotationBucket}`;
-        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries, rotationSeed);
+
+        const initialEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, [], `${signature}:initial`);
+        if (initialEntries.length > 0) {
+            dashboardSuggestedRecommendationEntries = initialEntries;
+            dashboardSuggestedCacheSignature = signature;
+            dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
+            writeDashboardSuggestionCache(signature, dashboardSuggestedCacheExpiresAt, dashboardSuggestedRecommendationEntries);
+            syncDashboardSuggestedMediaStore();
+            renderDashboardSuggestionsCarousel();
+        }
+
+        const bookEntries = await bookPromise;
+        if (requestVersion !== dashboardSuggestedRequestVersion) return;
+
+        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries, `${signature}:final`);
         updateDashboardSuggestionHistory(dashboardSuggestedRecommendationEntries);
         dashboardSuggestedCacheSignature = signature;
         dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
+        writeDashboardSuggestionCache(signature, dashboardSuggestedCacheExpiresAt, dashboardSuggestedRecommendationEntries);
         syncDashboardSuggestedMediaStore();
         renderDashboardSuggestionsCarousel();
     })()
