@@ -19,6 +19,7 @@ Objetivo:
 - Hardening pós-reauditoria `H1-H6` concluído
 - Hardening final `R1-R5` concluído
 - Fase atual: **estabilização concluída e manutenção evolutiva controlada**
+- Últimas melhorias de UX aplicadas ao dashboard, onboarding e menus de topo
 
 ## Resumo executivo
 
@@ -49,6 +50,11 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 - Estatísticas globais no escopo atual
 - Notícias RSS com múltiplas fontes e balanceamento
 - Perfil básico de conta
+- Sugestões do dashboard por género real para séries e filmes, com rotação controlada e menor repetição recente
+- Auto-add de séries à biblioteca ao marcar episódios/temporadas como vistos
+- Onboarding de autenticação com reenvio de confirmação, recuperação de links expirados e branding `MediaDex` no email
+- Menu da conta e popup de notificações com fecho automático em desktop ao sair com o rato
+- Aviso único por sessão para mutações relevantes sem sessão iniciada
 - Reviews externas MVP no detalhe:
   - séries
   - filmes
@@ -258,6 +264,44 @@ Estado atual:
 Estado atual:
 - rate limit mais conservador
 - resposta pública mais mínima
+
+## Ajustes UX recentes
+
+Estado do bloco:
+- concluído no escopo atual
+
+### Onboarding e autenticação
+
+Estado atual:
+- mensagem pós-registo clarifica envio do email, spam/lixo e expiração em `1 hora`
+- ação de `Reenviar email de confirmação` disponível no modal de autenticação
+- links expirados/ inválidos reabrem o modal com recuperação orientada
+- emails Auth enviados com SMTP próprio e branding `MediaDex`
+
+### Menus de topo
+
+Estado atual:
+- menu da conta:
+  - sem sessão: `Entrar`, `Registar`, `Mudar Tema`
+  - com sessão: ações de conta e dados locais, sem `Entrar`/`Registar`
+- menu da conta fecha em desktop ao sair da sua área com pequeno delay
+- popup de notificações fecha em desktop ao sair da sua área com pequeno delay
+
+### Biblioteca e persistência local
+
+Estado atual:
+- primeira mutação relevante sem sessão mostra aviso único por sessão sobre persistência apenas local
+- marcar episódios/temporadas como vistos pode adicionar automaticamente a série à biblioteca
+- destino automático:
+  - `A Ver` se a série continuar incompleta
+  - `Concluídas/Arquivo` se a marcação completar a série
+
+### Sugestões do dashboard
+
+Estado atual:
+- séries e filmes usam `discover` por género real em vez de pesquisa textual por nome do género
+- reduzido o enviesamento de títulos com palavras como `Drama`
+- rotação controlada com memória curta local para reduzir repetição recente
 - CORS restringido ao domínio principal
 - índice único na base de dados mantido como autoridade final
 
