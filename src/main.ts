@@ -2516,6 +2516,16 @@ async function displayMovieDetails(media: Series): Promise<void> {
         () => API.fetchMovieDetails(media.id, signal, media.source_id),
         { mediaType: 'movie', mediaId: media.id }
     );
+    const movieCredits = await runObservedSection(
+        'series-details',
+        `/api/tmdb/movie/${movieDetails.source_id || media.source_id || media.id}/credits`,
+        () => API.fetchMovieCredits(movieDetails.source_id || media.source_id || media.id, signal),
+        { mediaType: 'movie', mediaId: media.id, optional: 'credits' }
+    ).catch((error) => {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn('Falha ao carregar créditos do filme. A vista de detalhes continuará sem elenco.', error);
+        return { cast: [], crew: [] };
+    });
     const externalReviews = await API.fetchTmdbExternalReviews('movie', movieDetails.source_id || media.source_id || media.id, signal).catch((error) => {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         console.warn('Falha ao carregar reviews externas do filme.', error);
@@ -2545,7 +2555,7 @@ async function displayMovieDetails(media: Series): Promise<void> {
     }
     const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
     const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
-    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived }, externalReviews);
+    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived }, externalReviews, movieCredits);
 }
 
 async function displayBookDetails(media: Series): Promise<void> {

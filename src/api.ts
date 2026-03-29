@@ -440,6 +440,62 @@ export async function fetchSeriesCredits(seriesId: number, signal: AbortSignal |
     };
 }
 
+export async function fetchMovieCredits(movieId: number | string, signal: AbortSignal | null): Promise<TMDbCredits> {
+    const resolvedId = Math.trunc(Number(movieId));
+    if (!Number.isFinite(resolvedId) || resolvedId <= 0) {
+        return { cast: [], crew: [] };
+    }
+
+    const url = `${API_BASE_TMDB}/movie/${resolvedId}/credits?language=pt-PT`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const payload = await response.json() as {
+        cast?: Array<{ id: number; name: string; profile_path: string | null; character?: string | null }>;
+        crew?: Array<{ id: number; name: string; profile_path: string | null; job?: string | null }>;
+    };
+
+    const prioritizedJobs = new Set([
+        'Director',
+        'Writer',
+        'Screenplay',
+        'Story',
+        'Novel',
+        'Characters',
+        'Creator',
+        'Producer',
+        'Executive Producer',
+    ]);
+
+    const crewById = new Map<number, { id: number; name: string; profile_path: string | null; jobs: string[] }>();
+    (payload.crew || []).forEach((person) => {
+        if (!person?.id || !person?.name) return;
+        const rawJob = String(person.job || '').trim();
+        if (!rawJob || !prioritizedJobs.has(rawJob)) return;
+        const current = crewById.get(person.id);
+        if (current) {
+            if (!current.jobs.includes(rawJob)) current.jobs.push(rawJob);
+            return;
+        }
+        crewById.set(person.id, {
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            jobs: [rawJob],
+        });
+    });
+
+    return {
+        cast: (payload.cast || []).map((person) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: [{ character: person.character || '' }],
+        })),
+        crew: Array.from(crewById.values()),
+    };
+}
+
 /**
  * Busca os vídeos de uma série no TMDb (trailers/teasers).
  * @param seriesId - O ID da série.

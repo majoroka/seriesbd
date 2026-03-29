@@ -134,8 +134,16 @@ export interface TMDbPerson {
     roles: { character: string }[];
 }
 
+export interface TMDbCrewPerson {
+    id: number;
+    name: string;
+    profile_path: string | null;
+    jobs: string[];
+}
+
 export interface TMDbCredits {
     cast: TMDbPerson[];
+    crew?: TMDbCrewPerson[];
 }
 
 export interface TraktRatings {

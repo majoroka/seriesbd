@@ -18,7 +18,7 @@ import * as S from './state';
 import * as API from './api';
 import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey } from './media';
 
 declare module 'chart.js' {
@@ -2820,7 +2820,8 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
 export function renderMediaDetails(
     media: Series,
     options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean },
-    externalReviews: ExternalReview[] = []
+    externalReviews: ExternalReview[] = [],
+    creditsData: TMDbCredits | null = null
 ) {
     const detailSection = DOM.seriesViewSection;
     clearElementChildren(detailSection);
@@ -3095,7 +3096,19 @@ export function renderMediaDetails(
     detailSection.dataset.mediaType = mediaType;
     detailSection.dataset.mediaId = String(media.id);
 
-    const bodyContentContainer = el('div', { class: 'v2-body-content' }, [
+    const bodyContentContainer = el('div', { class: 'v2-body-content' });
+    if (mediaType === 'movie' && creditsData) {
+        const crewPeople = (creditsData.crew || []).map((person: TMDbCrewPerson) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: person.jobs,
+        }));
+        const moviePeopleElement = renderPeopleInfoCard(crewPeople, creditsData.cast || [], 'Elenco e Criadores');
+        if (moviePeopleElement) bodyContentContainer.appendChild(moviePeopleElement);
+    }
+
+    [
         el('div', { class: 'v2-info-card collapsible' }, [
             el('details', {}, [
                 el('summary', { text: 'As Minhas Notas' }),
@@ -3115,7 +3128,7 @@ export function renderMediaDetails(
                 ? 'As fontes atuais deste livro não disponibilizam reviews externas textuais.'
                 : 'Não existem reviews externas disponíveis para este conteúdo.'
         )
-    ]);
+    ].forEach((node) => bodyContentContainer.appendChild(node));
     detailSection.appendChild(bodyContentContainer);
 }
 
@@ -3302,45 +3315,16 @@ export function renderSeriesDetails(
     detailSection.dataset.seriesId = String(seriesData.id);
 
     const bodyContentContainer = el('div', { class: 'v2-body-content' });
-    const peopleElement = (() => {
-        const creators = seriesData.created_by || [];
-        const fullCast = creditsData.cast || [];
-        if (creators.length === 0 && fullCast.length === 0) return null;
-        const peopleMap = new Map<number, { id: number; name: string; profile_path: string | null; roles: string[] }>();
-        creators.forEach(p => {
-            if (!peopleMap.has(p.id)) peopleMap.set(p.id, { ...p, roles: ['Criador(a)'] });
-        });
-        fullCast.forEach(p => {
-            const characterNames = p.roles?.map(role => role.character).filter(Boolean) || [];
-            if (characterNames.length > 0) {
-                if (peopleMap.has(p.id)) {
-                    peopleMap.get(p.id)!.roles.push(...characterNames);
-                } else {
-                    peopleMap.set(p.id, { id: p.id, name: p.name, profile_path: p.profile_path, roles: characterNames });
-                }
-            }
-        });
-        const allPeople = Array.from(peopleMap.values());
-        const listElement = el('ol', { class: 'v2-people-list' });
-        let buttonElement = null;
-        if (allPeople.length > 9) {
-            const initialPeople = allPeople.slice(0, 9);
-            const remainingPeople = allPeople.slice(9);
-            initialPeople.forEach(p => listElement.appendChild(createPersonElement(p)));
-            buttonElement = el('div', { class: 'v2-people-list-actions' }, [
-                el('button', { class: 'cast-show-more-btn', 'data-remaining-cast': JSON.stringify(remainingPeople), text: 'Ver Mais' })
-            ]);
-        } else {
-            allPeople.forEach(p => listElement.appendChild(createPersonElement(p)));
-        }
-        return el('div', { class: 'v2-info-card collapsible' }, [
-            el('details', {}, [
-                el('summary', { text: 'Elenco e Criadores' }),
-                listElement,
-                buttonElement
-            ])
-        ]);
-    })();
+    const peopleElement = renderPeopleInfoCard(
+        (seriesData.created_by || []).map((person) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: ['Criador(a)'],
+        })),
+        creditsData.cast || [],
+        'Elenco e Criadores'
+    );
     if (peopleElement) bodyContentContainer.appendChild(peopleElement);
 
     const currentUserNotes = currentUserData.notes || '';
@@ -3399,6 +3383,67 @@ export function createPersonElement(person: { id: number; name: string; profile_
                 el('p', { class: 'name', text: person.name }),
                 el('p', { class: 'character', text: person.roles.join(', ') })
             ])
+        ])
+    ]);
+}
+
+function renderPeopleInfoCard(
+    creators: Array<{ id: number; name: string; profile_path: string | null; roles: string[] }>,
+    cast: TMDbCredits['cast'],
+    summaryLabel: string
+): HTMLElement | null {
+    const fullCast = cast || [];
+    if (creators.length === 0 && fullCast.length === 0) return null;
+
+    const peopleMap = new Map<number, { id: number; name: string; profile_path: string | null; roles: string[] }>();
+    creators.forEach((person) => {
+        if (!peopleMap.has(person.id)) {
+            peopleMap.set(person.id, { ...person, roles: [...person.roles] });
+            return;
+        }
+        const existing = peopleMap.get(person.id)!;
+        person.roles.forEach((role) => {
+            if (!existing.roles.includes(role)) existing.roles.push(role);
+        });
+    });
+
+    fullCast.forEach((person) => {
+        const characterNames = person.roles?.map((role) => role.character).filter(Boolean) || [];
+        if (characterNames.length === 0) return;
+        if (peopleMap.has(person.id)) {
+            const existing = peopleMap.get(person.id)!;
+            characterNames.forEach((role) => {
+                if (!existing.roles.includes(role)) existing.roles.push(role);
+            });
+            return;
+        }
+        peopleMap.set(person.id, {
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: characterNames,
+        });
+    });
+
+    const allPeople = Array.from(peopleMap.values());
+    const listElement = el('ol', { class: 'v2-people-list' });
+    let buttonElement: HTMLElement | null = null;
+    if (allPeople.length > 9) {
+        const initialPeople = allPeople.slice(0, 9);
+        const remainingPeople = allPeople.slice(9);
+        initialPeople.forEach((person) => listElement.appendChild(createPersonElement(person)));
+        buttonElement = el('div', { class: 'v2-people-list-actions' }, [
+            el('button', { class: 'cast-show-more-btn', 'data-remaining-cast': JSON.stringify(remainingPeople), text: 'Ver Mais' })
+        ]);
+    } else {
+        allPeople.forEach((person) => listElement.appendChild(createPersonElement(person)));
+    }
+
+    return el('div', { class: 'v2-info-card collapsible' }, [
+        el('details', {}, [
+            el('summary', { text: summaryLabel }),
+            listElement,
+            buttonElement
         ])
     ]);
 }
