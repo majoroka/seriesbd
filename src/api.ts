@@ -56,11 +56,43 @@ function extractStatusFromError(error: unknown): number | null {
  * @param {AbortSignal} signal - O sinal para abortar o pedido.
  */
 export async function searchSeries(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
+    const normalizedQuery = normalizeSearchToken(query);
     const searchUrl = `${API_BASE_TMDB}/search/tv?query=${encodeURIComponent(query)}&language=pt-PT`;
     const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as { results: unknown };
-    return { results: normalizeSeriesCollection(payload.results) };
+    const titleResults = normalizeSeriesCollection(payload.results);
+
+    if (normalizedQuery.length < 3) {
+        return { results: titleResults };
+    }
+
+    try {
+        const personResults = await searchPeople(query, signal);
+        const relatedCandidates = personResults
+            .map((person) => ({
+                person,
+                score: scorePersonSearchResult(person, query, 'series'),
+            }))
+            .filter((entry) => entry.score >= 1.85)
+            .sort((left, right) => right.score - left.score)
+            .slice(0, 2);
+
+        if (relatedCandidates.length === 0) {
+            return { results: titleResults };
+        }
+
+        const relatedEntries = (
+            await Promise.all(
+                relatedCandidates.map(async ({ person }) => fetchRelatedMediaByPerson(person.id, 'series', signal))
+            )
+        ).flat();
+
+        return { results: mergeSearchResults(titleResults, relatedEntries, 'series') };
+    } catch (error) {
+        console.warn('[search] Falha no enriquecimento por pessoa para séries.', error);
+        return { results: titleResults };
+    }
 }
 
 function mapMovieSearchResult(rawMovie: any): Series {
@@ -85,13 +117,216 @@ function mapMovieSearchResult(rawMovie: any): Series {
     } as Series);
 }
 
+function normalizeSearchToken(value: string): string {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function scorePersonSearchResult(
+    person: { name?: string | null; popularity?: number | null; known_for_department?: string | null },
+    query: string,
+    mediaType: 'series' | 'movie'
+): number {
+    const normalizedQuery = normalizeSearchToken(query);
+    const normalizedName = normalizeSearchToken(person?.name || '');
+    if (!normalizedQuery || !normalizedName) return -1;
+
+    let score = 0;
+    if (normalizedName === normalizedQuery) score += 3;
+    else if (normalizedName.startsWith(normalizedQuery)) score += 2;
+    else if (normalizedName.includes(normalizedQuery)) score += 1;
+    else return -1;
+
+    const department = String(person?.known_for_department || '').trim().toLowerCase();
+    if (mediaType === 'movie') {
+        if (department === 'directing') score += 1.25;
+        else if (department === 'writing') score += 1;
+        else if (department === 'acting') score += 0.75;
+    } else {
+        if (department === 'acting') score += 1;
+        else if (department === 'writing' || department === 'production') score += 0.85;
+        else if (department === 'directing') score += 0.65;
+    }
+
+    const popularity = Number(person?.popularity || 0);
+    score += Math.min(1, popularity / 20);
+    return Number(score.toFixed(3));
+}
+
+async function searchPeople(query: string, signal: AbortSignal): Promise<Array<{ id: number; name: string; popularity?: number; known_for_department?: string }>> {
+    const searchUrl = `${API_BASE_TMDB}/search/person?query=${encodeURIComponent(query)}&language=pt-PT`;
+    const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as { results?: Array<{ id: number; name: string; popularity?: number; known_for_department?: string }> };
+    return Array.isArray(payload.results) ? payload.results : [];
+}
+
+type PersonCreditEntry = {
+    id: number;
+    media_type?: 'tv' | 'movie' | string;
+    name?: string;
+    title?: string;
+    original_name?: string;
+    original_title?: string;
+    overview?: string;
+    poster_path?: string | null;
+    backdrop_path?: string | null;
+    first_air_date?: string;
+    release_date?: string;
+    vote_average?: number;
+    popularity?: number;
+    genre_ids?: number[];
+    character?: string | null;
+    job?: string | null;
+};
+
+type RelatedMediaEntry = {
+    item: Series;
+    relevance: number;
+};
+
+function scoreMovieCreditRelevance(entry: PersonCreditEntry): number {
+    const job = String(entry.job || '').trim();
+    if (job === 'Director') return 5;
+    if (job === 'Writer' || job === 'Screenplay' || job === 'Story') return 4;
+    if (job === 'Novel' || job === 'Characters') return 3;
+    if (job === 'Producer' || job === 'Executive Producer') return 2;
+    if (entry.character) return 1;
+    return 0;
+}
+
+function scoreSeriesCreditRelevance(entry: PersonCreditEntry): number {
+    const job = String(entry.job || '').trim();
+    if (job === 'Creator') return 5;
+    if (job === 'Writer' || job === 'Screenplay' || job === 'Story') return 4;
+    if (job === 'Executive Producer' || job === 'Producer') return 3;
+    if (job === 'Director') return 2;
+    if (entry.character) return 1;
+    return 0;
+}
+
+async function fetchRelatedMediaByPerson(
+    personId: number,
+    mediaType: 'series' | 'movie',
+    signal: AbortSignal
+): Promise<RelatedMediaEntry[]> {
+    const url = `${API_BASE_TMDB}/person/${personId}/combined_credits?language=pt-PT`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const payload = await response.json() as { cast?: PersonCreditEntry[]; crew?: PersonCreditEntry[] };
+
+    const relatedEntries: RelatedMediaEntry[] = [];
+    const appendEntry = (entry: PersonCreditEntry, relevance: number) => {
+        if (mediaType === 'movie') {
+            relatedEntries.push({
+                item: mapMovieSearchResult(entry),
+                relevance: relevance + Math.min(1, Number(entry.popularity || 0) / 20),
+            });
+            return;
+        }
+        relatedEntries.push({
+            item: normalizeSeries({
+                ...entry,
+                media_type: 'series',
+                name: String(entry.name || entry.original_name || ''),
+                original_name: String(entry.original_name || entry.name || ''),
+                first_air_date: String(entry.first_air_date || ''),
+                genres: [],
+            } as Series),
+            relevance: relevance + Math.min(1, Number(entry.popularity || 0) / 20),
+        });
+    };
+
+    const castEntries = Array.isArray(payload.cast) ? payload.cast : [];
+    const crewEntries = Array.isArray(payload.crew) ? payload.crew : [];
+
+    castEntries.forEach((entry) => {
+        if (mediaType === 'movie' && entry.media_type !== 'movie') return;
+        if (mediaType === 'series' && entry.media_type !== 'tv') return;
+        if (!entry.id) return;
+        appendEntry(entry, mediaType === 'movie' ? scoreMovieCreditRelevance(entry) : scoreSeriesCreditRelevance(entry));
+    });
+
+    crewEntries.forEach((entry) => {
+        if (mediaType === 'movie' && entry.media_type !== 'movie') return;
+        if (mediaType === 'series' && entry.media_type !== 'tv') return;
+        if (!entry.id) return;
+        appendEntry(entry, mediaType === 'movie' ? scoreMovieCreditRelevance(entry) : scoreSeriesCreditRelevance(entry));
+    });
+
+    return relatedEntries
+        .filter((entry) => entry.relevance > 0 && entry.item.id && entry.item.name)
+        .sort((left, right) => {
+            if (right.relevance !== left.relevance) return right.relevance - left.relevance;
+            const ratingDiff = (Number(right.item.vote_average) || 0) - (Number(left.item.vote_average) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            return left.item.name.localeCompare(right.item.name, 'pt-PT');
+        });
+}
+
+function mergeSearchResults(
+    primaryResults: Series[],
+    relatedEntries: RelatedMediaEntry[],
+    mediaType: 'series' | 'movie'
+): Series[] {
+    const merged = new Map<string, Series>();
+    primaryResults.forEach((item) => {
+        const key = `${item.media_type || mediaType}:${item.id}`;
+        if (!merged.has(key)) merged.set(key, item);
+    });
+
+    relatedEntries.forEach((entry) => {
+        const key = `${entry.item.media_type || mediaType}:${entry.item.id}`;
+        if (!merged.has(key)) {
+            merged.set(key, entry.item);
+        }
+    });
+
+    return Array.from(merged.values()).slice(0, 24);
+}
+
 export async function searchMovies(query: string, signal: AbortSignal): Promise<{ results: Series[] }> {
+    const normalizedQuery = normalizeSearchToken(query);
     const searchUrl = `${API_BASE_TMDB}/search/movie?query=${encodeURIComponent(query)}&language=pt-PT`;
     const response = await fetchWithRetry(searchUrl, { signal }, RETRY_FAST.retries, RETRY_FAST.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as { results?: unknown[] };
-    const results = Array.isArray(payload.results) ? payload.results.map(mapMovieSearchResult) : [];
-    return { results };
+    const titleResults = Array.isArray(payload.results) ? payload.results.map(mapMovieSearchResult) : [];
+
+    if (normalizedQuery.length < 3) {
+        return { results: titleResults };
+    }
+
+    try {
+        const personResults = await searchPeople(query, signal);
+        const relatedCandidates = personResults
+            .map((person) => ({
+                person,
+                score: scorePersonSearchResult(person, query, 'movie'),
+            }))
+            .filter((entry) => entry.score >= 2)
+            .sort((left, right) => right.score - left.score)
+            .slice(0, 2);
+
+        if (relatedCandidates.length === 0) {
+            return { results: titleResults };
+        }
+
+        const relatedEntries = (
+            await Promise.all(
+                relatedCandidates.map(async ({ person }) => fetchRelatedMediaByPerson(person.id, 'movie', signal))
+            )
+        ).flat();
+
+        return { results: mergeSearchResults(titleResults, relatedEntries, 'movie') };
+    } catch (error) {
+        console.warn('[search] Falha no enriquecimento por pessoa para filmes.', error);
+        return { results: titleResults };
+    }
 }
 
 export async function fetchMovieDetails(
