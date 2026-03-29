@@ -107,6 +107,7 @@ let notificationReadStateLoaded = false;
 let notificationDismissedState: NotificationReadState = {};
 let notificationsCenterEntries: AppNotification[] = [];
 let notificationsMenuOpen = false;
+let notificationsMenuHoverCloseTimer: number | null = null;
 let mobileTopbarPanelOpen = false;
 let clearingLocalDeviceData = false;
 let settingsMenuHoverCloseTimer: number | null = null;
@@ -635,6 +636,7 @@ function getNotificationMediaLabel(mediaType: MediaType): string {
 }
 
 function closeNotificationsMenu(): void {
+    cancelNotificationsMenuHoverClose();
     notificationsMenuOpen = false;
     if (DOM.notificationsMenu) {
         DOM.notificationsMenu.classList.remove('visible');
@@ -662,6 +664,20 @@ function toggleNotificationsMenu(): void {
         return;
     }
     openNotificationsMenu();
+}
+
+function cancelNotificationsMenuHoverClose(): void {
+    if (!notificationsMenuHoverCloseTimer) return;
+    window.clearTimeout(notificationsMenuHoverCloseTimer);
+    notificationsMenuHoverCloseTimer = null;
+}
+
+function scheduleNotificationsMenuHoverClose(): void {
+    if (isMobileViewport() || !notificationsMenuOpen) return;
+    cancelNotificationsMenuHoverClose();
+    notificationsMenuHoverCloseTimer = window.setTimeout(() => {
+        closeNotificationsMenu();
+    }, SETTINGS_MENU_HOVER_CLOSE_DELAY_MS);
 }
 
 function setSettingsMenuOpen(isOpen: boolean): void {
@@ -4435,11 +4451,18 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.notificationModal?.addEventListener('click', (e: MouseEvent) => e.target === DOM.notificationModal && UI.closeNotificationModal());
     DOM.notificationsBtn?.addEventListener('click', async (event) => {
         event.stopPropagation();
+        cancelNotificationsMenuHoverClose();
         if (!notificationsMenuOpen) {
             DOM.settingsMenu?.classList.remove('visible');
             await refreshNotificationsCenter();
         }
         toggleNotificationsMenu();
+    });
+    DOM.notificationsMenuWrapper?.addEventListener('mouseenter', () => {
+        cancelNotificationsMenuHoverClose();
+    });
+    DOM.notificationsMenuWrapper?.addEventListener('mouseleave', () => {
+        scheduleNotificationsMenuHoverClose();
     });
     DOM.notificationsMenu?.addEventListener('click', (event) => {
         event.stopPropagation();
