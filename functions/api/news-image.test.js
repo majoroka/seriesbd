@@ -89,6 +89,30 @@ describe('news-image function', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('allows Open Library cover redirects to archive.org image hosts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, {
+        status: 302,
+        headers: { location: 'https://ia801234.us.archive.org/BookReader/BookReaderImages.php?zip=/foo/bar&file=cover.jpg' },
+      }))
+      .mockResolvedValueOnce(new Response('image-bytes', {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      }));
+
+    const response = await onRequest({
+      request: new Request('https://example.com/api/news-image?url=https://covers.openlibrary.org/b/id/13122866-L.jpg', {
+        method: 'GET',
+        headers: { 'cf-connecting-ip': '1.1.1.6' },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/jpeg');
+    expect(await response.text()).toBe('image-bytes');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('blocks public hosts that are not on the allowlist', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 

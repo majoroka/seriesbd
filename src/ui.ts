@@ -18,8 +18,8 @@ import * as S from './state';
 import * as API from './api';
 import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
-import { createMediaKey } from './media';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
+import { createMediaKey, normalizeSeriesCollection } from './media';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -842,6 +842,14 @@ type DashboardSuggestionHistoryEntry = {
     key: string;
     shownAt: number;
 };
+type DashboardSuggestionCachePayload = {
+    signature: string;
+    expiresAt: number;
+    entries: Array<{
+        item: Series;
+        reason: string;
+    }>;
+};
 type DashboardNewsState = 'idle' | 'loading' | 'ready' | 'error';
 type DashboardContentFilter = 'all' | 'series' | 'movie' | 'book';
 type DashboardPanelKey = 'news' | 'upcoming' | 'recent' | 'suggestions';
@@ -874,6 +882,7 @@ const DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS = 5;
 const DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS = 6 * 60 * 60 * 1000;
 const DASHBOARD_SUGGESTED_RECENT_HISTORY_LIMIT = 24;
 const DASHBOARD_SUGGESTED_RECENT_STORAGE_KEY = 'seriesdb.dashboardSuggestions.recent.v1';
+const DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY = 'seriesdb.dashboardSuggestions.cache.v1';
 const DASHBOARD_NEWS_LIMIT = 24;
 const DASHBOARD_NEWS_VISIBLE_LIMIT = 20;
 const DASHBOARD_NEWS_BOOK_MIN_VISIBLE = 1;
@@ -906,6 +915,20 @@ const DASHBOARD_NEWS_STOPWORDS = new Set([
     'uma', 'umas', 'uns', 'the', 'and', 'mais', 'como', 'quando', 'where', 'what', 'have', 'novo', 'nova',
     'series', 'série', 'filme', 'livro', 'media', 'show', 'shows', 'book', 'books', 'movie', 'movies',
 ]);
+
+const GLOBAL_LIBRARY_GENRE_ORDER = [
+    'Drama',
+    'Crime',
+    'Ficção Científica e Fantasia',
+    'Ação e Aventura',
+    'Mistério',
+    'Comédia',
+    'Ação',
+    'Faroeste',
+    'Ficção científica',
+    'Thriller',
+    'Horror/Terror',
+] as const;
 
 const MOVIE_GENRE_ID_BY_KEY: Record<string, number> = {
     action: 28,
@@ -1592,6 +1615,7 @@ function renderDashboardSuggestionsCarousel(): void {
     if (!DOM.dashboardSuggestionsCarousel) return;
 
     const topGenres = buildTopDashboardGenres();
+    hydrateDashboardSuggestionCache(topGenres);
     void ensureDashboardRecommendations(topGenres);
 
     const filter = dashboardPanelFilters.suggestions;
@@ -1812,6 +1836,18 @@ function getDashboardSuggestionRotationBucket(): number {
     return Math.floor(Date.now() / DASHBOARD_SUGGESTED_ROTATION_WINDOW_MS);
 }
 
+function buildDashboardSuggestionSignature(topGenres: DashboardTopGenre[]): string {
+    const libraryCount = S.myWatchlist.length + S.myArchive.length;
+    const rotationBucket = getDashboardSuggestionRotationBucket();
+    return [
+        `watchlist:${S.myWatchlist.length}`,
+        `archive:${S.myArchive.length}`,
+        `rotation:${rotationBucket}`,
+        `history:${libraryCount >= DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS && topGenres.length > 0 ? 1 : 0}`,
+        ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
+    ].join('|');
+}
+
 function hashDashboardSuggestionSeed(value: string): number {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
@@ -1891,6 +1927,65 @@ function updateDashboardSuggestionHistory(entries: DashboardSuggestionEntry[]): 
     writeDashboardSuggestionHistory(nextEntries);
 }
 
+function readDashboardSuggestionCache(): DashboardSuggestionCachePayload | null {
+    try {
+        const raw = window.localStorage.getItem(DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return null;
+        const signature = String((parsed as { signature?: unknown }).signature || '').trim();
+        const expiresAt = Number((parsed as { expiresAt?: unknown }).expiresAt);
+        const entriesRaw = (parsed as { entries?: unknown }).entries;
+        if (!signature || !Number.isFinite(expiresAt) || expiresAt <= 0 || !Array.isArray(entriesRaw)) return null;
+        const entries = entriesRaw
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const item = (entry as { item?: unknown }).item;
+                const reason = String((entry as { reason?: unknown }).reason || '').trim();
+                if (!item || typeof item !== 'object' || !reason) return null;
+                const normalized = normalizeSeriesCollection([item as Series])[0];
+                if (!normalized?.id || !normalized?.name) return null;
+                return { item: normalized, reason };
+            })
+            .filter((entry): entry is DashboardSuggestionEntry => Boolean(entry));
+        if (entries.length === 0) return null;
+        return { signature, expiresAt, entries };
+    } catch {
+        return null;
+    }
+}
+
+function writeDashboardSuggestionCache(signature: string, expiresAt: number, entries: DashboardSuggestionEntry[]): void {
+    try {
+        const payload: DashboardSuggestionCachePayload = {
+            signature,
+            expiresAt,
+            entries: entries.slice(0, DASHBOARD_SUGGESTED_MAX_TOTAL).map((entry) => ({
+                item: entry.item,
+                reason: entry.reason,
+            })),
+        };
+        window.localStorage.setItem(DASHBOARD_SUGGESTED_CACHE_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+        // Ignora falhas de persistência local; as sugestões continuam funcionais.
+    }
+}
+
+function hydrateDashboardSuggestionCache(topGenres: DashboardTopGenre[]): void {
+    const now = Date.now();
+    const signature = buildDashboardSuggestionSignature(topGenres);
+    const cached = readDashboardSuggestionCache();
+    if (!cached) return;
+    if (cached.signature !== signature || cached.expiresAt <= now) return;
+    if (dashboardSuggestedRecommendationEntries.length > 0 && dashboardSuggestedCacheSignature === signature && dashboardSuggestedCacheExpiresAt > now) {
+        return;
+    }
+    dashboardSuggestedRecommendationEntries = cached.entries;
+    dashboardSuggestedCacheSignature = cached.signature;
+    dashboardSuggestedCacheExpiresAt = cached.expiresAt;
+    syncDashboardSuggestedMediaStore();
+}
+
 function buildDashboardSuggestedMediaPayload(): Series[] {
     const allItems = [
         ...dashboardSuggestedUpcomingEntries.map((entry) => entry.item),
@@ -1901,6 +1996,87 @@ function buildDashboardSuggestedMediaPayload(): Series[] {
 
 function syncDashboardSuggestedMediaStore(): void {
     S.setDashboardSuggestedMedia(buildDashboardSuggestedMediaPayload());
+}
+
+function normalizeGlobalLibraryGenreLabel(value: string): string {
+    const normalized = normalizeGenreToken(value);
+    if (!normalized) return '';
+    if (
+        normalized === 'terror'
+        || normalized === 'horror'
+        || normalized === 'horror terror'
+        || normalized.includes('terror')
+        || normalized.includes('horror')
+        || normalized.includes('ghost')
+        || normalized.includes('haunted')
+    ) return 'Horror/Terror';
+    if (
+        normalized.includes('science fiction fantasy')
+        || normalized.includes('ficcao cientifica e fantasia')
+        || (normalized.includes('science fiction') && normalized.includes('fantasy'))
+        || (normalized.includes('ficcao cientifica') && normalized.includes('fantasia'))
+    ) return 'Ficção Científica e Fantasia';
+    if (
+        normalized.includes('science fiction')
+        || normalized.includes('ficcao cientifica')
+        || normalized.includes('sci fi')
+        || normalized.includes('dystopian')
+        || normalized.includes('distopia')
+    ) return 'Ficção científica';
+    if (
+        normalized.includes('fantasy')
+        || normalized.includes('fantasia')
+    ) return 'Ficção Científica e Fantasia';
+    if (
+        normalized.includes('action adventure')
+        || normalized.includes('acao aventura')
+        || normalized.includes('adventure')
+        || normalized.includes('aventura')
+    ) return 'Ação e Aventura';
+    if (
+        normalized === 'acao'
+        || normalized.includes('action')
+    ) return 'Ação';
+    if (
+        normalized.includes('mystery')
+        || normalized.includes('misterio')
+        || normalized.includes('detective')
+        || normalized.includes('suspense')
+    ) return 'Mistério';
+    if (
+        normalized.includes('thriller')
+        || normalized.includes('psychological')
+        || normalized.includes('psicologico')
+    ) return 'Thriller';
+    if (
+        normalized.includes('crime')
+        || normalized.includes('true crime')
+        || normalized.includes('criminal')
+        || normalized.includes('police')
+        || normalized.includes('detective')
+        || normalized.includes('murder')
+    ) return 'Crime';
+    if (
+        normalized.includes('drama')
+        || normalized.includes('literary fiction')
+        || normalized.includes('ficcao literaria')
+        || normalized.includes('contemporary')
+        || normalized.includes('contemporaneo')
+    ) return 'Drama';
+    if (
+        normalized.includes('comedy')
+        || normalized.includes('comedia')
+        || normalized.includes('humor')
+        || normalized.includes('satire')
+        || normalized.includes('satira')
+    ) return 'Comédia';
+    if (
+        normalized.includes('western')
+        || normalized.includes('faroeste')
+        || normalized.includes('cowboy')
+    ) return 'Faroeste';
+    const matchedLabel = GLOBAL_LIBRARY_GENRE_ORDER.find((label) => normalizeGenreToken(label) === normalized);
+    return matchedLabel || '';
 }
 
 async function fetchSuggestedSeriesEntries(
@@ -2092,13 +2268,7 @@ function interleaveSuggestionEntries(
 
 async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): Promise<void> {
     const libraryCount = S.myWatchlist.length + S.myArchive.length;
-    const rotationBucket = getDashboardSuggestionRotationBucket();
-    const signature = [
-        `watchlist:${S.myWatchlist.length}`,
-        `archive:${S.myArchive.length}`,
-        `rotation:${rotationBucket}`,
-        ...topGenres.map((genre) => `${genre.normalized}:${genre.count}`),
-    ].join('|');
+    const signature = buildDashboardSuggestionSignature(topGenres);
 
     const now = Date.now();
     if (
@@ -2116,18 +2286,31 @@ async function ensureDashboardRecommendations(topGenres: DashboardTopGenre[]): P
     const preferHistory = libraryCount >= DASHBOARD_SUGGESTED_HISTORY_MIN_ITEMS && topGenres.length > 0;
 
     dashboardSuggestedInFlight = (async () => {
-        const [seriesEntries, movieEntries, bookEntries] = await Promise.all([
-            fetchSuggestedSeriesEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-            fetchSuggestedMovieEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-            fetchSuggestedBookEntries(topGenres, libraryKeys, preferHistory).catch(() => []),
-        ]);
+        const seriesPromise = fetchSuggestedSeriesEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
+        const moviePromise = fetchSuggestedMovieEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
+        const bookPromise = fetchSuggestedBookEntries(topGenres, libraryKeys, preferHistory).catch(() => []);
 
+        const [seriesEntries, movieEntries] = await Promise.all([seriesPromise, moviePromise]);
         if (requestVersion !== dashboardSuggestedRequestVersion) return;
-        const rotationSeed = `${signature}:${rotationBucket}`;
-        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries, rotationSeed);
+
+        const initialEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, [], `${signature}:initial`);
+        if (initialEntries.length > 0) {
+            dashboardSuggestedRecommendationEntries = initialEntries;
+            dashboardSuggestedCacheSignature = signature;
+            dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
+            writeDashboardSuggestionCache(signature, dashboardSuggestedCacheExpiresAt, dashboardSuggestedRecommendationEntries);
+            syncDashboardSuggestedMediaStore();
+            renderDashboardSuggestionsCarousel();
+        }
+
+        const bookEntries = await bookPromise;
+        if (requestVersion !== dashboardSuggestedRequestVersion) return;
+
+        dashboardSuggestedRecommendationEntries = interleaveSuggestionEntries(seriesEntries, movieEntries, bookEntries, `${signature}:final`);
         updateDashboardSuggestionHistory(dashboardSuggestedRecommendationEntries);
         dashboardSuggestedCacheSignature = signature;
         dashboardSuggestedCacheExpiresAt = Date.now() + DASHBOARD_SUGGESTED_CACHE_TTL_MS;
+        writeDashboardSuggestionCache(signature, dashboardSuggestedCacheExpiresAt, dashboardSuggestedRecommendationEntries);
         syncDashboardSuggestedMediaStore();
         renderDashboardSuggestionsCarousel();
     })()
@@ -2820,7 +3003,8 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
 export function renderMediaDetails(
     media: Series,
     options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean },
-    externalReviews: ExternalReview[] = []
+    externalReviews: ExternalReview[] = [],
+    creditsData: TMDbCredits | null = null
 ) {
     const detailSection = DOM.seriesViewSection;
     clearElementChildren(detailSection);
@@ -3095,7 +3279,19 @@ export function renderMediaDetails(
     detailSection.dataset.mediaType = mediaType;
     detailSection.dataset.mediaId = String(media.id);
 
-    const bodyContentContainer = el('div', { class: 'v2-body-content' }, [
+    const bodyContentContainer = el('div', { class: 'v2-body-content' });
+    if (mediaType === 'movie' && creditsData) {
+        const crewPeople = (creditsData.crew || []).map((person: TMDbCrewPerson) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: person.jobs,
+        }));
+        const moviePeopleElement = renderPeopleInfoCard(crewPeople, creditsData.cast || [], 'Elenco e Criadores');
+        if (moviePeopleElement) bodyContentContainer.appendChild(moviePeopleElement);
+    }
+
+    [
         el('div', { class: 'v2-info-card collapsible' }, [
             el('details', {}, [
                 el('summary', { text: 'As Minhas Notas' }),
@@ -3115,7 +3311,7 @@ export function renderMediaDetails(
                 ? 'As fontes atuais deste livro não disponibilizam reviews externas textuais.'
                 : 'Não existem reviews externas disponíveis para este conteúdo.'
         )
-    ]);
+    ].forEach((node) => bodyContentContainer.appendChild(node));
     detailSection.appendChild(bodyContentContainer);
 }
 
@@ -3302,45 +3498,16 @@ export function renderSeriesDetails(
     detailSection.dataset.seriesId = String(seriesData.id);
 
     const bodyContentContainer = el('div', { class: 'v2-body-content' });
-    const peopleElement = (() => {
-        const creators = seriesData.created_by || [];
-        const fullCast = creditsData.cast || [];
-        if (creators.length === 0 && fullCast.length === 0) return null;
-        const peopleMap = new Map<number, { id: number; name: string; profile_path: string | null; roles: string[] }>();
-        creators.forEach(p => {
-            if (!peopleMap.has(p.id)) peopleMap.set(p.id, { ...p, roles: ['Criador(a)'] });
-        });
-        fullCast.forEach(p => {
-            const characterNames = p.roles?.map(role => role.character).filter(Boolean) || [];
-            if (characterNames.length > 0) {
-                if (peopleMap.has(p.id)) {
-                    peopleMap.get(p.id)!.roles.push(...characterNames);
-                } else {
-                    peopleMap.set(p.id, { id: p.id, name: p.name, profile_path: p.profile_path, roles: characterNames });
-                }
-            }
-        });
-        const allPeople = Array.from(peopleMap.values());
-        const listElement = el('ol', { class: 'v2-people-list' });
-        let buttonElement = null;
-        if (allPeople.length > 9) {
-            const initialPeople = allPeople.slice(0, 9);
-            const remainingPeople = allPeople.slice(9);
-            initialPeople.forEach(p => listElement.appendChild(createPersonElement(p)));
-            buttonElement = el('div', { class: 'v2-people-list-actions' }, [
-                el('button', { class: 'cast-show-more-btn', 'data-remaining-cast': JSON.stringify(remainingPeople), text: 'Ver Mais' })
-            ]);
-        } else {
-            allPeople.forEach(p => listElement.appendChild(createPersonElement(p)));
-        }
-        return el('div', { class: 'v2-info-card collapsible' }, [
-            el('details', {}, [
-                el('summary', { text: 'Elenco e Criadores' }),
-                listElement,
-                buttonElement
-            ])
-        ]);
-    })();
+    const peopleElement = renderPeopleInfoCard(
+        (seriesData.created_by || []).map((person) => ({
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: ['Criador(a)'],
+        })),
+        creditsData.cast || [],
+        'Elenco e Criadores'
+    );
     if (peopleElement) bodyContentContainer.appendChild(peopleElement);
 
     const currentUserNotes = currentUserData.notes || '';
@@ -3399,6 +3566,67 @@ export function createPersonElement(person: { id: number; name: string; profile_
                 el('p', { class: 'name', text: person.name }),
                 el('p', { class: 'character', text: person.roles.join(', ') })
             ])
+        ])
+    ]);
+}
+
+function renderPeopleInfoCard(
+    creators: Array<{ id: number; name: string; profile_path: string | null; roles: string[] }>,
+    cast: TMDbCredits['cast'],
+    summaryLabel: string
+): HTMLElement | null {
+    const fullCast = cast || [];
+    if (creators.length === 0 && fullCast.length === 0) return null;
+
+    const peopleMap = new Map<number, { id: number; name: string; profile_path: string | null; roles: string[] }>();
+    creators.forEach((person) => {
+        if (!peopleMap.has(person.id)) {
+            peopleMap.set(person.id, { ...person, roles: [...person.roles] });
+            return;
+        }
+        const existing = peopleMap.get(person.id)!;
+        person.roles.forEach((role) => {
+            if (!existing.roles.includes(role)) existing.roles.push(role);
+        });
+    });
+
+    fullCast.forEach((person) => {
+        const characterNames = person.roles?.map((role) => role.character).filter(Boolean) || [];
+        if (characterNames.length === 0) return;
+        if (peopleMap.has(person.id)) {
+            const existing = peopleMap.get(person.id)!;
+            characterNames.forEach((role) => {
+                if (!existing.roles.includes(role)) existing.roles.push(role);
+            });
+            return;
+        }
+        peopleMap.set(person.id, {
+            id: person.id,
+            name: person.name,
+            profile_path: person.profile_path,
+            roles: characterNames,
+        });
+    });
+
+    const allPeople = Array.from(peopleMap.values());
+    const listElement = el('ol', { class: 'v2-people-list' });
+    let buttonElement: HTMLElement | null = null;
+    if (allPeople.length > 9) {
+        const initialPeople = allPeople.slice(0, 9);
+        const remainingPeople = allPeople.slice(9);
+        initialPeople.forEach((person) => listElement.appendChild(createPersonElement(person)));
+        buttonElement = el('div', { class: 'v2-people-list-actions' }, [
+            el('button', { class: 'cast-show-more-btn', 'data-remaining-cast': JSON.stringify(remainingPeople), text: 'Ver Mais' })
+        ]);
+    } else {
+        allPeople.forEach((person) => listElement.appendChild(createPersonElement(person)));
+    }
+
+    return el('div', { class: 'v2-info-card collapsible' }, [
+        el('details', {}, [
+            el('summary', { text: summaryLabel }),
+            listElement,
+            buttonElement
         ])
     ]);
 }
@@ -4301,30 +4529,32 @@ function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
             movie: getStatsMediaVisual('movie'),
             book: getStatsMediaVisual('book'),
         };
-        const genreMap = new Map<string, Record<MediaType, number>>();
+        const genreMap = new Map<string, Record<MediaType, number>>(
+            GLOBAL_LIBRARY_GENRE_ORDER.map((label) => [label, { series: 0, movie: 0, book: 0 }])
+        );
         (['series', 'movie', 'book'] as MediaType[]).forEach((mediaType) => {
             getContextItems(mediaType, cache).forEach((item) => {
                 if (!Array.isArray(item.genres)) return;
                 item.genres.forEach((genre: Genre) => {
                     const genreName = translateGenreName(genre.name) || genre.name;
-                    if (!genreName) return;
-                    if (!genreMap.has(genreName)) {
-                        genreMap.set(genreName, { series: 0, movie: 0, book: 0 });
-                    }
-                    genreMap.get(genreName)![mediaType] += 1;
+                    const normalizedGenreLabel = normalizeGlobalLibraryGenreLabel(genreName);
+                    if (!normalizedGenreLabel || !genreMap.has(normalizedGenreLabel)) return;
+                    genreMap.get(normalizedGenreLabel)![mediaType] += 1;
                 });
             });
         });
-        const topGenres = Array.from(genreMap.entries())
+        const globalGenres = Array.from(genreMap.entries())
             .map(([name, counts]) => ({
                 name,
                 counts,
                 total: counts.series + counts.movie + counts.book,
             }))
             .filter((entry) => entry.total > 0)
-            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-            .slice(0, 10);
-        const labels = topGenres.map((entry) => entry.name);
+            .sort((left, right) =>
+                GLOBAL_LIBRARY_GENRE_ORDER.indexOf(left.name as typeof GLOBAL_LIBRARY_GENRE_ORDER[number])
+                - GLOBAL_LIBRARY_GENRE_ORDER.indexOf(right.name as typeof GLOBAL_LIBRARY_GENRE_ORDER[number])
+            );
+        const labels = globalGenres.map((entry) => entry.name);
         setCanvasA11yLabel(
             canvas,
             labels.length > 0
@@ -4345,7 +4575,7 @@ function renderGenresChart(stats: StatsSummary, cache?: StatsComputationCache) {
                 labels,
                 datasets: (['series', 'movie', 'book'] as MediaType[]).map((mediaType) => ({
                     label: visuals[mediaType].label,
-                    data: topGenres.map((entry) => entry.counts[mediaType]),
+                    data: globalGenres.map((entry) => entry.counts[mediaType]),
                     backgroundColor: visuals[mediaType].accent,
                     borderColor: visuals[mediaType].accent,
                     borderWidth: 1,

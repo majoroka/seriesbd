@@ -63,9 +63,129 @@ const extractIsbnFields = (inputValues) => {
   };
 };
 
+const BOOK_CANONICAL_GENRE_LABELS = [
+  'Drama',
+  'Crime',
+  'Mistério',
+  'Thriller',
+  'Romance',
+  'Horror/Terror',
+  'Ficção científica',
+  'Fantasia',
+  'Ação e Aventura',
+  'Comédia',
+  'Biografia',
+  'História',
+  'Não-ficção',
+  'Infantil/Juvenil',
+  'Faroeste',
+];
+
+const BOOK_GENRE_RULES = [
+  { genre: 'Crime', patterns: ['true crime', 'crime', 'criminal', 'murder', 'police', 'noir'] },
+  { genre: 'Thriller', patterns: ['psychological thriller', 'thriller', 'suspense', 'psychological', 'psicologico'] },
+  { genre: 'Mistério', patterns: ['mystery', 'misterio', 'detective', 'whodunit', 'investigation', 'investigacao'] },
+  { genre: 'Ficção científica', patterns: ['science fiction', 'sci fi', 'sci-fi', 'ficcao cientifica', 'dystopian', 'distopia'] },
+  { genre: 'Fantasia', patterns: ['epic fantasy', 'urban fantasy', 'fantasy', 'fantasia', 'magic', 'magia'] },
+  { genre: 'Romance', patterns: ['romance', 'love story', 'amor'] },
+  { genre: 'Horror/Terror', patterns: ['horror', 'terror', 'ghost', 'haunted', 'supernatural'] },
+  { genre: 'Ação e Aventura', patterns: ['action adventure', 'adventure', 'aventura', 'action', 'acao'] },
+  { genre: 'Comédia', patterns: ['comedy', 'comedia', 'humor', 'satire', 'satira'] },
+  { genre: 'Biografia', patterns: ['biography', 'autobiography', 'memoir', 'biografia', 'memorias'] },
+  { genre: 'História', patterns: ['historical fiction', 'historical', 'history', 'historia'] },
+  { genre: 'Infantil/Juvenil', patterns: ['young adult', 'juvenile', 'children', 'childrens', 'kids', 'infantil', 'juvenil'] },
+  { genre: 'Faroeste', patterns: ['western', 'faroeste', 'cowboy'] },
+  { genre: 'Não-ficção', patterns: ['non fiction', 'non-fiction', 'nao ficcao', 'essay', 'ensaio', 'documentary', 'documentario'] },
+  { genre: 'Drama', patterns: ['literary fiction', 'ficcao literaria', 'contemporary', 'contemporaneo', 'drama'] },
+];
+
+const normalizeBookGenreToken = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/&/g, ' e ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const BOOK_GENRE_NOISE_TOKENS = new Set([
+  'general',
+  'fiction',
+  'general fiction',
+  'nonfiction',
+  'non fiction',
+  'authors',
+  'author',
+  'portuguese',
+  'brasil',
+  'brazil',
+  'portugal',
+  'language',
+  'languages',
+  'literary',
+  'literature',
+  'literatura',
+  'books',
+  'book',
+  'reading',
+  'readers',
+  'subjects',
+  'tema geral',
+  'temas gerais',
+]);
+
+const titleCaseGenre = (value) => String(value || '')
+  .toLowerCase()
+  .split(' ')
+  .filter(Boolean)
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(' ');
+
+const mapBookGenreTokenToCanonical = (value) => {
+  const normalized = normalizeBookGenreToken(value);
+  if (!normalized || BOOK_GENRE_NOISE_TOKENS.has(normalized)) return '';
+  const matchedRule = BOOK_GENRE_RULES.find((rule) =>
+    rule.patterns.some((pattern) => normalized.includes(pattern))
+  );
+  return matchedRule?.genre || '';
+};
+
+const splitBookGenreCandidates = (input) => {
+  const values = Array.isArray(input) ? input : [input];
+  return values
+    .flatMap((entry) => String(entry || '').split(/[\/,&;|>]+/g))
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+};
+
 const toGenreList = (input) => {
-  if (!Array.isArray(input)) return [];
-  return input.slice(0, 3).map((name, index) => ({ id: index + 1, name: String(name) }));
+  const candidates = splitBookGenreCandidates(input);
+  if (candidates.length === 0) return [];
+
+  const canonical = [];
+  const rawFallback = [];
+  const seenCanonical = new Set();
+  const seenFallback = new Set();
+
+  candidates.forEach((candidate) => {
+    const mapped = mapBookGenreTokenToCanonical(candidate);
+    if (mapped && !seenCanonical.has(mapped)) {
+      seenCanonical.add(mapped);
+      canonical.push(mapped);
+      return;
+    }
+
+    const normalized = normalizeBookGenreToken(candidate);
+    if (!normalized || BOOK_GENRE_NOISE_TOKENS.has(normalized)) return;
+    const fallbackLabel = titleCaseGenre(normalized);
+    if (!fallbackLabel || BOOK_CANONICAL_GENRE_LABELS.includes(fallbackLabel) || seenFallback.has(fallbackLabel)) return;
+    seenFallback.add(fallbackLabel);
+    rawFallback.push(fallbackLabel);
+  });
+
+  return [...canonical, ...rawFallback]
+    .slice(0, 3)
+    .map((name, index) => ({ id: index + 1, name: String(name) }));
 };
 
 const dedupeBookResults = (results) => {
@@ -432,7 +552,7 @@ const mapOpenLibraryWorkDetails = (payload, sourceId, fallbackTitle = '', fallba
     poster_path: coverId ? `${OPEN_LIBRARY_COVERS_BASE_URL}/${coverId}-L.jpg` : null,
     backdrop_path: null,
     first_air_date: firstPublished,
-    genres: [],
+    genres: toGenreList(payload?.subjects || payload?.subject || []),
     ...isbnFields,
   };
 };
