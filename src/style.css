@@ -612,6 +612,31 @@ body.light-theme .sidebar-submenu-shell {
     flex-grow: 1;
 }
 
+.search-bar-clear-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background-color: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.search-bar-clear-button:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    background-color: rgba(var(--media-series-rgb), 0.08);
+}
+
+.search-bar-clear-button[hidden] {
+    display: none !important;
+}
+
 #search-media-type {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -5163,7 +5188,7 @@ body.light-theme .network-logo {
     .search-bar {
         width: 100%; /* Ocupa a largura toda */
         display: grid;
-        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        grid-template-columns: auto auto minmax(0, 1fr) auto auto;
         align-items: center;
         gap: 0.5rem;
         padding: 0.45rem 0.55rem;
@@ -5201,6 +5226,11 @@ body.light-theme .network-logo {
         padding: 0; /* Remove o padding */
         font-size: 0; /* Esconde o texto "Pesquisar" */
         position: relative; /* Contexto para o ícone */
+    }
+
+    .search-bar .search-bar-clear-button {
+        width: 40px;
+        height: 40px;
     }
 
     .media-progress-controls {

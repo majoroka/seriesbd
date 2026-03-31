@@ -4041,7 +4041,25 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.addSeriesHeaderInput.placeholder = getSearchPlaceholder(mediaType);
     };
 
+    const syncSearchClearButtonVisibility = () => {
+        if (!DOM.addSeriesHeaderClearBtn) return;
+        DOM.addSeriesHeaderClearBtn.hidden = DOM.addSeriesHeaderInput.value.trim().length === 0;
+    };
+
+    const clearSearchInput = () => {
+        debouncedSearch.cancel();
+        S.resetSearchAbortController();
+        DOM.addSeriesHeaderInput.value = '';
+        S.setCurrentSearchResults([]);
+        syncSearchClearButtonVisibility();
+        if (DOM.addSeriesSection && DOM.addSeriesSection.style.display !== 'none') {
+            setElementMessage(DOM.searchResultsContainer, getSearchEmptyMessage(selectedSearchMediaType));
+        }
+        DOM.addSeriesHeaderInput.focus();
+    };
+
     setSearchMediaType(parseMediaType(DOM.searchMediaTypeSelect?.value));
+    syncSearchClearButtonVisibility();
 
     const performSearch = () => {
         const query = DOM.addSeriesHeaderInput.value.trim();
@@ -4092,6 +4110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.searchMediaTypeSelect?.addEventListener('change', () => {
         setSearchMediaType(parseMediaType(DOM.searchMediaTypeSelect.value));
+        syncSearchClearButtonVisibility();
         if (DOM.addSeriesHeaderInput.value.trim().length > 1) {
             debouncedSearch.cancel();
             performSearch();
@@ -4100,9 +4119,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.addSeriesHeaderInput.addEventListener('input', () => {
         S.resetSearchAbortController();
+        syncSearchClearButtonVisibility();
         debouncedSearch();
     });
 
+    DOM.addSeriesHeaderClearBtn.addEventListener('click', clearSearchInput);
     DOM.addSeriesHeaderButton.addEventListener('click', performSearch);
 
     DOM.addSeriesHeaderInput.addEventListener('keydown', (e) => {
