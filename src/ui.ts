@@ -20,6 +20,7 @@ import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from '
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey, normalizeSeriesCollection } from './media';
+import { getSeriesLibraryStatus as getSeriesLifecycleStatus } from './seriesLifecycle';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -989,8 +990,14 @@ function resolveLibraryStatus(series: Series): LibraryStatusFilter {
     if (isArchived) return 'archive';
 
     if (mediaType === 'series') {
-        const watchedCount = S.watchedState[series.id]?.length || 0;
-        return watchedCount > 0 ? 'unseen' : 'watchlist';
+        return getSeriesLifecycleStatus({
+            watchedCount: S.watchedState[series.id]?.length || 0,
+            totalEpisodes: series.total_episodes || 0,
+            releasedEpisodes: series._details?.released_episode_count,
+            status: series._details?.status,
+            nextEpisodeToAir: series._details?.next_episode_to_air,
+            firstAirDate: series.first_air_date,
+        });
     }
 
     const progressPercent = getMediaProgressPercent(series);
