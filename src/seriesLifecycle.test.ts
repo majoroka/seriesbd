@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getSeriesArchiveRecommendation,
   getSeriesLibraryStatus,
+  getSeriesUnwatchedBadgeCount,
   getSeriesReleasedEpisodesFromDetails,
   getSeriesTotalEpisodesFromDetails,
   isSeriesStatusTerminal,
@@ -147,6 +148,40 @@ describe('series lifecycle helpers', () => {
         firstAirDate: '2020-01-01',
       }),
     ).toBe('archive');
+  });
+
+  it('uses total known episodes for the A Ver badge when totals are available', () => {
+    expect(
+      getSeriesUnwatchedBadgeCount({
+        watchedCount: 30,
+        totalEpisodes: 48,
+        releasedEpisodes: 30,
+        status: 'Returning Series',
+        nextEpisodeToAir: {
+          season_number: 4,
+          episode_number: 6,
+          air_date: '2030-05-31',
+        } as any,
+        firstAirDate: '2020-01-01',
+      }),
+    ).toBe(18);
+  });
+
+  it('falls back to inferred episode counts for the A Ver badge when totals are stale', () => {
+    expect(
+      getSeriesUnwatchedBadgeCount({
+        watchedCount: 30,
+        totalEpisodes: 30,
+        releasedEpisodes: 30,
+        status: 'Returning Series',
+        nextEpisodeToAir: {
+          season_number: 4,
+          episode_number: 6,
+          air_date: '2030-05-31',
+        } as any,
+        firstAirDate: '2020-01-01',
+      }),
+    ).toBe(5);
   });
 
   it('keeps an archived series in watchlist when released episodes are still pending', () => {
