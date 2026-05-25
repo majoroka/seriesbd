@@ -23,6 +23,7 @@ import { createMediaKey, normalizeSeriesCollection } from './media';
 import {
     getEffectiveReleasedEpisodeCount,
     getSeriesLibraryStatus as getSeriesLifecycleStatus,
+    getSeriesUnwatchedBadgeCount,
     getSeriesUnwatchedReleasedCount,
 } from './seriesLifecycle';
 
@@ -2948,7 +2949,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const isSeriesInProgress = watchedCount > 0 && progressPercentage < 100;
 
     const unwatchedCount = mediaType === 'series'
-        ? getSeriesUnwatchedReleasedCount({
+        ? getSeriesUnwatchedBadgeCount({
             watchedCount,
             totalEpisodes,
             releasedEpisodes: series._details?.released_episode_count,

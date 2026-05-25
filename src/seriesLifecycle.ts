@@ -61,6 +61,10 @@ function getImplicitReleasedEpisodeCountBeforeNext(snapshot: SeriesLifecycleSnap
   return snapshot.totalEpisodes + (nextEpisode.episode_number - 1);
 }
 
+export function getSeriesImplicitEpisodeCount(snapshot: SeriesLifecycleInput): number | null {
+  return getImplicitReleasedEpisodeCountBeforeNext({ ...snapshot, isArchived: false });
+}
+
 function hasPremiered(firstAirDate: string | null | undefined): boolean {
   const premiereDate = parseDateOnly(firstAirDate);
   if (!premiereDate) return true;
@@ -161,6 +165,17 @@ export function getSeriesUnwatchedReleasedCount(snapshot: SeriesLifecycleInput):
   const releasedEpisodes = getEffectiveReleasedEpisodeCount(snapshot);
   if (releasedEpisodes === null || releasedEpisodes <= 0) return 0;
   return Math.max(0, releasedEpisodes - snapshot.watchedCount);
+}
+
+export function getSeriesUnwatchedBadgeCount(snapshot: SeriesLifecycleInput): number {
+  const implicitEpisodeCount = getSeriesImplicitEpisodeCount(snapshot);
+  const knownEpisodeCount = Math.max(
+    snapshot.totalEpisodes || 0,
+    snapshot.releasedEpisodes || 0,
+    implicitEpisodeCount || 0,
+  );
+  if (knownEpisodeCount <= 0) return 0;
+  return Math.max(0, knownEpisodeCount - snapshot.watchedCount);
 }
 
 export function getSeriesArchiveRecommendation(snapshot: SeriesLifecycleSnapshot): SeriesArchiveRecommendation {
