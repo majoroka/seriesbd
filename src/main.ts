@@ -32,15 +32,20 @@ import {
 import {
     clearPendingLibrarySyncConflict,
     getPendingLibrarySyncConflict,
+    getLibrarySyncStatusSummary,
     LibrarySyncOutcome,
+    type LibrarySyncStatusSummary,
     markLocalLibraryMutation,
-    pushLocalLibrarySnapshot,
+    pushLocalLibrarySnapshotWithReason,
+    replaceRemoteLibrarySnapshotWithLocal,
     resolvePendingLibrarySyncConflict,
+    restoreLibrarySnapshotFromCloud,
     syncLibrarySnapshotAfterLogin,
 } from './librarySync';
 import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
+const SYNC_AUDIT_STORAGE_KEY = 'seriesdb.syncAudit.v1';
 const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
 const GUEST_ADD_WARNING_SHOWN_STORAGE_KEY = 'seriesdb.guestAddWarningShown.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
@@ -59,6 +64,14 @@ type PerformanceMetric = {
     avgDurationMs: number;
     lastDurationMs: number;
     lastRunAt: string;
+};
+type SyncAuditEntry = {
+    at: string;
+    event: string;
+    userId: string | null;
+    localTotal: number | null;
+    remoteTotal: number | null;
+    detail: string;
 };
 type DetailReturnContext = {
     sectionId: string;
@@ -114,6 +127,8 @@ let notificationsMenuHoverCloseTimer: number | null = null;
 let mobileTopbarPanelOpen = false;
 let clearingLocalDeviceData = false;
 let settingsMenuHoverCloseTimer: number | null = null;
+let lastLibrarySyncStatusSummary: LibrarySyncStatusSummary | null = null;
+let syncAuditEntries: SyncAuditEntry[] = [];
 const nextAiredRetryAt = new Map<number, number>();
 
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -1168,6 +1183,28 @@ function persistObservabilitySnapshot() {
     (window as unknown as { __seriesdbObservability?: unknown }).__seriesdbObservability = snapshot;
 }
 
+function persistSyncAuditSnapshot() {
+    try {
+        sessionStorage.setItem(SYNC_AUDIT_STORAGE_KEY, JSON.stringify(syncAuditEntries));
+    } catch (error) {
+        console.warn('[library-sync] Não foi possível persistir audit trail local.', error);
+    }
+}
+
+function recordLibrarySyncAudit(event: string, detail: string, summary: LibrarySyncStatusSummary | null = lastLibrarySyncStatusSummary) {
+    const entry: SyncAuditEntry = {
+        at: new Date().toISOString(),
+        event,
+        userId: currentAuthenticatedUserId,
+        localTotal: summary?.localCounts.totalItemCount ?? null,
+        remoteTotal: summary?.remoteCounts?.totalItemCount ?? null,
+        detail,
+    };
+    syncAuditEntries = [entry, ...syncAuditEntries].slice(0, 25);
+    persistSyncAuditSnapshot();
+    console.info('[library-sync][audit]', entry);
+}
+
 function recordSectionPerformance(section: ObservabilitySection, durationMs: number, success: boolean) {
     const current = sectionPerformanceMetrics[section] || {
         runs: 0,
@@ -1420,7 +1457,10 @@ async function syncUserSettingsToRemoteIfNeeded(): Promise<void> {
 async function syncLibrarySnapshotToRemoteIfNeeded(): Promise<void> {
     if (!isSupabaseConfigured() || !currentAuthenticatedUserId || isApplyingRemoteLibrarySnapshot) return;
     try {
-        await pushLocalLibrarySnapshot(currentAuthenticatedUserId);
+        await pushLocalLibrarySnapshotWithReason(currentAuthenticatedUserId, 'auto');
+        if (DOM.settingsMenu?.classList.contains('visible')) {
+            await refreshLibrarySyncStatus(currentAuthenticatedUserId, 'auto-push');
+        }
     } catch (error) {
         console.error('[library-sync] Falha ao guardar biblioteca no Supabase.', error);
     }
@@ -1462,6 +1502,77 @@ async function syncCloudStateAfterLogin(userId: string): Promise<LibrarySyncOutc
     return libraryOutcome;
 }
 
+function formatLibrarySyncTimestamp(iso: string | null): string {
+    if (!iso) return 'sem registo';
+    const timestamp = Date.parse(iso);
+    if (Number.isNaN(timestamp)) return 'sem registo';
+    return new Date(timestamp).toLocaleString('pt-PT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function setLibrarySyncStatusUi(label: string, detail: string): void {
+    if (DOM.accountSyncStatusLabel) {
+        DOM.accountSyncStatusLabel.textContent = label;
+    }
+    if (DOM.accountSyncStatusDetail) {
+        DOM.accountSyncStatusDetail.textContent = detail;
+    }
+}
+
+async function refreshLibrarySyncStatus(userId: string | null, reason = 'status-refresh'): Promise<void> {
+    if (!userId || !isSupabaseConfigured()) {
+        lastLibrarySyncStatusSummary = null;
+        setLibrarySyncStatusUi(
+            'Sem sessão cloud ativa.',
+            'Inicie sessão para sincronizar a biblioteca entre dispositivos.',
+        );
+        return;
+    }
+
+    try {
+        const summary = await getLibrarySyncStatusSummary(userId);
+        lastLibrarySyncStatusSummary = summary;
+
+        if (summary.pendingConflict) {
+            setLibrarySyncStatusUi(
+                'Conflito de sincronização pendente.',
+                `Cloud: ${summary.remoteCounts?.totalItemCount ?? 0} itens • Dispositivo: ${summary.localCounts.totalItemCount} itens`,
+            );
+            recordLibrarySyncAudit(reason, 'Conflito de sincronização pendente detetado.', summary);
+            return;
+        }
+
+        if (!summary.remoteAvailable || !summary.remoteCounts) {
+            setLibrarySyncStatusUi(
+                'Sem snapshot remoto consolidado.',
+                `Este dispositivo tem ${summary.localCounts.totalItemCount} itens. Última mutação local: ${formatLibrarySyncTimestamp(summary.localMutationAt)}.`,
+            );
+            recordLibrarySyncAudit(reason, 'Sem snapshot remoto disponível.', summary);
+            return;
+        }
+
+        const remoteDeviceSuffix = summary.remoteDeviceId && summary.remoteDeviceId !== summary.localDeviceId
+            ? ' • snapshot vindo de outro dispositivo'
+            : '';
+        setLibrarySyncStatusUi(
+            `Cloud pronta com ${summary.remoteCounts.totalItemCount} itens.`,
+            `Última sync: ${formatLibrarySyncTimestamp(summary.remoteUpdatedAt)} • razão: ${summary.remoteSyncReason || 'desconhecida'}${remoteDeviceSuffix}`,
+        );
+        recordLibrarySyncAudit(reason, 'Estado de sync cloud atualizado.', summary);
+    } catch (error) {
+        console.error('[library-sync] Falha ao carregar estado de sincronização.', error);
+        setLibrarySyncStatusUi(
+            'Erro ao validar sincronização.',
+            'Não foi possível ler o estado atual da cloud neste momento.',
+        );
+    }
+}
+
 async function handleLibrarySyncConflict(outcome: LibrarySyncOutcome): Promise<LibrarySyncOutcome> {
     if (outcome !== 'conflict_remote_richer' && outcome !== 'conflict_local_richer') {
         return outcome;
@@ -1475,6 +1586,17 @@ async function handleLibrarySyncConflict(outcome: LibrarySyncOutcome): Promise<L
     const primaryMessage = outcome === 'conflict_remote_richer'
         ? `A cloud tem muito mais dados do que este dispositivo (${remoteSummary} vs ${localSummary}). Pretende restaurar a biblioteca da cloud?`
         : `Este dispositivo tem muito mais dados do que a cloud (${localSummary} vs ${remoteSummary}). Pretende manter os dados deste dispositivo e substituir a cloud?`;
+    recordLibrarySyncAudit('conflict-detected', primaryMessage, {
+        localDeviceId: '',
+        localMutationAt: conflict.localMutationAt,
+        localCounts: conflict.localCounts,
+        remoteAvailable: true,
+        remoteUpdatedAt: conflict.remoteUpdatedAt,
+        remoteCounts: conflict.remoteCounts,
+        remoteDeviceId: null,
+        remoteSyncReason: null,
+        pendingConflict: conflict,
+    });
 
     const usePrimaryOption = await UI.showConfirmationModal(primaryMessage);
     if (usePrimaryOption) {
@@ -1487,6 +1609,7 @@ async function handleLibrarySyncConflict(outcome: LibrarySyncOutcome): Promise<L
         } else if (resolved === 'pushed') {
             UI.showNotification('Biblioteca deste dispositivo sincronizada para a cloud.');
         }
+        await refreshLibrarySyncStatus(conflict.userId, 'conflict-resolved-primary');
         return resolved;
     }
 
@@ -1504,11 +1627,13 @@ async function handleLibrarySyncConflict(outcome: LibrarySyncOutcome): Promise<L
         } else if (resolved === 'pushed') {
             UI.showNotification('Biblioteca deste dispositivo sincronizada para a cloud.');
         }
+        await refreshLibrarySyncStatus(conflict.userId, 'conflict-resolved-secondary');
         return resolved;
     }
 
     clearPendingLibrarySyncConflict();
     UI.showNotification('Sincronização adiada. Nenhuma biblioteca foi substituída.');
+    await refreshLibrarySyncStatus(conflict.userId, 'conflict-deferred');
     return 'noop';
 }
 
@@ -1638,6 +1763,8 @@ function updateAuthActionButtons(user: User | null) {
     DOM.authLogoutBtn.hidden = !hasSession;
     DOM.clearLocalDeviceDataBtn.hidden = !hasSession;
     DOM.accountMenuNote.hidden = !hasSession;
+    DOM.restoreCloudLibraryBtn.hidden = !hasSession;
+    DOM.replaceCloudLibraryBtn.hidden = !hasSession;
     DOM.exportDataBtn.hidden = !hasSession;
     DOM.importDataBtn.hidden = !hasSession;
     DOM.rescanSeriesBtn.hidden = !hasSession;
@@ -1647,11 +1774,15 @@ function updateAuthActionButtons(user: User | null) {
     DOM.rescanSeriesBtn.disabled = !hasSession;
     DOM.refetchDataBtn.disabled = !hasSession;
     DOM.clearLocalDeviceDataBtn.disabled = !hasSession;
+    DOM.restoreCloudLibraryBtn.disabled = !hasSession;
+    DOM.replaceCloudLibraryBtn.disabled = !hasSession;
     DOM.exportDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.importDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.rescanSeriesBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.refetchDataBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.clearLocalDeviceDataBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.restoreCloudLibraryBtn.setAttribute('aria-disabled', String(!hasSession));
+    DOM.replaceCloudLibraryBtn.setAttribute('aria-disabled', String(!hasSession));
     DOM.exportDataBtn.title = hasSession
         ? 'Exportar media'
         : 'Disponível apenas com sessão ativa.';
@@ -1666,6 +1797,12 @@ function updateAuthActionButtons(user: User | null) {
         : 'Disponível apenas com sessão ativa.';
     DOM.clearLocalDeviceDataBtn.title = hasSession
         ? 'Limpar dados deste dispositivo'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.restoreCloudLibraryBtn.title = hasSession
+        ? 'Restaurar biblioteca da cloud'
+        : 'Disponível apenas com sessão ativa.';
+    DOM.replaceCloudLibraryBtn.title = hasSession
+        ? 'Substituir snapshot cloud com este dispositivo'
         : 'Disponível apenas com sessão ativa.';
 }
 
@@ -1918,7 +2055,9 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
             UI.showNotification(`Sessão iniciada: ${user.email}`);
-            void syncCloudStateAfterLogin(user.id).then((outcome) => handleLibrarySyncConflict(outcome));
+            void syncCloudStateAfterLogin(user.id)
+                .then((outcome) => handleLibrarySyncConflict(outcome))
+                .then(() => refreshLibrarySyncStatus(user.id, 'signed-in'));
         }
     } else if (event === 'SIGNED_OUT') {
         clearInactivityLogoutTimer();
@@ -1936,6 +2075,7 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
         lastSignOutReason = null;
         clearInMemoryLibraryState();
         renderLibraryStateFromMemory();
+        void refreshLibrarySyncStatus(null, 'signed-out');
     }
 }
 
@@ -1947,6 +2087,10 @@ async function initializeAuthState() {
         DOM.authSignupBtn.disabled = true;
         DOM.accountProfileBtn.disabled = true;
         DOM.authLogoutBtn.disabled = true;
+        setLibrarySyncStatusUi(
+            'Modo local ativo.',
+            'A cloud não está configurada neste ambiente.',
+        );
         return;
     }
 
@@ -1963,6 +2107,9 @@ async function initializeAuthState() {
         if (currentUser) {
             const outcome = await syncCloudStateAfterLogin(currentUser.id);
             await handleLibrarySyncConflict(outcome);
+            await refreshLibrarySyncStatus(currentUser.id, 'initial-auth');
+        } else {
+            await refreshLibrarySyncStatus(null, 'initial-auth-no-session');
         }
     } catch (error) {
         if (isBenignMissingRefreshTokenError(error)) {
@@ -3343,7 +3490,10 @@ async function importData(): Promise<void> {
                 UI.showNotification('Dados importados com sucesso! A aplicação será atualizada.');
                 await initializeApp();
                 await markLocalLibraryMutation();
-                await syncLibrarySnapshotToRemoteIfNeeded();
+                if (currentAuthenticatedUserId) {
+                    await pushLocalLibrarySnapshotWithReason(currentAuthenticatedUserId, 'import');
+                    await refreshLibrarySyncStatus(currentAuthenticatedUserId, 'import');
+                }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 console.error('Erro ao importar dados:', message);
@@ -3409,6 +3559,70 @@ async function refetchAllMetadata(): Promise<void> {
         const message = error instanceof Error ? error.message : String(error);
         console.error('Erro ao recarregar todos os metadados:', message);
         UI.showNotification(`Ocorreu um erro geral durante a atualização dos metadados: ${message}`);
+    }
+}
+
+async function restoreLibraryFromCloudManually(): Promise<void> {
+    setSettingsMenuOpen(false);
+    if (!currentAuthenticatedUserId) {
+        UI.showNotification('Inicie sessão para restaurar a biblioteca da cloud.');
+        return;
+    }
+
+    const summary = lastLibrarySyncStatusSummary ?? await getLibrarySyncStatusSummary(currentAuthenticatedUserId);
+    if (!summary.remoteAvailable || !summary.remoteCounts || summary.remoteCounts.totalItemCount === 0) {
+        UI.showNotification('A cloud não tem um snapshot remoto com dados para restaurar.');
+        return;
+    }
+
+    const confirmed = await UI.showConfirmationModal(
+        `Isto irá substituir os dados deste dispositivo pela biblioteca da cloud (${summary.remoteCounts.totalItemCount} itens). Deseja continuar?`,
+    );
+    if (!confirmed) return;
+
+    try {
+        isApplyingRemoteLibrarySnapshot = true;
+        const outcome = await restoreLibrarySnapshotFromCloud(currentAuthenticatedUserId);
+        if (outcome === 'pulled') {
+            await initializeApp();
+            UI.showNotification('Biblioteca restaurada da cloud.');
+            await refreshLibrarySyncStatus(currentAuthenticatedUserId, 'manual-restore-cloud');
+        }
+    } catch (error) {
+        console.error('[library-sync] Falha ao restaurar a biblioteca da cloud.', error);
+        UI.showNotification('Não foi possível restaurar a biblioteca da cloud.');
+    } finally {
+        isApplyingRemoteLibrarySnapshot = false;
+    }
+}
+
+async function replaceCloudWithLocalManually(): Promise<void> {
+    setSettingsMenuOpen(false);
+    if (!currentAuthenticatedUserId) {
+        UI.showNotification('Inicie sessão para substituir a cloud.');
+        return;
+    }
+
+    const summary = lastLibrarySyncStatusSummary ?? await getLibrarySyncStatusSummary(currentAuthenticatedUserId);
+    if (summary.localCounts.totalItemCount === 0) {
+        UI.showNotification('Este dispositivo não tem dados suficientes para substituir a cloud.');
+        return;
+    }
+
+    const confirmed = await UI.showConfirmationModal(
+        `Isto irá substituir o snapshot cloud atual com os ${summary.localCounts.totalItemCount} itens deste dispositivo. Deseja continuar?`,
+    );
+    if (!confirmed) return;
+
+    try {
+        const outcome = await replaceRemoteLibrarySnapshotWithLocal(currentAuthenticatedUserId, 'manual_replace_cloud');
+        if (outcome === 'pushed') {
+            UI.showNotification('A cloud foi substituída com a biblioteca deste dispositivo.');
+            await refreshLibrarySyncStatus(currentAuthenticatedUserId, 'manual-replace-cloud');
+        }
+    } catch (error) {
+        console.error('[library-sync] Falha ao substituir a cloud com este dispositivo.', error);
+        UI.showNotification('Não foi possível substituir a cloud com este dispositivo.');
     }
 }
 
@@ -4766,6 +4980,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.exportDataBtn?.addEventListener('click', exportData);
     DOM.importDataBtn?.addEventListener('click', importData);
+    DOM.restoreCloudLibraryBtn?.addEventListener('click', () => {
+        void restoreLibraryFromCloudManually();
+    });
+    DOM.replaceCloudLibraryBtn?.addEventListener('click', () => {
+        void replaceCloudWithLocalManually();
+    });
     DOM.authLoginBtn?.addEventListener('click', () => {
         setSettingsMenuOpen(false);
         if (isMobileViewport()) {
