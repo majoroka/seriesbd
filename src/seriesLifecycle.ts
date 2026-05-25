@@ -43,6 +43,22 @@ function hasImplicitReleasedEpisodesBeforeNext(snapshot: SeriesLifecycleSnapshot
   return nextEpisode.episode_number > 1;
 }
 
+function getImplicitReleasedEpisodeCountBeforeNext(snapshot: SeriesLifecycleSnapshot): number | null {
+  if (!hasImplicitReleasedEpisodesBeforeNext(snapshot)) return null;
+  const nextEpisode = snapshot.nextEpisodeToAir;
+  if (!nextEpisode) return null;
+  if (
+    nextEpisode.episode_number === 2
+    && typeof snapshot.releasedEpisodes === 'number'
+    && snapshot.watchedCount === snapshot.releasedEpisodes
+    && snapshot.watchedCount < snapshot.totalEpisodes
+  ) {
+    return snapshot.releasedEpisodes + 1;
+  }
+  if (snapshot.totalEpisodes > snapshot.watchedCount) return null;
+  return snapshot.totalEpisodes + (nextEpisode.episode_number - 1);
+}
+
 function hasPremiered(firstAirDate: string | null | undefined): boolean {
   const premiereDate = parseDateOnly(firstAirDate);
   if (!premiereDate) return true;
@@ -119,23 +135,21 @@ export function getSeriesLibraryStatus(snapshot: Omit<SeriesLifecycleSnapshot, '
   if (releasedEpisodes !== null) {
     if (releasedEpisodes <= 0 || watchedCount <= 0) return 'watchlist';
     if (watchedCount < releasedEpisodes) return 'unseen';
-    if (
-      !isSeriesStatusTerminal(snapshot.status)
-      && hasImplicitReleasedEpisodesBeforeNext(snapshot)
-      && totalEpisodes > watchedCount
-    ) {
-      return 'unseen';
+    if (!isSeriesStatusTerminal(snapshot.status)) {
+      const implicitReleasedCount = getImplicitReleasedEpisodeCountBeforeNext(snapshot);
+      if (implicitReleasedCount !== null) {
+        return watchedCount < implicitReleasedCount ? 'unseen' : 'archive';
+      }
     }
     return 'archive';
   }
 
   if (watchedCount <= 0) return 'watchlist';
-  if (
-    !isSeriesStatusTerminal(snapshot.status)
-    && hasImplicitReleasedEpisodesBeforeNext(snapshot)
-    && totalEpisodes > watchedCount
-  ) {
-    return 'unseen';
+  if (!isSeriesStatusTerminal(snapshot.status)) {
+    const implicitReleasedCount = getImplicitReleasedEpisodeCountBeforeNext(snapshot);
+    if (implicitReleasedCount !== null) {
+      return watchedCount < implicitReleasedCount ? 'unseen' : 'archive';
+    }
   }
   if (totalEpisodes > 0 && watchedCount < totalEpisodes) return 'unseen';
   return 'archive';
