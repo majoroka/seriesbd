@@ -13,6 +13,8 @@ type SeriesLifecycleSnapshot = {
   isArchived: boolean;
 };
 
+export type SeriesLifecycleInput = Omit<SeriesLifecycleSnapshot, 'isArchived'>;
+
 function parseDateOnly(value: string | null | undefined): Date | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -105,7 +107,7 @@ export function getSeriesReleasedEpisodesFromDetails(
   return 0;
 }
 
-function getEffectiveReleasedEpisodeCount(snapshot: SeriesLifecycleSnapshot): number | null {
+export function getEffectiveReleasedEpisodeCount(snapshot: SeriesLifecycleInput): number | null {
   if (typeof snapshot.releasedEpisodes === 'number' && snapshot.releasedEpisodes >= 0) {
     if (
       snapshot.nextEpisodeToAir?.air_date
@@ -130,7 +132,7 @@ function getEffectiveReleasedEpisodeCount(snapshot: SeriesLifecycleSnapshot): nu
 
 export function getSeriesLibraryStatus(snapshot: Omit<SeriesLifecycleSnapshot, 'isArchived'>): SeriesLibraryLifecycleStatus {
   const { watchedCount, totalEpisodes } = snapshot;
-  const releasedEpisodes = getEffectiveReleasedEpisodeCount({ ...snapshot, isArchived: false });
+  const releasedEpisodes = getEffectiveReleasedEpisodeCount(snapshot);
 
   if (releasedEpisodes !== null) {
     if (releasedEpisodes <= 0 || watchedCount <= 0) return 'watchlist';
@@ -153,6 +155,12 @@ export function getSeriesLibraryStatus(snapshot: Omit<SeriesLifecycleSnapshot, '
   }
   if (totalEpisodes > 0 && watchedCount < totalEpisodes) return 'unseen';
   return 'archive';
+}
+
+export function getSeriesUnwatchedReleasedCount(snapshot: SeriesLifecycleInput): number {
+  const releasedEpisodes = getEffectiveReleasedEpisodeCount(snapshot);
+  if (releasedEpisodes === null || releasedEpisodes <= 0) return 0;
+  return Math.max(0, releasedEpisodes - snapshot.watchedCount);
 }
 
 export function getSeriesArchiveRecommendation(snapshot: SeriesLifecycleSnapshot): SeriesArchiveRecommendation {

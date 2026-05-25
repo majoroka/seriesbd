@@ -20,7 +20,11 @@ import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from '
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey, normalizeSeriesCollection } from './media';
-import { getSeriesLibraryStatus as getSeriesLifecycleStatus } from './seriesLifecycle';
+import {
+    getEffectiveReleasedEpisodeCount,
+    getSeriesLibraryStatus as getSeriesLifecycleStatus,
+    getSeriesUnwatchedReleasedCount,
+} from './seriesLifecycle';
 
 declare module 'chart.js' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1011,7 +1015,15 @@ function resolveDashboardProgress(series: Series): number {
     }
 
     const watchedCount = S.watchedState[series.id]?.length || 0;
-    const totalEpisodes = series.total_episodes || 0;
+    const releasedEpisodes = getEffectiveReleasedEpisodeCount({
+        watchedCount,
+        totalEpisodes: series.total_episodes || 0,
+        releasedEpisodes: series._details?.released_episode_count,
+        status: series._details?.status,
+        nextEpisodeToAir: series._details?.next_episode_to_air,
+        firstAirDate: series.first_air_date,
+    });
+    const totalEpisodes = releasedEpisodes ?? (series.total_episodes || 0);
     if (totalEpisodes > 0) {
         return Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100));
     }
@@ -2916,13 +2928,35 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
     const watchedCount = S.watchedState[series.id]?.length || 0;
     const totalEpisodes = series.total_episodes || 0;
+    const releasedEpisodes = mediaType === 'series'
+        ? getEffectiveReleasedEpisodeCount({
+            watchedCount,
+            totalEpisodes,
+            releasedEpisodes: series._details?.released_episode_count,
+            status: series._details?.status,
+            nextEpisodeToAir: series._details?.next_episode_to_air,
+            firstAirDate: series.first_air_date,
+        })
+        : null;
+    const progressEpisodesBase = mediaType === 'series'
+        ? (releasedEpisodes ?? totalEpisodes)
+        : totalEpisodes;
     const nonSeriesProgress = getMediaProgressPercent(series);
     const progressPercentage = mediaType === 'series'
-        ? (totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0)
+        ? (progressEpisodesBase > 0 ? (watchedCount / progressEpisodesBase) * 100 : 0)
         : nonSeriesProgress;
     const isSeriesInProgress = watchedCount > 0 && progressPercentage < 100;
 
-    const unwatchedCount = totalEpisodes > 0 ? totalEpisodes - watchedCount : 0;
+    const unwatchedCount = mediaType === 'series'
+        ? getSeriesUnwatchedReleasedCount({
+            watchedCount,
+            totalEpisodes,
+            releasedEpisodes: series._details?.released_episode_count,
+            status: series._details?.status,
+            nextEpisodeToAir: series._details?.next_episode_to_air,
+            firstAirDate: series.first_air_date,
+        })
+        : (totalEpisodes > 0 ? totalEpisodes - watchedCount : 0);
     let unwatchedBadge = null;
     // Mostra o badge se a flag `showUnwatchedBadge` estiver ativa (secção "A Ver")
     // OU se a série estiver em progresso (para a secção "Todas").
@@ -4040,7 +4074,16 @@ function buildStatsSummaryForContext(context: StatsMediaContext, cache?: StatsCo
         if (mediaType === 'series') {
             const watchedCount = S.watchedState[item.id]?.length || 0;
             const totalEpisodes = item.total_episodes || 0;
-            const episodeProgress = totalEpisodes > 0 ? Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100)) : 0;
+            const releasedEpisodes = getEffectiveReleasedEpisodeCount({
+                watchedCount,
+                totalEpisodes,
+                releasedEpisodes: item._details?.released_episode_count,
+                status: item._details?.status,
+                nextEpisodeToAir: item._details?.next_episode_to_air,
+                firstAirDate: item.first_air_date,
+            });
+            const progressBase = releasedEpisodes ?? totalEpisodes;
+            const episodeProgress = progressBase > 0 ? Math.max(0, Math.min(100, (watchedCount / progressBase) * 100)) : 0;
             const status = resolveLibraryStatus(item);
             const isCompleted = status === 'archive';
             const isInProgress = status === 'unseen';
@@ -4054,7 +4097,14 @@ function buildStatsSummaryForContext(context: StatsMediaContext, cache?: StatsCo
 
             if (context === 'series') {
                 consumedUnits += watchedCount;
-                pendingUnits += Math.max(totalEpisodes - watchedCount, 0);
+                pendingUnits += getSeriesUnwatchedReleasedCount({
+                    watchedCount,
+                    totalEpisodes,
+                    releasedEpisodes: item._details?.released_episode_count,
+                    status: item._details?.status,
+                    nextEpisodeToAir: item._details?.next_episode_to_air,
+                    firstAirDate: item.first_air_date,
+                });
             } else {
                 if (isCompleted) consumedUnits += 1;
                 else pendingUnits += 1;
