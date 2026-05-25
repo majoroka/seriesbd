@@ -147,6 +147,39 @@ const NEXT_AIRED_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const MOBILE_TOPBAR_BREAKPOINT_PX = 768;
 const SETTINGS_MENU_HOVER_CLOSE_DELAY_MS = 180;
 
+async function getAuthoritativeSeriesTotalEpisodes(
+    details: TMDbSeriesDetails,
+    signal: AbortSignal | null,
+): Promise<number> {
+    const seasonCounts = new Map<number, number>();
+    (details.seasons || [])
+        .filter((season) => season.season_number !== 0)
+        .forEach((season) => {
+            seasonCounts.set(season.season_number, season.episode_count || 0);
+        });
+
+    const relevantSeasonNumbers = new Set<number>();
+    const nextSeasonNumber = details.next_episode_to_air?.season_number;
+    const lastSeasonNumber = details.last_episode_to_air?.season_number;
+    if (typeof nextSeasonNumber === 'number' && nextSeasonNumber > 0) relevantSeasonNumbers.add(nextSeasonNumber);
+    if (typeof lastSeasonNumber === 'number' && lastSeasonNumber > 0) relevantSeasonNumbers.add(lastSeasonNumber);
+
+    for (const seasonNumber of relevantSeasonNumbers) {
+        try {
+            const seasonDetails = await API.getSeasonDetailsWithCache(details.id, seasonNumber, signal);
+            const seasonEpisodeCount = seasonDetails.episodes?.length || seasonDetails.episode_count || 0;
+            if (seasonEpisodeCount > (seasonCounts.get(seasonNumber) || 0)) {
+                seasonCounts.set(seasonNumber, seasonEpisodeCount);
+            }
+        } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn(`[series] Falha ao validar contagem da temporada ${seasonNumber} para ${details.name}.`, error);
+        }
+    }
+
+    return Array.from(seasonCounts.values()).reduce((sum, count) => sum + Math.max(0, count), 0);
+}
+
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     if (typeof error === 'object' && error !== null) {
@@ -2292,11 +2325,7 @@ async function addMediaToWatchlist(
 
     // Se já for TMDbSeriesDetails, usa-o, senão, busca os detalhes.
     const details: TMDbSeriesDetails = 'seasons' in media ? media : await API.fetchSeriesDetails(media.id, null);
-    const totalEpisodes = details.seasons
-        ? details.seasons
-            .filter((season) => season.season_number !== 0)
-            .reduce((acc, season) => acc + season.episode_count, 0)
-        : 0;
+    const totalEpisodes = await getAuthoritativeSeriesTotalEpisodes(details, null);
 
     const seriesToAdd: Series = {
         ...normalizedMedia,
@@ -2403,7 +2432,8 @@ async function updateNextAired() {
         console.log(`A atualizar detalhes para ${seriesToFetch.length} séries.`);
         const task = (series: Series) =>
             API.fetchSeriesDetails(series.id, null).then((details: any) => {
-                series.total_episodes = getSeriesTotalEpisodesFromDetails(details);
+                return getAuthoritativeSeriesTotalEpisodes(details, null).then((authoritativeTotalEpisodes) => {
+                    series.total_episodes = authoritativeTotalEpisodes;
                 series._details = {
                     status: details.status,
                     next_episode_to_air: details.next_episode_to_air,
@@ -2412,6 +2442,7 @@ async function updateNextAired() {
                 };
                 series._lastUpdated = new Date().toISOString();
                 nextAiredRetryAt.delete(series.id);
+                });
             }).catch(err => {
                 const status = getErrorStatus(err);
                 if (status === 429) {
@@ -2451,7 +2482,7 @@ async function updateNextAired() {
             const series = S.getSeries(seriesId);
             if (series) {
                 const freshData = await API.fetchSeriesDetails(seriesId, null);
-                series.total_episodes = getSeriesTotalEpisodesFromDetails(freshData);
+                series.total_episodes = await getAuthoritativeSeriesTotalEpisodes(freshData, null);
                 series._details = {
                     status: freshData.status,
                     next_episode_to_air: freshData.next_episode_to_air,
@@ -2726,6 +2757,16 @@ async function displaySeriesDetails(seriesId: number) {
                 const allTMDbSeasonsData = seasonResults
                     .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
                     .map(res => res.value);
+                const authoritativeTotalEpisodes = allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || season.episode_count || 0), 0);
+                if (authoritativeTotalEpisodes > 0) {
+                    seriesData.total_episodes = authoritativeTotalEpisodes;
+                    const localSeries = S.getSeries(seriesId);
+                    if (localSeries && localSeries.total_episodes !== authoritativeTotalEpisodes) {
+                        localSeries.total_episodes = authoritativeTotalEpisodes;
+                        localSeries._lastUpdated = new Date().toISOString();
+                        await S.updateSeries(localSeries);
+                    }
+                }
 
                 const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
                 const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
@@ -3118,7 +3159,7 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
 
         if (totalEpisodes <= 0 || watchedEpisodesCount >= totalEpisodes || !series._details?.status) {
             const freshData = await API.fetchSeriesDetails(seriesId, null);
-            const freshTotalEpisodes = getSeriesTotalEpisodesFromDetails(freshData);
+            const freshTotalEpisodes = await getAuthoritativeSeriesTotalEpisodes(freshData, null);
 
             if (
                 freshTotalEpisodes !== totalEpisodes
@@ -3203,9 +3244,7 @@ async function updateGlobalProgress() {
         await Promise.all(seriesNeedingTotals.map(async (series) => {
             try {
                 const details = await API.fetchSeriesDetails(series.id, null);
-                const count = details.seasons
-                    ?.filter(season => season.season_number !== 0)
-                    .reduce((acc, season) => acc + season.episode_count, 0) || 0;
+                const count = await getAuthoritativeSeriesTotalEpisodes(details, null);
 
                 if (count > 0) {
                     if (series.total_episodes !== count) {
@@ -3597,7 +3636,7 @@ async function refetchAllMetadata(): Promise<void> {
         const task = async (localSeries: Series) => {
             try {
                 const freshData = await API.fetchSeriesDetails(localSeries.id, null);
-                const totalEpisodes = freshData.seasons?.filter(s => s.season_number !== 0).reduce((acc, s) => acc + s.episode_count, 0) || 0;
+                const totalEpisodes = await getAuthoritativeSeriesTotalEpisodes(freshData, null);
                 Object.assign(localSeries, {
                     name: freshData.name,
                     overview: freshData.overview,
