@@ -742,12 +742,7 @@ export function renderWatchlist() {
     const seriesToWatch = S.myWatchlist
         .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
         .filter((series) => {
-        const mediaType = series.media_type || 'series';
-        if (mediaType === 'series') {
-            return !S.watchedState[series.id] || S.watchedState[series.id].length === 0;
-        }
-        if (mediaType === 'movie') return true;
-        return getMediaProgressPercent(series) === 0;
+        return resolveLibraryStatus(series) === 'watchlist';
     });
     if (seriesToWatch.length === 0) {
         if (scopedLibraryMediaType === 'book') {
@@ -770,19 +765,7 @@ export function renderUnseen() {
     clearElementChildren(DOM.unseenContainer);
     const seriesInProgress = S.myWatchlist
         .filter((series) => scopedLibraryMediaType === 'all' || (series.media_type || 'series') === scopedLibraryMediaType)
-        .filter(series => {
-        const mediaType = series.media_type || 'series';
-        if (mediaType === 'series') {
-            const watchedCount = S.watchedState[series.id]?.length || 0;
-            const totalEpisodes = series.total_episodes || 0;
-            if (totalEpisodes > 0) {
-                return watchedCount > 0 && watchedCount < totalEpisodes;
-            }
-            return watchedCount > 0;
-        }
-        const progressPercent = getMediaProgressPercent(series);
-        return progressPercent > 0 && progressPercent < 100;
-    });
+        .filter((series) => resolveLibraryStatus(series) === 'unseen');
     if (seriesInProgress.length === 0) {
         if (scopedLibraryMediaType === 'book') {
             setElementMessage(DOM.unseenContainer, 'Nenhum livro em leitura.', { className: 'empty-list-message' });
@@ -1035,6 +1018,13 @@ function isItemArchived(item: Series): boolean {
 
 function getItemStatusLabel(item: Series, progress: number): string {
     const mediaType = item.media_type || 'series';
+    if (mediaType === 'series') {
+        const status = resolveLibraryStatus(item);
+        if (status === 'archive') return 'VISTO';
+        if (status === 'unseen') return 'A VER';
+        return 'QUERO VER';
+    }
+
     const archived = isItemArchived(item);
     if (archived || progress >= 100) {
         return mediaType === 'book' ? 'LIDO' : 'VISTO';
@@ -1046,6 +1036,13 @@ function getItemStatusLabel(item: Series, progress: number): string {
 }
 
 function getItemStatusClass(item: Series, progress: number): 'is-complete' | 'is-progress' | 'is-pending' {
+    if ((item.media_type || 'series') === 'series') {
+        const status = resolveLibraryStatus(item);
+        if (status === 'archive') return 'is-complete';
+        if (status === 'unseen') return 'is-progress';
+        return 'is-pending';
+    }
+
     const archived = isItemArchived(item);
     if (archived || progress >= 100) return 'is-complete';
     if (progress > 0) return 'is-progress';
@@ -1062,6 +1059,18 @@ function computeDashboardMetrics(mediaType: DashboardCardType): DashboardMetrics
     let completed = 0;
 
     mediaItems.forEach((item) => {
+        if ((item.media_type || 'series') === 'series') {
+            const status = resolveLibraryStatus(item);
+            if (status === 'archive') {
+                completed += 1;
+            } else if (status === 'unseen') {
+                inProgress += 1;
+            } else {
+                pending += 1;
+            }
+            return;
+        }
+
         const archived = isItemArchived(item);
         if (archived) {
             completed += 1;
@@ -1099,13 +1108,20 @@ function computeAllDashboardMetrics(): Record<DashboardCardType, DashboardMetric
     const allLibraryItems = [...S.myWatchlist, ...S.myArchive];
     allLibraryItems.forEach((item) => {
         const mediaType = (item.media_type || 'series') as MediaType;
-        const archived = isItemArchived(item);
-        const progress = archived ? 100 : resolveDashboardProgress(item);
-        const bucket = archived || progress >= 100
-            ? 'completed'
-            : progress > 0
-                ? 'inProgress'
-                : 'pending';
+        const bucket = mediaType === 'series'
+            ? (() => {
+                const status = resolveLibraryStatus(item);
+                if (status === 'archive') return 'completed';
+                if (status === 'unseen') return 'inProgress';
+                return 'pending';
+            })()
+            : (() => {
+                const archived = isItemArchived(item);
+                const progress = archived ? 100 : resolveDashboardProgress(item);
+                if (archived || progress >= 100) return 'completed';
+                if (progress > 0) return 'inProgress';
+                return 'pending';
+            })();
 
         metrics[mediaType].total += 1;
         metrics[mediaType][bucket] += 1;
@@ -4018,11 +4034,13 @@ function buildStatsSummaryForContext(context: StatsMediaContext, cache?: StatsCo
             const watchedCount = S.watchedState[item.id]?.length || 0;
             const totalEpisodes = item.total_episodes || 0;
             const episodeProgress = totalEpisodes > 0 ? Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100)) : 0;
-            const isCompleted = isArchived || (totalEpisodes > 0 && watchedCount >= totalEpisodes);
+            const status = resolveLibraryStatus(item);
+            const isCompleted = status === 'archive';
+            const isInProgress = status === 'unseen';
 
             progressSum += isCompleted ? 100 : episodeProgress;
             if (isCompleted) completedItems += 1;
-            else if (episodeProgress > 0 && episodeProgress < 100) inProgressItems += 1;
+            else if (isInProgress) inProgressItems += 1;
             else pendingItems += 1;
 
             totalTimeMinutes += watchedCount * (item.episode_run_time || 30);
