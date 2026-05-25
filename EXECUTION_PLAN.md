@@ -20,6 +20,8 @@ Objetivo:
 - Hardening final `R1-R5` concluído
 - Fase atual: **estabilização concluída e manutenção evolutiva controlada**
 - Últimas melhorias de UX aplicadas ao dashboard, onboarding e menus de topo
+- Hardening do sync cloud concluído no escopo `S1-S10`, com conflitos explícitos, histórico de snapshots e ações manuais de recuperação
+- Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
 
 ## Resumo executivo
 
@@ -55,6 +57,15 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 - Onboarding de autenticação com reenvio de confirmação, recuperação de links expirados e branding `MediaDex` no email
 - Menu da conta e popup de notificações com fecho automático em desktop ao sair com o rato
 - Aviso único por sessão para mutações relevantes sem sessão iniciada
+- Sync cloud endurecido:
+  - proteção contra overwrite destrutivo
+  - conflito explícito entre local e cloud
+  - ações manuais `Restaurar da cloud` / `Substituir cloud com este dispositivo`
+  - histórico remoto de snapshots com `deviceId` e `sync_reason`
+- Lifecycle de séries endurecido:
+  - classificação por episódios já lançados
+  - reativação automática para `A Ver` quando saem episódios novos
+  - badges e progresso coerentes com o total autoritativo de episódios
 - Reviews externas MVP no detalhe:
   - séries
   - filmes
@@ -83,6 +94,30 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 2. melhorias futuras opcionais
 3. evolução funcional controlada
 4. disciplina operacional no bundle de auditoria sempre que houver nova entrega externa
+
+## Backlog futuro
+
+### B1 | Reminder de export periódico ao utilizador
+
+Objetivo:
+- reduzir risco residual de perda de dados do lado do utilizador mesmo com sync endurecido
+
+Ideia:
+- mostrar uma sugestão periódica de exportação de dados
+- frequência recomendada inicial:
+  - `7 dias`
+
+Regras recomendadas:
+- só mostrar a utilizadores com sessão ativa
+- não mostrar de forma intrusiva
+- permitir:
+  - `Exportar agora`
+  - `Lembrar mais tarde`
+  - `Não voltar a mostrar`
+
+Critério de valor:
+- cria uma camada simples de backup manual recorrente
+- reduz dependência exclusiva do snapshot cloud atual
 
 ## Plano de consolidação
 
