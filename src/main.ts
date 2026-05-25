@@ -19,6 +19,7 @@ import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
+import { getSeriesArchiveRecommendation, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
@@ -2401,8 +2402,9 @@ async function updateNextAired() {
         console.log(`A atualizar detalhes para ${seriesToFetch.length} séries.`);
         const task = (series: Series) =>
             API.fetchSeriesDetails(series.id, null).then((details: any) => {
+                series.total_episodes = getSeriesTotalEpisodesFromDetails(details);
                 series._details = {
-                    status: details.status, // Atualiza o status
+                    status: details.status,
                     next_episode_to_air: details.next_episode_to_air
                 };
                 series._lastUpdated = new Date().toISOString();
@@ -2432,14 +2434,21 @@ async function updateNextAired() {
         }
     }
 
-    const seriesToUnarchiveIds = allUserSeries
-        .filter(series =>
-            series._details?.next_episode_to_air && S.myArchive.some(s => s.id === series.id)
-        )
+    const seriesToMoveBackToWatchlist = allUserSeries
+        .filter(series => {
+            const watchedCount = S.watchedState[series.id]?.length || 0;
+            return getSeriesArchiveRecommendation({
+                watchedCount,
+                totalEpisodes: series.total_episodes || 0,
+                status: series._details?.status,
+                nextEpisodeToAir: series._details?.next_episode_to_air,
+                isArchived: S.myArchive.some(s => s.id === series.id),
+            }) === 'watchlist';
+        })
         .map(series => series.id);
 
-    if (seriesToUnarchiveIds.length > 0) {
-        for (const seriesId of seriesToUnarchiveIds) {
+    if (seriesToMoveBackToWatchlist.length > 0) {
+        for (const seriesId of seriesToMoveBackToWatchlist) {
             const series = S.getSeries(seriesId);
             if(series) await S.unarchiveSeries(series);
         }
@@ -3071,28 +3080,45 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
         if (!series) return false;
 
         const watchedEpisodesCount = S.watchedState[seriesId]?.length || 0;
-        let totalEpisodes = series.total_episodes;
+        let totalEpisodes = series.total_episodes || 0;
 
-        if (totalEpisodes === undefined || (totalEpisodes > 0 && watchedEpisodesCount >= totalEpisodes)) {
+        if (totalEpisodes <= 0 || watchedEpisodesCount >= totalEpisodes || !series._details?.status) {
             const freshData = await API.fetchSeriesDetails(seriesId, null);
-            const freshTotalEpisodes = freshData.seasons
-                ? freshData.seasons
-                    .filter((season) => season.season_number !== 0)
-                    .reduce((acc, season) => acc + season.episode_count, 0)
-                : 0;
+            const freshTotalEpisodes = getSeriesTotalEpisodesFromDetails(freshData);
 
-            if (freshTotalEpisodes !== totalEpisodes) {
+            if (
+                freshTotalEpisodes !== totalEpisodes
+                || series._details?.status !== freshData.status
+                || series._details?.next_episode_to_air?.id !== freshData.next_episode_to_air?.id
+            ) {
                 series.total_episodes = freshTotalEpisodes;
-                totalEpisodes = freshTotalEpisodes; // Re-assign after update
-                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air, };
+                totalEpisodes = freshTotalEpisodes;
+                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
             }
         }
 
-        const isComplete = totalEpisodes !== undefined && totalEpisodes > 0 && watchedEpisodesCount >= totalEpisodes;
+        const archiveRecommendation = getSeriesArchiveRecommendation({
+            watchedCount: watchedEpisodesCount,
+            totalEpisodes,
+            status: series._details?.status,
+            nextEpisodeToAir: series._details?.next_episode_to_air,
+            isArchived: S.myArchive.some((item) => item.media_type === 'series' && item.id === series.id),
+        });
 
-        if (isComplete) {
+        if (archiveRecommendation === 'watchlist') {
+            if (S.myArchive.some((item) => item.media_type === 'series' && item.id === series.id)) {
+                await S.unarchiveSeries(series);
+                UI.renderWatchlist();
+                UI.renderUnseen();
+                UI.renderArchive();
+                UI.renderAllSeries();
+            }
+            return false;
+        }
+
+        if (archiveRecommendation === 'archive') {
             await S.archiveSeries(series);
             UI.renderWatchlist();
             UI.renderUnseen();
