@@ -2437,6 +2437,35 @@ async function updateNextAired() {
         }
     }
 
+    // Verifica se algum dos episódios que estavam agendados já foi para o ar
+    const justAiredSeriesIds = allUserSeries
+        .filter(series => {
+            const nextEp = series._details?.next_episode_to_air;
+            return nextEp && new Date(nextEp.air_date).getTime() < now;
+        })
+        .map(series => series.id);
+
+    if (justAiredSeriesIds.length > 0) {
+        console.log(`A atualizar metadados para ${justAiredSeriesIds.length} séries com episódios recém-lançados.`);
+        const refreshTask = async (seriesId: number) => {
+            const series = S.getSeries(seriesId);
+            if (series) {
+                const freshData = await API.fetchSeriesDetails(seriesId, null);
+                series.total_episodes = getSeriesTotalEpisodesFromDetails(freshData);
+                series._details = {
+                    status: freshData.status,
+                    next_episode_to_air: freshData.next_episode_to_air,
+                    last_episode_to_air: freshData.last_episode_to_air,
+                    released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                };
+                series._lastUpdated = new Date().toISOString();
+                await S.updateSeries(series);
+            }
+        };
+        await processInBatches(justAiredSeriesIds, NEXT_AIRED_BATCH_SIZE, NEXT_AIRED_BATCH_DELAY_MS, refreshTask);
+        allUserSeries = [...S.myWatchlist, ...S.myArchive];
+    }
+
     const seriesToMoveBackToWatchlist = allUserSeries
         .filter(series => {
             const watchedCount = S.watchedState[series.id]?.length || 0;
@@ -2481,34 +2510,6 @@ async function updateNextAired() {
             if (series) await S.archiveSeries(series);
         }
         allUserSeries = [...S.myWatchlist, ...S.myArchive];
-    }
-
-    // Verifica se algum dos episódios que estavam agendados já foi para o ar
-    const justAiredSeriesIds = allUserSeries
-        .filter(series => {
-            const nextEp = series._details?.next_episode_to_air;
-            return nextEp && new Date(nextEp.air_date).getTime() < now;
-        })
-        .map(series => series.id);
-
-    if (justAiredSeriesIds.length > 0) {
-        console.log(`A atualizar metadados para ${justAiredSeriesIds.length} séries com episódios recém-lançados.`);
-        const refreshTask = async (seriesId: number) => {
-            const series = S.getSeries(seriesId);
-            if (series) {
-                const freshData = await API.fetchSeriesDetails(seriesId, null);
-                series.total_episodes = getSeriesTotalEpisodesFromDetails(freshData);
-                series._details = {
-                    status: freshData.status,
-                    next_episode_to_air: freshData.next_episode_to_air,
-                    last_episode_to_air: freshData.last_episode_to_air,
-                    released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
-                };
-                series._lastUpdated = new Date().toISOString();
-                await S.updateSeries(series);
-            }
-        };
-        await processInBatches(justAiredSeriesIds, NEXT_AIRED_BATCH_SIZE, NEXT_AIRED_BATCH_DELAY_MS, refreshTask);
     }
 
     const upcomingEpisodes = allUserSeries

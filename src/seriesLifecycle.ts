@@ -19,6 +19,14 @@ function parseDateOnly(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isDateInPastOrToday(value: string | null | undefined): boolean {
+  const parsed = parseDateOnly(value);
+  if (!parsed) return false;
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return parsed.getTime() <= todayUtc;
+}
+
 function hasPremiered(firstAirDate: string | null | undefined): boolean {
   const premiereDate = parseDateOnly(firstAirDate);
   if (!premiereDate) return true;
@@ -67,6 +75,13 @@ export function getSeriesReleasedEpisodesFromDetails(
 
 function getEffectiveReleasedEpisodeCount(snapshot: SeriesLifecycleSnapshot): number | null {
   if (typeof snapshot.releasedEpisodes === 'number' && snapshot.releasedEpisodes >= 0) {
+    if (
+      snapshot.nextEpisodeToAir?.air_date
+      && isDateInPastOrToday(snapshot.nextEpisodeToAir.air_date)
+      && snapshot.totalEpisodes > snapshot.releasedEpisodes
+    ) {
+      return Math.min(snapshot.totalEpisodes, snapshot.releasedEpisodes + 1);
+    }
     return snapshot.releasedEpisodes;
   }
 
