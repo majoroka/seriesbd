@@ -12,6 +12,25 @@ import {
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = 2;
 export const LOCAL_LIBRARY_MUTATION_AT_KEY = 'seriesdb.localLibraryMutationAt';
+export const LOCAL_DEVICE_ID_KEY = 'seriesdb.deviceId';
+
+export type LibrarySnapshotSyncReason =
+  | 'auto'
+  | 'post_login_local_seed'
+  | 'post_login_conflict_local'
+  | 'manual_replace_cloud'
+  | 'import';
+
+export type LibrarySnapshotSyncMeta = {
+  deviceId: string;
+  syncReason: LibrarySnapshotSyncReason;
+  watchlistCount: number;
+  archiveCount: number;
+  watchedStateKeyCount: number;
+  userDataCount: number;
+  totalItemCount: number;
+  appVersion: string | null;
+};
 
 export type LibrarySnapshotPayload = {
   version: number;
@@ -20,6 +39,7 @@ export type LibrarySnapshotPayload = {
   archive: Series[];
   watchedState: WatchedState;
   userData: UserData;
+  syncMeta?: LibrarySnapshotSyncMeta | null;
 };
 
 type RemoteLibrarySnapshotRow = {
@@ -52,6 +72,18 @@ export type LibrarySyncConflictContext = {
   remoteUpdatedAt: string;
   localCounts: LibrarySnapshotCounts;
   remoteCounts: LibrarySnapshotCounts;
+};
+
+export type LibrarySyncStatusSummary = {
+  localDeviceId: string;
+  localMutationAt: string | null;
+  localCounts: LibrarySnapshotCounts;
+  remoteAvailable: boolean;
+  remoteUpdatedAt: string | null;
+  remoteCounts: LibrarySnapshotCounts | null;
+  remoteDeviceId: string | null;
+  remoteSyncReason: string | null;
+  pendingConflict: LibrarySyncConflictContext | null;
 };
 
 type PendingLibrarySyncConflict = LibrarySyncConflictContext & {
@@ -91,6 +123,36 @@ function normalizeUserData(input: unknown): UserData {
   return normalized;
 }
 
+function normalizeString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeInteger(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.trunc(numeric));
+}
+
+function normalizeSyncMeta(input: unknown): LibrarySnapshotSyncMeta | null {
+  if (!isObjectLike(input)) return null;
+  const deviceId = normalizeString(input.deviceId);
+  if (!deviceId) return null;
+  const syncReason = normalizeString(input.syncReason) || 'auto';
+  const appVersion = normalizeString(input.appVersion);
+  return {
+    deviceId,
+    syncReason: syncReason as LibrarySnapshotSyncReason,
+    watchlistCount: normalizeInteger(input.watchlistCount),
+    archiveCount: normalizeInteger(input.archiveCount),
+    watchedStateKeyCount: normalizeInteger(input.watchedStateKeyCount),
+    userDataCount: normalizeInteger(input.userDataCount),
+    totalItemCount: normalizeInteger(input.totalItemCount),
+    appVersion,
+  };
+}
+
 function normalizeLibraryPayload(payload: unknown): LibrarySnapshotPayload {
   const record = isObjectLike(payload) ? payload : {};
   return {
@@ -106,6 +168,7 @@ function normalizeLibraryPayload(payload: unknown): LibrarySnapshotPayload {
     archive: normalizeSeriesCollection(record.archive),
     watchedState: normalizeWatchedState(record.watchedState),
     userData: normalizeUserData(record.userData),
+    syncMeta: normalizeSyncMeta(record.syncMeta),
   };
 }
 
@@ -161,6 +224,24 @@ export async function getLocalLibraryMutationAt(): Promise<string | null> {
   return typeof record.value === 'string' ? record.value : String(record.value || '');
 }
 
+function createLocalDeviceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `device-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+export async function getOrCreateLocalDeviceId(): Promise<string> {
+  const record = await db.kvStore.get(LOCAL_DEVICE_ID_KEY);
+  const existingValue =
+    typeof record?.value === 'string' ? record.value.trim() : String(record?.value || '').trim();
+  if (existingValue) return existingValue;
+
+  const deviceId = createLocalDeviceId();
+  await db.kvStore.put({ key: LOCAL_DEVICE_ID_KEY, value: deviceId });
+  return deviceId;
+}
+
 export function getPendingLibrarySyncConflict(): LibrarySyncConflictContext | null {
   if (!pendingLibrarySyncConflict) return null;
   const { remotePayload: _remotePayload, ...context } = pendingLibrarySyncConflict;
@@ -182,6 +263,40 @@ export function buildLocalLibrarySnapshot(): LibrarySnapshotPayload {
   };
 }
 
+function buildSnapshotSyncMeta(
+  counts: LibrarySnapshotCounts,
+  deviceId: string,
+  syncReason: LibrarySnapshotSyncReason,
+): LibrarySnapshotSyncMeta {
+  const appVersion =
+    typeof import.meta !== 'undefined' && typeof import.meta.env?.VITE_APP_VERSION === 'string'
+      ? import.meta.env.VITE_APP_VERSION
+      : null;
+
+  return {
+    deviceId,
+    syncReason,
+    watchlistCount: counts.watchlistCount,
+    archiveCount: counts.archiveCount,
+    watchedStateKeyCount: counts.watchedStateKeyCount,
+    userDataCount: counts.userDataCount,
+    totalItemCount: counts.totalItemCount,
+    appVersion,
+  };
+}
+
+async function buildLocalLibrarySnapshotForSync(syncReason: LibrarySnapshotSyncReason): Promise<{
+  payload: LibrarySnapshotPayload;
+  counts: LibrarySnapshotCounts;
+  deviceId: string;
+}> {
+  const payload = normalizeLibraryPayload(buildLocalLibrarySnapshot());
+  const counts = getLibrarySnapshotCounts(payload);
+  const deviceId = await getOrCreateLocalDeviceId();
+  payload.syncMeta = buildSnapshotSyncMeta(counts, deviceId, syncReason);
+  return { payload, counts, deviceId };
+}
+
 async function fetchRemoteLibrarySnapshot(userId: string): Promise<RemoteLibrarySnapshotRow | null> {
   if (!isSupabaseConfigured()) return null;
   const client = getSupabaseClient();
@@ -198,12 +313,55 @@ async function fetchRemoteLibrarySnapshot(userId: string): Promise<RemoteLibrary
 export async function pushLocalLibrarySnapshot(_userId: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const client = getSupabaseClient();
-  const payload = normalizeLibraryPayload(buildLocalLibrarySnapshot());
+  const { payload, counts, deviceId } = await buildLocalLibrarySnapshotForSync('auto');
   assertSerializedJsonLimit(payload, MAX_LIBRARY_SNAPSHOT_SIZE_BYTES, 'O snapshot da biblioteca');
-  const { error } = await client.rpc('upsert_library_snapshot', {
+  let { error } = await client.rpc('upsert_library_snapshot', {
     p_schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
     p_payload: payload,
+    p_sync_reason: 'auto',
+    p_device_id: deviceId,
+    p_watchlist_count: counts.watchlistCount,
+    p_archive_count: counts.archiveCount,
+    p_watched_state_key_count: counts.watchedStateKeyCount,
+    p_user_data_count: counts.userDataCount,
+    p_total_item_count: counts.totalItemCount,
   });
+  if (error && /upsert_library_snapshot/i.test(error.message || '')) {
+    const fallbackResult = await client.rpc('upsert_library_snapshot', {
+      p_schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
+      p_payload: payload,
+    });
+    error = fallbackResult.error;
+  }
+  if (error) throw error;
+}
+
+export async function pushLocalLibrarySnapshotWithReason(
+  _userId: string,
+  syncReason: LibrarySnapshotSyncReason,
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const client = getSupabaseClient();
+  const { payload, counts, deviceId } = await buildLocalLibrarySnapshotForSync(syncReason);
+  assertSerializedJsonLimit(payload, MAX_LIBRARY_SNAPSHOT_SIZE_BYTES, 'O snapshot da biblioteca');
+  let { error } = await client.rpc('upsert_library_snapshot', {
+    p_schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
+    p_payload: payload,
+    p_sync_reason: syncReason,
+    p_device_id: deviceId,
+    p_watchlist_count: counts.watchlistCount,
+    p_archive_count: counts.archiveCount,
+    p_watched_state_key_count: counts.watchedStateKeyCount,
+    p_user_data_count: counts.userDataCount,
+    p_total_item_count: counts.totalItemCount,
+  });
+  if (error && /upsert_library_snapshot/i.test(error.message || '')) {
+    const fallbackResult = await client.rpc('upsert_library_snapshot', {
+      p_schema_version: LIBRARY_SNAPSHOT_SCHEMA_VERSION,
+      p_payload: payload,
+    });
+    error = fallbackResult.error;
+  }
   if (error) throw error;
 }
 
@@ -257,6 +415,77 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
   await markLocalLibraryMutation(remoteUpdatedAtIso);
 }
 
+export async function restoreLibrarySnapshotFromCloud(userId: string): Promise<LibrarySyncOutcome> {
+  if (!isSupabaseConfigured()) return 'disabled';
+  const remoteRow = await fetchRemoteLibrarySnapshot(userId);
+  if (!remoteRow) return 'noop';
+  const remotePayload = normalizeLibraryPayload(remoteRow.payload);
+  if (!hasMeaningfulLibraryData(remotePayload)) return 'noop';
+  pendingLibrarySyncConflict = null;
+  await applyRemoteLibrarySnapshotToLocal(remotePayload, remoteRow.updated_at);
+  return 'pulled';
+}
+
+export async function replaceRemoteLibrarySnapshotWithLocal(
+  userId: string,
+  syncReason: LibrarySnapshotSyncReason = 'manual_replace_cloud',
+): Promise<LibrarySyncOutcome> {
+  if (!isSupabaseConfigured()) return 'disabled';
+  pendingLibrarySyncConflict = null;
+  await pushLocalLibrarySnapshotWithReason(userId, syncReason);
+  await markLocalLibraryMutation(new Date().toISOString());
+  return 'pushed';
+}
+
+export async function getLibrarySyncStatusSummary(userId: string): Promise<LibrarySyncStatusSummary> {
+  const localSnapshot = buildLocalLibrarySnapshot();
+  const localCounts = getLibrarySnapshotCounts(localSnapshot);
+  const localMutationAt = await getLocalLibraryMutationAt();
+  const localDeviceId = await getOrCreateLocalDeviceId();
+
+  if (!isSupabaseConfigured()) {
+    return {
+      localDeviceId,
+      localMutationAt,
+      localCounts,
+      remoteAvailable: false,
+      remoteUpdatedAt: null,
+      remoteCounts: null,
+      remoteDeviceId: null,
+      remoteSyncReason: null,
+      pendingConflict: getPendingLibrarySyncConflict(),
+    };
+  }
+
+  const remoteRow = await fetchRemoteLibrarySnapshot(userId);
+  if (!remoteRow) {
+    return {
+      localDeviceId,
+      localMutationAt,
+      localCounts,
+      remoteAvailable: false,
+      remoteUpdatedAt: null,
+      remoteCounts: null,
+      remoteDeviceId: null,
+      remoteSyncReason: null,
+      pendingConflict: getPendingLibrarySyncConflict(),
+    };
+  }
+
+  const remotePayload = normalizeLibraryPayload(remoteRow.payload);
+  return {
+    localDeviceId,
+    localMutationAt,
+    localCounts,
+    remoteAvailable: hasMeaningfulLibraryData(remotePayload),
+    remoteUpdatedAt: remoteRow.updated_at,
+    remoteCounts: getLibrarySnapshotCounts(remotePayload),
+    remoteDeviceId: remotePayload.syncMeta?.deviceId ?? null,
+    remoteSyncReason: remotePayload.syncMeta?.syncReason ?? null,
+    pendingConflict: getPendingLibrarySyncConflict(),
+  };
+}
+
 export async function resolvePendingLibrarySyncConflict(choice: 'use_remote' | 'use_local'): Promise<LibrarySyncOutcome> {
   if (!pendingLibrarySyncConflict) return 'noop';
   const conflict = pendingLibrarySyncConflict;
@@ -267,7 +496,7 @@ export async function resolvePendingLibrarySyncConflict(choice: 'use_remote' | '
     return 'pulled';
   }
 
-  await pushLocalLibrarySnapshot(conflict.userId);
+  await pushLocalLibrarySnapshotWithReason(conflict.userId, 'post_login_conflict_local');
   await markLocalLibraryMutation(new Date().toISOString());
   return 'pushed';
 }
@@ -285,7 +514,7 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
   const remoteRow = await fetchRemoteLibrarySnapshot(userId);
   if (!remoteRow) {
     if (!localHasData) return 'noop';
-    await pushLocalLibrarySnapshot(userId);
+    await pushLocalLibrarySnapshotWithReason(userId, 'post_login_local_seed');
     await markLocalLibraryMutation(new Date().toISOString());
     return 'pushed';
   }
@@ -297,7 +526,7 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
 
   if (!remoteHasData) {
     if (!localHasData) return 'noop';
-    await pushLocalLibrarySnapshot(userId);
+    await pushLocalLibrarySnapshotWithReason(userId, 'post_login_local_seed');
     await markLocalLibraryMutation(new Date().toISOString());
     return 'pushed';
   }
@@ -333,13 +562,13 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
 
   // Proteção contra migrações antigas sem timestamp local: priorizar local para evitar perda de dados.
   if (Number.isNaN(localMutationTs)) {
-    await pushLocalLibrarySnapshot(userId);
+    await pushLocalLibrarySnapshotWithReason(userId, 'post_login_local_seed');
     await markLocalLibraryMutation(new Date().toISOString());
     return 'pushed';
   }
 
   if (!Number.isNaN(localMutationTs) && !Number.isNaN(remoteUpdatedTs) && localMutationTs > remoteUpdatedTs + 1000) {
-    await pushLocalLibrarySnapshot(userId);
+    await pushLocalLibrarySnapshotWithReason(userId, 'auto');
     await markLocalLibraryMutation(new Date().toISOString());
     return 'pushed';
   }

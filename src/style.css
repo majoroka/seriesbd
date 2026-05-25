@@ -3704,6 +3704,39 @@ body.light-theme .network-logo {
     color: var(--text-secondary);
 }
 
+.settings-menu li.account-menu-sync {
+    padding: 0.25rem 0.35rem 0.4rem;
+}
+
+.account-sync-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    padding: 0.65rem 0.75rem;
+}
+
+.account-sync-card strong {
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.account-sync-card p {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--text-secondary);
+}
+
+#account-sync-status-label {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 /* ========== LIBRARY SEARCH MODAL ========== */
 .library-search-modal-content {
     max-width: 600px;
