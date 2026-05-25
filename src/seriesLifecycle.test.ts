@@ -115,6 +115,40 @@ describe('series lifecycle helpers', () => {
     ).toBe('unseen');
   });
 
+  it('treats a stale total with future episode 6 as proof that five new episodes are released', () => {
+    expect(
+      getSeriesLibraryStatus({
+        watchedCount: 30,
+        totalEpisodes: 30,
+        releasedEpisodes: 30,
+        status: 'Returning Series',
+        nextEpisodeToAir: {
+          season_number: 4,
+          episode_number: 6,
+          air_date: '2030-05-31',
+        } as any,
+        firstAirDate: '2020-01-01',
+      }),
+    ).toBe('unseen');
+  });
+
+  it('keeps a stale-total returning series completed if the inferred released episodes are already watched', () => {
+    expect(
+      getSeriesLibraryStatus({
+        watchedCount: 35,
+        totalEpisodes: 30,
+        releasedEpisodes: 30,
+        status: 'Returning Series',
+        nextEpisodeToAir: {
+          season_number: 4,
+          episode_number: 6,
+          air_date: '2030-05-31',
+        } as any,
+        firstAirDate: '2020-01-01',
+      }),
+    ).toBe('archive');
+  });
+
   it('keeps an archived series in watchlist when released episodes are still pending', () => {
     expect(
       getSeriesArchiveRecommendation({
