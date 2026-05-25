@@ -2389,7 +2389,6 @@ async function updateNextAired() {
     const oneDay = 24 * 60 * 60 * 1000;
 
     const seriesToFetch = allUserSeries.filter(series => {
-        if (series._details?.status === 'Ended') return false; // Não busca atualizações para séries terminadas
         const retryAt = nextAiredRetryAt.get(series.id) ?? 0;
         if (retryAt > now) return false;
         if (!series._lastUpdated) return true;
@@ -2469,7 +2468,7 @@ async function updateNextAired() {
             const series = S.getSeries(seriesId);
             if (series) {
                 const freshData = await API.fetchSeriesDetails(seriesId, null);
-                series.total_episodes = freshData.seasons?.filter(s => s.season_number !== 0).reduce((acc, s) => acc + s.episode_count, 0) || 0;
+                series.total_episodes = getSeriesTotalEpisodesFromDetails(freshData);
                 series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
