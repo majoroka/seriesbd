@@ -27,6 +27,22 @@ function isDateInPastOrToday(value: string | null | undefined): boolean {
   return parsed.getTime() <= todayUtc;
 }
 
+function isDateInFuture(value: string | null | undefined): boolean {
+  const parsed = parseDateOnly(value);
+  if (!parsed) return false;
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return parsed.getTime() > todayUtc;
+}
+
+function hasImplicitReleasedEpisodesBeforeNext(snapshot: SeriesLifecycleSnapshot): boolean {
+  const nextEpisode = snapshot.nextEpisodeToAir;
+  if (!nextEpisode) return false;
+  if (!isDateInFuture(nextEpisode.air_date)) return false;
+  if (nextEpisode.season_number <= 0) return false;
+  return nextEpisode.episode_number > 1;
+}
+
 function hasPremiered(firstAirDate: string | null | undefined): boolean {
   const premiereDate = parseDateOnly(firstAirDate);
   if (!premiereDate) return true;
@@ -103,10 +119,24 @@ export function getSeriesLibraryStatus(snapshot: Omit<SeriesLifecycleSnapshot, '
   if (releasedEpisodes !== null) {
     if (releasedEpisodes <= 0 || watchedCount <= 0) return 'watchlist';
     if (watchedCount < releasedEpisodes) return 'unseen';
+    if (
+      !isSeriesStatusTerminal(snapshot.status)
+      && hasImplicitReleasedEpisodesBeforeNext(snapshot)
+      && totalEpisodes > watchedCount
+    ) {
+      return 'unseen';
+    }
     return 'archive';
   }
 
   if (watchedCount <= 0) return 'watchlist';
+  if (
+    !isSeriesStatusTerminal(snapshot.status)
+    && hasImplicitReleasedEpisodesBeforeNext(snapshot)
+    && totalEpisodes > watchedCount
+  ) {
+    return 'unseen';
+  }
   if (totalEpisodes > 0 && watchedCount < totalEpisodes) return 'unseen';
   return 'archive';
 }

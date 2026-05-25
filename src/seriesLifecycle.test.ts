@@ -98,6 +98,23 @@ describe('series lifecycle helpers', () => {
     ).toBe('unseen');
   });
 
+  it('treats a future episode 2 as proof that episode 1 is already released', () => {
+    expect(
+      getSeriesLibraryStatus({
+        watchedCount: 30,
+        totalEpisodes: 40,
+        releasedEpisodes: 30,
+        status: 'Returning Series',
+        nextEpisodeToAir: {
+          season_number: 4,
+          episode_number: 2,
+          air_date: '2030-04-26',
+        } as any,
+        firstAirDate: '2020-01-01',
+      }),
+    ).toBe('unseen');
+  });
+
   it('keeps an archived series in watchlist when released episodes are still pending', () => {
     expect(
       getSeriesArchiveRecommendation({
