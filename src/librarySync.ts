@@ -33,7 +33,32 @@ export type LibrarySyncOutcome =
   | 'disabled'
   | 'noop'
   | 'pushed'
-  | 'pulled';
+  | 'pulled'
+  | 'conflict_remote_richer'
+  | 'conflict_local_richer';
+
+export type LibrarySnapshotCounts = {
+  watchlistCount: number;
+  archiveCount: number;
+  watchedStateKeyCount: number;
+  userDataCount: number;
+  totalItemCount: number;
+  footprintScore: number;
+};
+
+export type LibrarySyncConflictContext = {
+  userId: string;
+  localMutationAt: string | null;
+  remoteUpdatedAt: string;
+  localCounts: LibrarySnapshotCounts;
+  remoteCounts: LibrarySnapshotCounts;
+};
+
+type PendingLibrarySyncConflict = LibrarySyncConflictContext & {
+  remotePayload: LibrarySnapshotPayload;
+};
+
+let pendingLibrarySyncConflict: PendingLibrarySyncConflict | null = null;
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -93,6 +118,33 @@ function hasMeaningfulLibraryData(snapshot: LibrarySnapshotPayload): boolean {
   );
 }
 
+function getLibrarySnapshotCounts(snapshot: LibrarySnapshotPayload): LibrarySnapshotCounts {
+  const watchlistCount = snapshot.watchlist.length;
+  const archiveCount = snapshot.archive.length;
+  const watchedStateKeyCount = Object.keys(snapshot.watchedState).length;
+  const userDataCount = Object.keys(snapshot.userData).length;
+  const totalItemCount = watchlistCount + archiveCount;
+  return {
+    watchlistCount,
+    archiveCount,
+    watchedStateKeyCount,
+    userDataCount,
+    totalItemCount,
+    footprintScore: totalItemCount + watchedStateKeyCount + userDataCount,
+  };
+}
+
+function isSnapshotMuchRicher(richer: LibrarySnapshotCounts, poorer: LibrarySnapshotCounts): boolean {
+  if (richer.footprintScore <= poorer.footprintScore) return false;
+  if (richer.totalItemCount >= 20 && poorer.totalItemCount <= 5 && richer.totalItemCount - poorer.totalItemCount >= 10) {
+    return true;
+  }
+  if (poorer.footprintScore < richer.footprintScore * 0.25) {
+    return true;
+  }
+  return richer.footprintScore - poorer.footprintScore >= 20;
+}
+
 function parseIsoDate(value: string | null): number {
   if (!value) return Number.NaN;
   const parsed = Date.parse(value);
@@ -107,6 +159,16 @@ export async function getLocalLibraryMutationAt(): Promise<string | null> {
   const record = await db.kvStore.get(LOCAL_LIBRARY_MUTATION_AT_KEY);
   if (!record) return null;
   return typeof record.value === 'string' ? record.value : String(record.value || '');
+}
+
+export function getPendingLibrarySyncConflict(): LibrarySyncConflictContext | null {
+  if (!pendingLibrarySyncConflict) return null;
+  const { remotePayload: _remotePayload, ...context } = pendingLibrarySyncConflict;
+  return context;
+}
+
+export function clearPendingLibrarySyncConflict(): void {
+  pendingLibrarySyncConflict = null;
 }
 
 export function buildLocalLibrarySnapshot(): LibrarySnapshotPayload {
@@ -195,11 +257,28 @@ export async function applyRemoteLibrarySnapshotToLocal(rawPayload: unknown, rem
   await markLocalLibraryMutation(remoteUpdatedAtIso);
 }
 
+export async function resolvePendingLibrarySyncConflict(choice: 'use_remote' | 'use_local'): Promise<LibrarySyncOutcome> {
+  if (!pendingLibrarySyncConflict) return 'noop';
+  const conflict = pendingLibrarySyncConflict;
+  pendingLibrarySyncConflict = null;
+
+  if (choice === 'use_remote') {
+    await applyRemoteLibrarySnapshotToLocal(conflict.remotePayload, conflict.remoteUpdatedAt);
+    return 'pulled';
+  }
+
+  await pushLocalLibrarySnapshot(conflict.userId);
+  await markLocalLibraryMutation(new Date().toISOString());
+  return 'pushed';
+}
+
 export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<LibrarySyncOutcome> {
   if (!isSupabaseConfigured()) return 'disabled';
+  pendingLibrarySyncConflict = null;
 
   const localSnapshot = buildLocalLibrarySnapshot();
   const localHasData = hasMeaningfulLibraryData(localSnapshot);
+  const localCounts = getLibrarySnapshotCounts(localSnapshot);
   const localMutationAt = await getLocalLibraryMutationAt();
   const localMutationTs = parseIsoDate(localMutationAt);
 
@@ -213,6 +292,7 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
 
   const remotePayload = normalizeLibraryPayload(remoteRow.payload);
   const remoteHasData = hasMeaningfulLibraryData(remotePayload);
+  const remoteCounts = getLibrarySnapshotCounts(remotePayload);
   const remoteUpdatedTs = parseIsoDate(remoteRow.updated_at);
 
   if (!remoteHasData) {
@@ -225,6 +305,30 @@ export async function syncLibrarySnapshotAfterLogin(userId: string): Promise<Lib
   if (!localHasData) {
     await applyRemoteLibrarySnapshotToLocal(remotePayload, remoteRow.updated_at);
     return 'pulled';
+  }
+
+  if (isSnapshotMuchRicher(remoteCounts, localCounts)) {
+    pendingLibrarySyncConflict = {
+      userId,
+      localMutationAt,
+      remoteUpdatedAt: remoteRow.updated_at,
+      localCounts,
+      remoteCounts,
+      remotePayload,
+    };
+    return 'conflict_remote_richer';
+  }
+
+  if (isSnapshotMuchRicher(localCounts, remoteCounts)) {
+    pendingLibrarySyncConflict = {
+      userId,
+      localMutationAt,
+      remoteUpdatedAt: remoteRow.updated_at,
+      localCounts,
+      remoteCounts,
+      remotePayload,
+    };
+    return 'conflict_local_richer';
   }
 
   // Proteção contra migrações antigas sem timestamp local: priorizar local para evitar perda de dados.
