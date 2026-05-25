@@ -8,6 +8,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
 - **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente. Séries fora da biblioteca podem ser adicionadas automaticamente quando o progresso começa a ser registado.
+- **Lifecycle de Séries Mais Fiável**: Séries ativas transitam automaticamente entre `Quero Ver`, `A Ver` e `Concluídos` conforme episódios já lançados, incluindo regresso automático a `A Ver` quando saem episódios novos.
 - **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações públicas (TMDb + Trakt), trailers e gestão de progresso.
 - **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), Top Rated e próximas estreias.
 - **Sugestões Personalizadas**: O dashboard usa géneros reais da biblioteca para curadoria de séries e filmes, com rotação controlada e menor repetição recente.
@@ -16,6 +17,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
 - **Temas Claro e Escuro**: Escolha o seu tema preferido para uma experiência de visualização mais confortável.
 - **Importação e Exportação**: Faça backup e restaure a sua biblioteca a qualquer momento.
+- **Sync Cloud Protegido**: A sincronização com Supabase passou a detetar conflitos sérios entre dispositivo e cloud, evitando overwrite destrutivo silencioso e mantendo histórico remoto de snapshots.
 - **Seguro**: As chaves de API são protegidas através de funções serverless na Cloudflare Pages, nunca sendo expostas no browser.
 
 ## Stack tecnológica
@@ -196,6 +198,9 @@ Resultado:
 - A secção **Top Rated** usa o endpoint `top_rated` do TMDb para priorizar séries com melhor avaliação pública.
 - O menu de definições inclui um toggle para excluir/incluir animação asiática no Top Rated.
 - Os menus de conta e notificações fecham automaticamente em desktop ao sair da sua área, mantendo clique fora e comportamento mobile.
+- O menu da conta inclui agora estado de sync cloud e ações manuais de recuperação:
+  - `Restaurar da cloud`
+  - `Substituir cloud com este dispositivo`
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
 - A sinopse dos detalhes usa agregação multi-fonte com prioridade linguística `pt-PT` -> `pt` -> `en`; na ausência de PT, é escolhido o texto em inglês mais completo.
 - O bloco de avaliações dos detalhes mostra 3 fontes quando disponíveis (TMDb, Trakt e TVMaze), com anéis concêntricos mais finos para acomodar a 3.ª métrica.
@@ -206,4 +211,8 @@ Resultado:
 - Observabilidade mínima ativa:
   - frontend regista falhas por secção dinâmica com contexto (`secção`, `endpoint`, `status`) e snapshot em `sessionStorage` (`seriesdb.observability.v1`);
   - funções Cloudflare devolvem `x-request-id`, `x-upstream-status`, `x-upstream-latency-ms`, `x-ratelimit-limit`, `x-ratelimit-remaining` e `x-ratelimit-reset` para troubleshooting.
+- Sync remoto:
+  - conflitos relevantes entre local e cloud já não são resolvidos silenciosamente;
+  - snapshots remotos passam a guardar `sync_reason`, `device_id` e histórico em `public.library_snapshot_history`;
+  - utilizadores podem continuar a exportar a biblioteca manualmente como camada adicional de segurança.
 - Em offline, funcionalidades dependentes de `/api/*` (pesquisa remota, tendências/populares/estreias, ratings públicos) podem ficar indisponíveis até voltar a ligação.
