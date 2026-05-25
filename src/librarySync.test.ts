@@ -55,7 +55,14 @@ vi.mock('./supabase', () => ({
 }));
 
 import * as S from './state';
-import { applyRemoteLibrarySnapshotToLocal, pushLocalLibrarySnapshot } from './librarySync';
+import {
+  applyRemoteLibrarySnapshotToLocal,
+  clearPendingLibrarySyncConflict,
+  getPendingLibrarySyncConflict,
+  pushLocalLibrarySnapshot,
+  resolvePendingLibrarySyncConflict,
+  syncLibrarySnapshotAfterLogin,
+} from './librarySync';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 
 function makeBook(id: number, name: string): Series {
@@ -86,6 +93,12 @@ describe('library snapshot restore', () => {
     mocked.supabaseClient.rpc.mockResolvedValue({ error: null });
     mocked.supabaseClient.from.mockReset();
     vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    S.setMyWatchlist([]);
+    S.setMyArchive([]);
+    S.setWatchedState({});
+    S.setUserData({});
+    mocked.db.kvStore.get.mockResolvedValue(null);
+    clearPendingLibrarySyncConflict();
   });
 
   it('restores book progress_percent from remote snapshot userData', async () => {
@@ -189,5 +202,193 @@ describe('library snapshot restore', () => {
         }),
       }),
     );
+  });
+
+  it('flags a conflict when the remote snapshot is much richer than local', async () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(getSupabaseClient).mockReturnValue(mocked.supabaseClient as any);
+
+    S.setMyWatchlist([makeBook(1, 'Only Local Item')]);
+    mocked.db.kvStore.get.mockResolvedValue({
+      key: 'seriesdb.localLibraryMutationAt',
+      value: '2026-05-23T21:06:49.960Z',
+    });
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: 'user-1',
+        schema_version: 2,
+        updated_at: '2026-05-24T22:15:34.689Z',
+        payload: {
+          version: 2,
+          generatedAt: '2026-05-24T22:15:34.689Z',
+          watchlist: Array.from({ length: 52 }, (_, index) => makeBook(1000 + index, `Watch ${index}`)),
+          archive: Array.from({ length: 157 }, (_, index) => makeBook(2000 + index, `Archive ${index}`)),
+          watchedState: {
+            'book:1000': [1],
+            'book:1001': [1],
+          },
+          userData: {
+            'book:1000': { rating: 8, notes: 'a', progress_percent: 100 },
+          },
+        },
+      },
+      error: null,
+    });
+
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    mocked.supabaseClient.from.mockReturnValue({ select });
+
+    const outcome = await syncLibrarySnapshotAfterLogin('user-1');
+
+    expect(outcome).toBe('conflict_remote_richer');
+    expect(getPendingLibrarySyncConflict()).toEqual(
+      expect.objectContaining({
+        userId: 'user-1',
+        localCounts: expect.objectContaining({ totalItemCount: 1 }),
+        remoteCounts: expect.objectContaining({ totalItemCount: 209 }),
+      }),
+    );
+    expect(mocked.supabaseClient.rpc).not.toHaveBeenCalled();
+    expect(mocked.db.watchlist.clear).not.toHaveBeenCalled();
+  });
+
+  it('flags a conflict when the local snapshot is much richer than remote', async () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(getSupabaseClient).mockReturnValue(mocked.supabaseClient as any);
+
+    S.setMyWatchlist(Array.from({ length: 40 }, (_, index) => makeBook(3000 + index, `Local ${index}`)));
+    S.setMyArchive(Array.from({ length: 30 }, (_, index) => makeBook(4000 + index, `Local Archive ${index}`)));
+    mocked.db.kvStore.get.mockResolvedValue({
+      key: 'seriesdb.localLibraryMutationAt',
+      value: '2026-05-25T10:00:00.000Z',
+    });
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: 'user-2',
+        schema_version: 2,
+        updated_at: '2026-05-24T22:15:34.689Z',
+        payload: {
+          version: 2,
+          generatedAt: '2026-05-24T22:15:34.689Z',
+          watchlist: [makeBook(9, 'Remote Only')],
+          archive: [],
+          watchedState: {},
+          userData: {},
+        },
+      },
+      error: null,
+    });
+
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    mocked.supabaseClient.from.mockReturnValue({ select });
+
+    const outcome = await syncLibrarySnapshotAfterLogin('user-2');
+
+    expect(outcome).toBe('conflict_local_richer');
+    expect(getPendingLibrarySyncConflict()).toEqual(
+      expect.objectContaining({
+        userId: 'user-2',
+        localCounts: expect.objectContaining({ totalItemCount: 70 }),
+        remoteCounts: expect.objectContaining({ totalItemCount: 1 }),
+      }),
+    );
+    expect(mocked.supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('resolves a pending remote-richer conflict by pulling remote data', async () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(getSupabaseClient).mockReturnValue(mocked.supabaseClient as any);
+
+    S.setMyWatchlist([makeBook(1, 'Only Local Item')]);
+    mocked.db.kvStore.get.mockResolvedValue({
+      key: 'seriesdb.localLibraryMutationAt',
+      value: '2026-05-23T21:06:49.960Z',
+    });
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: 'user-3',
+        schema_version: 2,
+        updated_at: '2026-05-24T22:15:34.689Z',
+        payload: {
+          version: 2,
+          generatedAt: '2026-05-24T22:15:34.689Z',
+          watchlist: Array.from({ length: 18 }, (_, index) => makeBook(5000 + index, `Remote Book ${index}`)),
+          archive: Array.from({ length: 12 }, (_, index) => makeBook(5100 + index, `Remote Archive ${index}`)),
+          watchedState: {},
+          userData: {},
+        },
+      },
+      error: null,
+    });
+
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    mocked.supabaseClient.from.mockReturnValue({ select });
+
+    const outcome = await syncLibrarySnapshotAfterLogin('user-3');
+    expect(outcome).toBe('conflict_remote_richer');
+
+    const resolved = await resolvePendingLibrarySyncConflict('use_remote');
+
+    expect(resolved).toBe('pulled');
+    expect(mocked.db.watchlist.clear).toHaveBeenCalled();
+    expect(mocked.db.watchlist.bulkPut).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 5000 })]),
+    );
+    expect(getPendingLibrarySyncConflict()).toBeNull();
+  });
+
+  it('resolves a pending local-richer conflict by pushing local data', async () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(getSupabaseClient).mockReturnValue(mocked.supabaseClient as any);
+
+    S.setMyWatchlist(Array.from({ length: 25 }, (_, index) => makeBook(6000 + index, `Push ${index}`)));
+    mocked.db.kvStore.get.mockResolvedValue({
+      key: 'seriesdb.localLibraryMutationAt',
+      value: '2026-05-25T10:00:00.000Z',
+    });
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: 'user-4',
+        schema_version: 2,
+        updated_at: '2026-05-24T22:15:34.689Z',
+        payload: {
+          version: 2,
+          generatedAt: '2026-05-24T22:15:34.689Z',
+          watchlist: [makeBook(9, 'Remote Only')],
+          archive: [],
+          watchedState: {},
+          userData: {},
+        },
+      },
+      error: null,
+    });
+
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    mocked.supabaseClient.from.mockReturnValue({ select });
+
+    const outcome = await syncLibrarySnapshotAfterLogin('user-4');
+    expect(outcome).toBe('conflict_local_richer');
+
+    const resolved = await resolvePendingLibrarySyncConflict('use_local');
+
+    expect(resolved).toBe('pushed');
+    expect(mocked.supabaseClient.rpc).toHaveBeenCalledWith(
+      'upsert_library_snapshot',
+      expect.objectContaining({
+        p_schema_version: 2,
+        p_payload: expect.objectContaining({
+          watchlist: expect.arrayContaining([expect.objectContaining({ id: 6000 })]),
+        }),
+      }),
+    );
+    expect(getPendingLibrarySyncConflict()).toBeNull();
   });
 });

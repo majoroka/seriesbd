@@ -30,9 +30,12 @@ import {
     updateCurrentUserProfile,
 } from './auth';
 import {
+    clearPendingLibrarySyncConflict,
+    getPendingLibrarySyncConflict,
     LibrarySyncOutcome,
     markLocalLibraryMutation,
     pushLocalLibrarySnapshot,
+    resolvePendingLibrarySyncConflict,
     syncLibrarySnapshotAfterLogin,
 } from './librarySync';
 import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
@@ -1459,6 +1462,56 @@ async function syncCloudStateAfterLogin(userId: string): Promise<LibrarySyncOutc
     return libraryOutcome;
 }
 
+async function handleLibrarySyncConflict(outcome: LibrarySyncOutcome): Promise<LibrarySyncOutcome> {
+    if (outcome !== 'conflict_remote_richer' && outcome !== 'conflict_local_richer') {
+        return outcome;
+    }
+
+    const conflict = getPendingLibrarySyncConflict();
+    if (!conflict) return 'noop';
+
+    const remoteSummary = `${conflict.remoteCounts.totalItemCount} itens na cloud`;
+    const localSummary = `${conflict.localCounts.totalItemCount} itens neste dispositivo`;
+    const primaryMessage = outcome === 'conflict_remote_richer'
+        ? `A cloud tem muito mais dados do que este dispositivo (${remoteSummary} vs ${localSummary}). Pretende restaurar a biblioteca da cloud?`
+        : `Este dispositivo tem muito mais dados do que a cloud (${localSummary} vs ${remoteSummary}). Pretende manter os dados deste dispositivo e substituir a cloud?`;
+
+    const usePrimaryOption = await UI.showConfirmationModal(primaryMessage);
+    if (usePrimaryOption) {
+        const resolved = await resolvePendingLibrarySyncConflict(
+            outcome === 'conflict_remote_richer' ? 'use_remote' : 'use_local',
+        );
+        if (resolved === 'pulled') {
+            await initializeApp();
+            UI.showNotification('Biblioteca restaurada da cloud.');
+        } else if (resolved === 'pushed') {
+            UI.showNotification('Biblioteca deste dispositivo sincronizada para a cloud.');
+        }
+        return resolved;
+    }
+
+    const secondaryMessage = outcome === 'conflict_remote_richer'
+        ? `Pretende então manter os dados deste dispositivo e substituir a cloud?`
+        : `Pretende então restaurar a biblioteca da cloud e substituir os dados deste dispositivo?`;
+    const useSecondaryOption = await UI.showConfirmationModal(secondaryMessage);
+    if (useSecondaryOption) {
+        const resolved = await resolvePendingLibrarySyncConflict(
+            outcome === 'conflict_remote_richer' ? 'use_local' : 'use_remote',
+        );
+        if (resolved === 'pulled') {
+            await initializeApp();
+            UI.showNotification('Biblioteca restaurada da cloud.');
+        } else if (resolved === 'pushed') {
+            UI.showNotification('Biblioteca deste dispositivo sincronizada para a cloud.');
+        }
+        return resolved;
+    }
+
+    clearPendingLibrarySyncConflict();
+    UI.showNotification('Sincronização adiada. Nenhuma biblioteca foi substituída.');
+    return 'noop';
+}
+
 function setAuthStatusLabel(message: string, mode: 'default' | 'connected' | 'error' = 'default') {
     if (!DOM.authStatusLabel) return;
     DOM.authStatusLabel.textContent = message;
@@ -1865,7 +1918,7 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
             UI.showNotification(`Sessão iniciada: ${user.email}`);
-            void syncCloudStateAfterLogin(user.id);
+            void syncCloudStateAfterLogin(user.id).then((outcome) => handleLibrarySyncConflict(outcome));
         }
     } else if (event === 'SIGNED_OUT') {
         clearInactivityLogoutTimer();
@@ -1908,7 +1961,8 @@ async function initializeAuthState() {
         const currentUser = session?.user ?? null;
         setAuthenticatedUi(currentUser);
         if (currentUser) {
-            await syncCloudStateAfterLogin(currentUser.id);
+            const outcome = await syncCloudStateAfterLogin(currentUser.id);
+            await handleLibrarySyncConflict(outcome);
         }
     } catch (error) {
         if (isBenignMissingRefreshTokenError(error)) {
