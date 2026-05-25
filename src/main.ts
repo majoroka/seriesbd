@@ -19,7 +19,7 @@ import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
-import { getSeriesArchiveRecommendation, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
+import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
@@ -2307,6 +2307,8 @@ async function addMediaToWatchlist(
         _details: {
             status: details.status,
             next_episode_to_air: details.next_episode_to_air,
+            last_episode_to_air: details.last_episode_to_air,
+            released_episode_count: getSeriesReleasedEpisodesFromDetails(details),
         },
         _lastUpdated: new Date().toISOString(),
     };
@@ -2404,7 +2406,9 @@ async function updateNextAired() {
                 series.total_episodes = getSeriesTotalEpisodesFromDetails(details);
                 series._details = {
                     status: details.status,
-                    next_episode_to_air: details.next_episode_to_air
+                    next_episode_to_air: details.next_episode_to_air,
+                    last_episode_to_air: details.last_episode_to_air,
+                    released_episode_count: getSeriesReleasedEpisodesFromDetails(details),
                 };
                 series._lastUpdated = new Date().toISOString();
                 nextAiredRetryAt.delete(series.id);
@@ -2439,10 +2443,27 @@ async function updateNextAired() {
             return getSeriesArchiveRecommendation({
                 watchedCount,
                 totalEpisodes: series.total_episodes || 0,
+                releasedEpisodes: series._details?.released_episode_count,
                 status: series._details?.status,
                 nextEpisodeToAir: series._details?.next_episode_to_air,
+                firstAirDate: series.first_air_date,
                 isArchived: S.myArchive.some(s => s.id === series.id),
             }) === 'watchlist';
+        })
+        .map(series => series.id);
+
+    const seriesToMoveToArchive = allUserSeries
+        .filter(series => {
+            const watchedCount = S.watchedState[series.id]?.length || 0;
+            return getSeriesArchiveRecommendation({
+                watchedCount,
+                totalEpisodes: series.total_episodes || 0,
+                releasedEpisodes: series._details?.released_episode_count,
+                status: series._details?.status,
+                nextEpisodeToAir: series._details?.next_episode_to_air,
+                firstAirDate: series.first_air_date,
+                isArchived: S.myArchive.some(s => s.id === series.id),
+            }) === 'archive';
         })
         .map(series => series.id);
 
@@ -2450,6 +2471,14 @@ async function updateNextAired() {
         for (const seriesId of seriesToMoveBackToWatchlist) {
             const series = S.getSeries(seriesId);
             if(series) await S.unarchiveSeries(series);
+        }
+        allUserSeries = [...S.myWatchlist, ...S.myArchive];
+    }
+
+    if (seriesToMoveToArchive.length > 0) {
+        for (const seriesId of seriesToMoveToArchive) {
+            const series = S.getSeries(seriesId);
+            if (series) await S.archiveSeries(series);
         }
         allUserSeries = [...S.myWatchlist, ...S.myArchive];
     }
@@ -2469,7 +2498,12 @@ async function updateNextAired() {
             if (series) {
                 const freshData = await API.fetchSeriesDetails(seriesId, null);
                 series.total_episodes = getSeriesTotalEpisodesFromDetails(freshData);
-                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air };
+                series._details = {
+                    status: freshData.status,
+                    next_episode_to_air: freshData.next_episode_to_air,
+                    last_episode_to_air: freshData.last_episode_to_air,
+                    released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
             }
@@ -3087,12 +3121,18 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
 
             if (
                 freshTotalEpisodes !== totalEpisodes
+                || series._details?.released_episode_count !== getSeriesReleasedEpisodesFromDetails(freshData)
                 || series._details?.status !== freshData.status
                 || series._details?.next_episode_to_air?.id !== freshData.next_episode_to_air?.id
             ) {
                 series.total_episodes = freshTotalEpisodes;
                 totalEpisodes = freshTotalEpisodes;
-                series._details = { status: freshData.status, next_episode_to_air: freshData.next_episode_to_air };
+                series._details = {
+                    status: freshData.status,
+                    next_episode_to_air: freshData.next_episode_to_air,
+                    last_episode_to_air: freshData.last_episode_to_air,
+                    released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
             }
@@ -3101,8 +3141,10 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
         const archiveRecommendation = getSeriesArchiveRecommendation({
             watchedCount: watchedEpisodesCount,
             totalEpisodes,
+            releasedEpisodes: series._details?.released_episode_count,
             status: series._details?.status,
             nextEpisodeToAir: series._details?.next_episode_to_air,
+            firstAirDate: series.first_air_date,
             isArchived: S.myArchive.some((item) => item.media_type === 'series' && item.id === series.id),
         });
 
@@ -3564,7 +3606,12 @@ async function refetchAllMetadata(): Promise<void> {
                     genres: freshData.genres,
                     episode_run_time: freshData.episode_run_time?.[0] || 30,
                     total_episodes: totalEpisodes,
-                    _details: { next_episode_to_air: freshData.next_episode_to_air, status: freshData.status },
+                    _details: {
+                        next_episode_to_air: freshData.next_episode_to_air,
+                        last_episode_to_air: freshData.last_episode_to_air,
+                        released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                        status: freshData.status,
+                    },
                     _lastUpdated: new Date().toISOString()
                 });
             } catch (err) {

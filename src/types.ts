@@ -103,6 +103,8 @@ export interface Series {
     production_countries?: { iso_3166_1?: string; name: string }[];
     _details?: {
         next_episode_to_air: Episode | null;
+        last_episode_to_air?: Episode | null;
+        released_episode_count?: number;
         status: string;
     };
     videos?: {
@@ -115,6 +117,7 @@ export interface Series {
 export interface TMDbSeriesDetails extends Omit<Series, 'episode_run_time' | '_details'> {
     created_by: { id: number; name: string; profile_path: string | null }[];
     next_episode_to_air: Episode | null;
+    last_episode_to_air?: Episode | null;
     episode_run_time: number[]; // This conflicts with Series, but we handle it in the mapping
     networks: { id: number; name: string; logo_path: string | null }[];
     production_companies: { id: number; name: string }[];
