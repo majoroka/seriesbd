@@ -59,3 +59,32 @@ Depois configurar no Cloudflare Pages (`Preview` e `Production`):
 2. Confirmar que surgem linhas correspondentes em:
    - `public.profiles`
    - `public.user_settings`
+
+## 5) Nota importante sobre grants futuros
+
+Contexto:
+- o Supabase está a mudar o comportamento por defeito da Data API para novas tabelas no schema `public`
+- em projetos novos isso passa a ser default em `2026-05-30`
+- em projetos existentes passa a afetar **novas tabelas criadas depois de `2026-10-30`**
+
+Impacto no projeto:
+- as tabelas e funções já existentes continuam a funcionar com os grants atuais
+- o risco está em futuras migrations que criem:
+  - novas tabelas
+  - novas funções RPC
+  sem `grant` explícito
+
+Regra operacional daqui para a frente:
+1. `create table`
+2. `alter table ... enable row level security`
+3. `create policy ...`
+4. `revoke ...`
+5. `grant ...`
+
+Para funções RPC:
+1. `create or replace function ...`
+2. `revoke all on function ... from public`
+3. `grant execute on function ... to authenticated` ou `service_role`
+
+Objetivo:
+- garantir que novas entidades continuam acessíveis via `supabase-js` / PostgREST apenas quando isso for explícito e intencional

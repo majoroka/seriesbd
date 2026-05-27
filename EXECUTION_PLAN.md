@@ -473,6 +473,10 @@ Só avançar se:
 - quando uma conta nova entra com cloud vazia e o dispositivo já tem biblioteca local, substituir o push automático por decisão explícita:
   - usar biblioteca deste dispositivo
   - começar com biblioteca vazia
+- manter como regra de futuras migrations Supabase:
+  - tabelas novas em `public` com `RLS + policy + revoke/grant` explícitos
+  - funções RPC novas com `revoke/grant execute` explícitos
+  - isto evita impacto da mudança de default grants da Data API após `2026-10-30` em projetos existentes
 
 ### Internacionalização
 
