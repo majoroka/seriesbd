@@ -477,6 +477,18 @@ Só avançar se:
   - tabelas novas em `public` com `RLS + policy + revoke/grant` explícitos
   - funções RPC novas com `revoke/grant execute` explícitos
   - isto evita impacto da mudança de default grants da Data API após `2026-10-30` em projetos existentes
+- recuperação de password por email via Supabase Auth:
+  - adicionar ação `Esqueci-me da password` no modal de login
+  - enviar email com `resetPasswordForEmail(...)`
+  - suportar `redirectTo` de recovery de volta à app
+  - abrir modal em modo `Definir nova password`
+  - concluir com `updateUser({ password })`
+  - tratar estados:
+    - email enviado
+    - link inválido/expirado
+    - password atualizada
+    - rate limit / reenvio
+  - manter fluxo separado da confirmação de email para não criar ambiguidade
 
 ### Internacionalização
 
