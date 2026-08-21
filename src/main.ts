@@ -1729,6 +1729,8 @@ async function signOutDueToInactivity(): Promise<void> {
     try {
         lastSignOutReason = 'inactivity';
         await signOutCurrentUser();
+        // Do not depend solely on the asynchronous Supabase event to clear this device's UI.
+        handleAuthStateChange('SIGNED_OUT', null);
     } catch (error) {
         if (isBenignMissingRefreshTokenError(error)) {
             console.warn('[auth] Refresh token ausente ao terminar sessão por inatividade. A limpar sessão local.', error);
@@ -5306,6 +5308,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             lastSignOutReason = 'manual';
             await signOutCurrentUser();
+            // The provider event can arrive late; clear the local session state immediately.
+            handleAuthStateChange('SIGNED_OUT', null);
         } catch (error) {
             if (isBenignMissingRefreshTokenError(error)) {
                 console.warn('[auth] Refresh token ausente ao terminar sessão manualmente. A limpar sessão local.', error);
