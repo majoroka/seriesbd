@@ -50,6 +50,8 @@ const SYNC_AUDIT_STORAGE_KEY = 'seriesdb.syncAudit.v1';
 const PENDING_CONFIRMATION_EMAIL_STORAGE_KEY = 'seriesdb.auth.pendingConfirmationEmail.v1';
 const GUEST_ADD_WARNING_SHOWN_STORAGE_KEY = 'seriesdb.guestAddWarningShown.v1';
 const SLOW_SECTION_THRESHOLD_MS = 1500;
+const MOVIE_DETAILS_RATE_LIMIT_MESSAGE = 'Demasiados pedidos em pouco tempo. A mostrar os dados disponíveis e a tentar atualizar depois.';
+const MOVIE_DETAILS_PARTIAL_MESSAGE = 'Alguns detalhes do filme não puderam ser atualizados.';
 type ObservabilitySection = 'search' | 'trending-day' | 'trending-week' | 'popular' | 'premieres' | 'series-details' | 'book-details' | 'initialize';
 type FailureMetric = {
     failCount: number;
@@ -2240,6 +2242,26 @@ function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
         || S.getDiscoveryMediaItem(mediaType, mediaId);
 }
 
+function renderFallbackMovieDetails(media: Series, options: { notifyMessage?: string } = {}): void {
+    const fallbackMovie = normalizeSeriesCollection([media])[0];
+    if (!fallbackMovie) return;
+
+    S.registerDiscoveryMedia([fallbackMovie]);
+    const isInLibrary = isMediaInLibrary('movie', fallbackMovie.id);
+    const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === fallbackMovie.id);
+    const progressPercent = getMediaProgressPercent('movie', fallbackMovie.id);
+    UI.renderMediaDetails(
+        fallbackMovie,
+        { progressPercent, isInLibrary, isArchived },
+        [],
+        null
+    );
+
+    if (options.notifyMessage) {
+        UI.showNotification(options.notifyMessage);
+    }
+}
+
 function updateCurrentSearchResultMedia(media: Series): void {
     S.registerDiscoveryMedia([media]);
     const hasMatch = S.currentSearchResults.some((item) => item.media_type === media.media_type && item.id === media.id);
@@ -2830,12 +2852,28 @@ async function displayMovieDetails(media: Series): Promise<void> {
     setElementMessage(DOM.seriesViewSection, 'A carregar detalhes do filme...');
     UI.showSection('series-view-section');
 
-    const movieDetails = await runObservedSection(
-        'series-details',
-        `/api/tmdb/movie/${media.source_id || media.id}`,
-        () => API.fetchMovieDetails(media.id, signal, media.source_id),
-        { mediaType: 'movie', mediaId: media.id }
-    );
+    let movieDetails: Series;
+    try {
+        movieDetails = await runObservedSection(
+            'series-details',
+            `/api/tmdb/movie/${media.source_id || media.id}`,
+            () => API.fetchMovieDetails(media.id, signal, media.source_id),
+            { mediaType: 'movie', mediaId: media.id }
+        );
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        const status = getErrorStatus(error);
+        renderFallbackMovieDetails(
+            S.getDiscoveryMediaItem('movie', media.id) || media,
+            {
+                notifyMessage: status === 429
+                    ? MOVIE_DETAILS_RATE_LIMIT_MESSAGE
+                    : MOVIE_DETAILS_PARTIAL_MESSAGE,
+            }
+        );
+        return;
+    }
+
     if (signal.aborted) return;
 
     updateCurrentSearchResultMedia(movieDetails);
@@ -3938,12 +3976,22 @@ let popularSeriesDisplayedCount = 0;
 let popularSeriesCacheMediaType: SubmenuMediaTarget | null = null;
 const POPULAR_SERIES_DISPLAY_BATCH_SIZE = 50;
 const POPULAR_SERIES_TARGET_TOTAL = 250;
+const POPULAR_MOVIE_TARGET_TOTAL = 100;
 const POPULAR_FETCH_CONCURRENCY = 4;
+const POPULAR_MOVIE_FETCH_CONCURRENCY = 2;
 let isPopularBootstrapping = false;
 let isPopularBackgroundLoading = false;
 let popularLoadToken = 0;
 const TMDB_ANIMATION_GENRE_ID = 16;
 let excludeAsianAnimationFromTopRated = true;
+
+function getPopularTargetTotal(mediaType: SubmenuMediaTarget): number {
+    return mediaType === 'movie' ? POPULAR_MOVIE_TARGET_TOTAL : POPULAR_SERIES_TARGET_TOTAL;
+}
+
+function getPopularFetchConcurrency(mediaType: SubmenuMediaTarget): number {
+    return mediaType === 'movie' ? POPULAR_MOVIE_FETCH_CONCURRENCY : POPULAR_FETCH_CONCURRENCY;
+}
 
 function sortPopularSeriesByRanking(seriesList: Series[]): Series[] {
     return [...seriesList].sort((a, b) => {
@@ -4041,23 +4089,25 @@ function renderTopRatedFromCache(mediaType: SubmenuMediaTarget = activeSubmenuMe
     return true;
 }
 
-function mergePopularSeries(results: Series[]) {
+function mergePopularSeries(results: Series[], mediaType: SubmenuMediaTarget) {
     if (results.length === 0) return;
     S.registerDiscoveryMedia(results);
+    const targetTotal = getPopularTargetTotal(mediaType);
     allPopularSeries = sortPopularSeriesByRanking(
         dedupePopularSeries([...allPopularSeries, ...results])
-    ).slice(0, POPULAR_SERIES_TARGET_TOTAL);
+    ).slice(0, targetTotal);
 }
 
 async function fetchPopularPagesChunk(
     pages: number[],
+    mediaType: SubmenuMediaTarget,
     fetchAndProcessChunk: (page: number) => Promise<{ results: Series[]; totalPages: number }>
 ) {
     if (pages.length === 0) return;
 
     const settled = await processInBatches(
         pages,
-        POPULAR_FETCH_CONCURRENCY,
+        getPopularFetchConcurrency(mediaType),
         0,
         async (page: number) => ({ page, chunk: await fetchAndProcessChunk(page) })
     );
@@ -4067,7 +4117,7 @@ async function fetchPopularPagesChunk(
         if (result.status === 'rejected') throw result.reason;
         mergedResults.push(...result.value.chunk.results);
     }
-    mergePopularSeries(mergedResults);
+    mergePopularSeries(mergedResults, mediaType);
 }
 
 async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget = activeSubmenuMediaTarget) {
@@ -4097,7 +4147,7 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
         }
         const currentVisibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
         popularSeriesDisplayedCount += POPULAR_SERIES_DISPLAY_BATCH_SIZE;
-        popularSeriesDisplayedCount = Math.min(popularSeriesDisplayedCount, POPULAR_SERIES_TARGET_TOTAL);
+        popularSeriesDisplayedCount = Math.min(popularSeriesDisplayedCount, getPopularTargetTotal(mediaType));
         const nextVisibleCount = Math.min(popularSeriesDisplayedCount, allPopularSeries.length);
 
         if (nextVisibleCount > currentVisibleCount) {
@@ -4115,6 +4165,8 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
     if (isPopularBootstrapping) return;
 
     const currentLoadToken = ++popularLoadToken;
+    const targetTotal = getPopularTargetTotal(mediaType);
+    const fetchConcurrency = getPopularFetchConcurrency(mediaType);
     isPopularBootstrapping = true;
     isPopularBackgroundLoading = false;
     popularSeriesCacheMediaType = mediaType;
@@ -4143,13 +4195,13 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
     const processRemainingChunks = async (startPage: number, totalPages: number, token: number) => {
         const maxPages = Math.max(1, totalPages);
         let page = startPage;
-        while (page <= maxPages && allPopularSeries.length < POPULAR_SERIES_TARGET_TOTAL) {
+        while (page <= maxPages && allPopularSeries.length < targetTotal) {
             if (token !== popularLoadToken) return;
             const pagesToFetch: number[] = [];
-            for (let i = 0; i < POPULAR_FETCH_CONCURRENCY && page <= maxPages; i++, page++) {
+            for (let i = 0; i < fetchConcurrency && page <= maxPages; i++, page++) {
                 pagesToFetch.push(page);
             }
-            await fetchPopularPagesChunk(pagesToFetch, fetchAndProcessChunk);
+            await fetchPopularPagesChunk(pagesToFetch, mediaType, fetchAndProcessChunk);
             if (token !== popularLoadToken) return;
             renderVisiblePopularSeries();
             updatePopularLoadMoreVisibility();
@@ -4161,17 +4213,17 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
         const firstChunk = await fetchAndProcessChunk(1);
         if (currentLoadToken !== popularLoadToken) return;
 
-        mergePopularSeries(firstChunk.results);
+        mergePopularSeries(firstChunk.results, mediaType);
         let nextPage = 2;
         const maxPages = Math.max(1, firstChunk.totalPages);
-        const initialTarget = Math.min(POPULAR_SERIES_DISPLAY_BATCH_SIZE, POPULAR_SERIES_TARGET_TOTAL);
+        const initialTarget = Math.min(POPULAR_SERIES_DISPLAY_BATCH_SIZE, targetTotal);
 
         while (allPopularSeries.length < initialTarget && nextPage <= maxPages) {
             const pagesToFetch: number[] = [];
-            for (let i = 0; i < POPULAR_FETCH_CONCURRENCY && nextPage <= maxPages; i++, nextPage++) {
+            for (let i = 0; i < fetchConcurrency && nextPage <= maxPages; i++, nextPage++) {
                 pagesToFetch.push(nextPage);
             }
-            await fetchPopularPagesChunk(pagesToFetch, fetchAndProcessChunk);
+            await fetchPopularPagesChunk(pagesToFetch, mediaType, fetchAndProcessChunk);
             if (currentLoadToken !== popularLoadToken) return;
         }
 
@@ -4180,7 +4232,7 @@ async function loadPopularSeries(loadMore = false, mediaType: SubmenuMediaTarget
         updatePopularLoadMoreVisibility();
 
         // Carrega o resto em segundo plano para chegar ao alvo total sem bloquear o "Ver Mais".
-        if (nextPage <= maxPages && allPopularSeries.length < POPULAR_SERIES_TARGET_TOTAL) {
+        if (nextPage <= maxPages && allPopularSeries.length < targetTotal) {
             isPopularBackgroundLoading = true;
             updatePopularLoadMoreVisibility();
             processRemainingChunks(nextPage, maxPages, currentLoadToken)
