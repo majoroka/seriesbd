@@ -2236,10 +2236,12 @@ async function setAllSeriesMediaFilterPreference(mediaFilter: AllSeriesMediaFilt
 function findMedia(mediaType: MediaType, mediaId: number): Series | undefined {
     return S.getMediaItem(mediaType, mediaId)
         || S.currentSearchResults.find((item) => item.media_type === mediaType && item.id === mediaId)
-        || S.dashboardSuggestedMedia.find((item) => item.media_type === mediaType && item.id === mediaId);
+        || S.dashboardSuggestedMedia.find((item) => item.media_type === mediaType && item.id === mediaId)
+        || S.getDiscoveryMediaItem(mediaType, mediaId);
 }
 
 function updateCurrentSearchResultMedia(media: Series): void {
+    S.registerDiscoveryMedia([media]);
     const hasMatch = S.currentSearchResults.some((item) => item.media_type === media.media_type && item.id === media.id);
     if (!hasMatch) return;
     const nextResults = S.currentSearchResults.map((item) => {
@@ -2834,21 +2836,9 @@ async function displayMovieDetails(media: Series): Promise<void> {
         () => API.fetchMovieDetails(media.id, signal, media.source_id),
         { mediaType: 'movie', mediaId: media.id }
     );
-    const movieCredits = await runObservedSection(
-        'series-details',
-        `/api/tmdb/movie/${movieDetails.source_id || media.source_id || media.id}/credits`,
-        () => API.fetchMovieCredits(movieDetails.source_id || media.source_id || media.id, signal),
-        { mediaType: 'movie', mediaId: media.id, optional: 'credits' }
-    ).catch((error) => {
-        if (error instanceof Error && error.name === 'AbortError') throw error;
-        console.warn('Falha ao carregar créditos do filme. A vista de detalhes continuará sem elenco.', error);
-        return { cast: [], crew: [] };
-    });
-    const externalReviews = await API.fetchTmdbExternalReviews('movie', movieDetails.source_id || media.source_id || media.id, signal).catch((error) => {
-        if (error instanceof Error && error.name === 'AbortError') throw error;
-        console.warn('Falha ao carregar reviews externas do filme.', error);
-        return [];
-    });
+    if (signal.aborted) return;
+
+    updateCurrentSearchResultMedia(movieDetails);
 
     const isInLibrary = isMediaInLibrary('movie', movieDetails.id);
     if (isInLibrary) {
@@ -2873,7 +2863,29 @@ async function displayMovieDetails(media: Series): Promise<void> {
     }
     const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
     const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
-    UI.renderMediaDetails(movieDetails, { progressPercent, isInLibrary, isArchived }, externalReviews, movieCredits);
+    const detailOptions = { progressPercent, isInLibrary, isArchived };
+    UI.renderMediaDetails(movieDetails, detailOptions, [], null);
+
+    const [movieCredits, externalReviews] = await Promise.all([
+        runObservedSection(
+            'series-details',
+            `/api/tmdb/movie/${movieDetails.source_id || media.source_id || media.id}/credits`,
+            () => API.fetchMovieCredits(movieDetails.source_id || media.source_id || media.id, signal),
+            { mediaType: 'movie', mediaId: media.id, optional: 'credits' }
+        ).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar créditos do filme. A vista de detalhes continuará sem elenco.', error);
+            return { cast: [], crew: [] };
+        }),
+        API.fetchTmdbExternalReviews('movie', movieDetails.source_id || media.source_id || media.id, signal).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar reviews externas do filme.', error);
+            return [];
+        }),
+    ]);
+
+    if (signal.aborted) return;
+    UI.renderMediaDetails(movieDetails, detailOptions, externalReviews, movieCredits);
 }
 
 function getMediaDetailObservabilitySection(mediaType: MediaType): ObservabilitySection {
@@ -3892,6 +3904,7 @@ async function loadTrending(
             () => API.fetchTrending(timeWindow, S.searchAbortController.signal, mediaType),
             { containerId, timeWindow, mediaType }
         );
+        S.registerDiscoveryMedia(data.results);
         UI.renderTrending(data.results, container);
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -4030,6 +4043,7 @@ function renderTopRatedFromCache(mediaType: SubmenuMediaTarget = activeSubmenuMe
 
 function mergePopularSeries(results: Series[]) {
     if (results.length === 0) return;
+    S.registerDiscoveryMedia(results);
     allPopularSeries = sortPopularSeriesByRanking(
         dedupePopularSeries([...allPopularSeries, ...results])
     ).slice(0, POPULAR_SERIES_TARGET_TOTAL);
@@ -4245,6 +4259,7 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
             () => API.fetchNewPremieres(premieresSeriesPage, S.searchAbortController.signal, mediaType),
             { page: premieresSeriesPage, loadMore, mediaType }
         );
+        S.registerDiscoveryMedia(data.results);
         
         if (!loadMore) {
             clearElementChildren(DOM.premieresContainer);
