@@ -613,18 +613,25 @@
                     <label for="auth-display-name">Nome a apresentar</label>
                     <input id="auth-display-name" type="text" maxlength="80" autocomplete="name">
                 </div>
-                <div class="auth-field">
+                <div id="auth-email-group" class="auth-field">
                     <label for="auth-email">Email</label>
                     <input id="auth-email" type="email" required autocomplete="email">
                 </div>
-                <div class="auth-field">
+                <div id="auth-password-group" class="auth-field">
                     <label for="auth-password">Password</label>
                     <input id="auth-password" type="password" required minlength="8" autocomplete="current-password">
+                </div>
+                <div id="auth-password-confirm-group" class="auth-field" hidden>
+                    <label for="auth-password-confirm">Confirmar nova password</label>
+                    <input id="auth-password-confirm" type="password" minlength="8" autocomplete="new-password">
                 </div>
                 <button id="auth-submit-btn" type="submit" class="search-bar-button">Entrar</button>
             </form>
             <button id="auth-resend-confirmation-btn" type="button" class="search-bar-button secondary auth-secondary-action" hidden>
                 Reenviar email de confirmação
+            </button>
+            <button id="auth-forgot-password-btn" type="button" class="auth-toggle-mode">
+                Esqueci-me da password
             </button>
             <button id="auth-toggle-mode-btn" type="button" class="auth-toggle-mode">
                 Ainda não tens conta? Registar
