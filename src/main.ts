@@ -23,11 +23,13 @@ import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, g
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
+    requestPasswordResetEmail,
     resendSignupConfirmationEmail,
     signInWithPassword,
     signOutCurrentUser,
     signUpWithPassword,
     subscribeToAuthState,
+    updateCurrentUserPassword,
     updateCurrentUserProfile,
 } from './auth';
 import {
@@ -80,6 +82,7 @@ type DetailReturnContext = {
     sectionId: string;
     scrollTop: number;
 };
+type AuthFormMode = 'login' | 'signup' | 'recovery_request' | 'recovery_update';
 type MainMenuTarget = 'dashboard' | 'series' | 'movie' | 'book' | 'library';
 type SubmenuMediaTarget = Extract<MainMenuTarget, 'series' | 'movie' | 'book'>;
 type AppNotificationKind =
@@ -106,9 +109,10 @@ type NotificationReadState = Record<string, string[]>;
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
 let detailReturnContext: DetailReturnContext | null = null;
-let authFormMode: 'login' | 'signup' = 'login';
+let authFormMode: AuthFormMode = 'login';
 let authFormBusy = false;
 let pendingConfirmationEmail: string | null = null;
+let passwordRecoveryCallbackDetected = false;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let currentDetailedSeriesData: TMDbSeriesDetails | null = null;
@@ -209,13 +213,26 @@ function getErrorMessage(error: unknown): string {
 
 function cleanAuthCallbackUrl() {
     const url = new URL(window.location.href);
-    url.searchParams.delete('error');
-    url.searchParams.delete('error_code');
-    url.searchParams.delete('error_description');
-    url.searchParams.delete('error_description_code');
-    url.searchParams.delete('code');
-    url.searchParams.delete('token');
-    url.searchParams.delete('token_hash');
+    const authParamNames = [
+        'access_token',
+        'refresh_token',
+        'token_type',
+        'expires_at',
+        'expires_in',
+        'type',
+        'error',
+        'error_code',
+        'error_description',
+        'error_description_code',
+        'code',
+        'token',
+        'token_hash',
+    ];
+    authParamNames.forEach((name) => url.searchParams.delete(name));
+
+    const hashParams = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+    authParamNames.forEach((name) => hashParams.delete(name));
+    url.hash = hashParams.toString();
     window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 }
 
@@ -245,6 +262,10 @@ function isConfirmationLinkFailure(params: URLSearchParams): boolean {
     return /otp_expired|token_expired|expired|invalid|access_denied|token|otp/.test(joined);
 }
 
+function isPasswordRecoveryCallback(params: URLSearchParams): boolean {
+    return (params.get('type') || '').toLowerCase() === 'recovery';
+}
+
 function openAuthModalForPendingConfirmation(message: string) {
     openAuthModal('login');
     if (pendingConfirmationEmail) {
@@ -252,6 +273,20 @@ function openAuthModalForPendingConfirmation(message: string) {
     }
     setPendingConfirmationEmail(pendingConfirmationEmail);
     setAuthInlineFeedback(message, 'info');
+    DOM.authPasswordInput.focus();
+}
+
+function openPasswordRecoveryRequestModal(message?: string) {
+    openAuthModal('recovery_request');
+    if (message) {
+        setAuthInlineFeedback(message, 'info');
+    }
+    DOM.authEmailInput.focus();
+}
+
+function openPasswordRecoveryUpdateModal() {
+    openAuthModal('recovery_update');
+    setAuthInlineFeedback('Defina uma nova password para voltar a entrar na sua conta.', 'info');
     DOM.authPasswordInput.focus();
 }
 
@@ -1856,29 +1891,66 @@ function setAuthFormLoadingState(isBusy: boolean) {
     DOM.authSubmitBtn.disabled = isBusy;
     DOM.authSubmitBtn.textContent = isBusy
         ? 'A processar...'
-        : (authFormMode === 'login' ? 'Entrar' : 'Criar conta');
+        : authFormMode === 'signup'
+            ? 'Criar conta'
+            : authFormMode === 'recovery_request'
+                ? 'Enviar link de recuperação'
+                : authFormMode === 'recovery_update'
+                    ? 'Guardar nova password'
+                    : 'Entrar';
     DOM.authEmailInput.disabled = isBusy;
     DOM.authPasswordInput.disabled = isBusy;
+    DOM.authPasswordConfirmInput.disabled = isBusy;
     DOM.authDisplayNameInput.disabled = isBusy;
     DOM.authToggleModeBtn.disabled = isBusy;
     DOM.authResendConfirmationBtn.disabled = isBusy || DOM.authResendConfirmationBtn.hidden;
+    DOM.authForgotPasswordBtn.disabled = isBusy || DOM.authForgotPasswordBtn.hidden;
 }
 
-function setAuthModalMode(mode: 'login' | 'signup') {
+function setAuthModalMode(mode: AuthFormMode) {
     authFormMode = mode;
     const isSignup = mode === 'signup';
+    const isRecoveryRequest = mode === 'recovery_request';
+    const isRecoveryUpdate = mode === 'recovery_update';
+    const isLogin = mode === 'login';
 
-    DOM.authModalTitle.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    DOM.authModalTitle.textContent = isSignup
+        ? 'Criar conta'
+        : isRecoveryRequest
+            ? 'Recuperar password'
+            : isRecoveryUpdate
+                ? 'Definir nova password'
+                : 'Entrar';
     DOM.authModalDescription.textContent = isSignup
         ? 'Crie a sua conta para sincronização futura de dados.'
-        : 'Use email e password para iniciar sessão.';
+        : isRecoveryRequest
+            ? 'Indique o email da conta. Se existir, enviamos um link para definir uma nova password.'
+            : isRecoveryUpdate
+                ? 'Escolha uma nova password com pelo menos 8 caracteres.'
+                : 'Use email e password para iniciar sessão.';
     DOM.authDisplayNameGroup.hidden = !isSignup;
     DOM.authDisplayNameInput.required = isSignup;
-    DOM.authPasswordInput.autocomplete = isSignup ? 'new-password' : 'current-password';
-    DOM.authSubmitBtn.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    DOM.authEmailGroup.hidden = isRecoveryUpdate;
+    DOM.authEmailInput.required = !isRecoveryUpdate;
+    DOM.authPasswordGroup.hidden = isRecoveryRequest;
+    DOM.authPasswordInput.required = !isRecoveryRequest;
+    DOM.authPasswordInput.autocomplete = isSignup || isRecoveryUpdate ? 'new-password' : 'current-password';
+    DOM.authPasswordConfirmGroup.hidden = !isRecoveryUpdate;
+    DOM.authPasswordConfirmInput.required = isRecoveryUpdate;
+    DOM.authSubmitBtn.textContent = isSignup
+        ? 'Criar conta'
+        : isRecoveryRequest
+            ? 'Enviar link de recuperação'
+            : isRecoveryUpdate
+                ? 'Guardar nova password'
+                : 'Entrar';
+    DOM.authForgotPasswordBtn.hidden = !isLogin;
+    DOM.authToggleModeBtn.hidden = isRecoveryUpdate;
     DOM.authToggleModeBtn.textContent = isSignup
         ? 'Já tens conta? Entrar'
-        : 'Ainda não tens conta? Registar';
+        : isRecoveryRequest
+            ? 'Voltar a entrar'
+            : 'Ainda não tens conta? Registar';
     if (isSignup) {
         setPendingConfirmationEmail(null);
     } else {
@@ -1895,11 +1967,11 @@ function resetAuthForm() {
     setAuthFormLoadingState(false);
 }
 
-function openAuthModal(mode: 'login' | 'signup') {
+function openAuthModal(mode: AuthFormMode) {
     UI.closeNotificationModal();
     setAuthModalMode(mode);
     resetAuthForm();
-    UI.openAuthModal();
+    UI.openAuthModal(mode === 'recovery_update' ? DOM.authPasswordInput : DOM.authEmailInput);
 }
 
 function closeAuthModal() {
@@ -2085,15 +2157,22 @@ function setAuthenticatedUi(user: User | null) {
 function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
-    if (event === 'SIGNED_IN' && user?.email) {
+    if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && user?.email) {
         setPendingConfirmationEmail(null);
         onUserActivityForSessionTimeout();
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
-            UI.showNotification(`Sessão iniciada: ${user.email}`);
+            if (event === 'SIGNED_IN') {
+                UI.showNotification(`Sessão iniciada: ${user.email}`);
+            }
             void syncCloudStateAfterLogin(user.id)
                 .then((outcome) => handleLibrarySyncConflict(outcome))
                 .then(() => refreshLibrarySyncStatus(user.id, 'signed-in'));
+        }
+        if (event === 'PASSWORD_RECOVERY') {
+            passwordRecoveryCallbackDetected = false;
+            cleanAuthCallbackUrl();
+            openPasswordRecoveryUpdateModal();
         }
     } else if (event === 'SIGNED_OUT') {
         clearInactivityLogoutTimer();
@@ -2144,6 +2223,11 @@ async function initializeAuthState() {
             const outcome = await syncCloudStateAfterLogin(currentUser.id);
             await handleLibrarySyncConflict(outcome);
             await refreshLibrarySyncStatus(currentUser.id, 'initial-auth');
+            if (passwordRecoveryCallbackDetected) {
+                passwordRecoveryCallbackDetected = false;
+                cleanAuthCallbackUrl();
+                openPasswordRecoveryUpdateModal();
+            }
         } else {
             await refreshLibrarySyncStatus(null, 'initial-auth-no-session');
         }
@@ -2164,6 +2248,10 @@ async function initializeAuthState() {
 
 function handleAuthCallbackFeedback() {
     const params = getAuthCallbackParams();
+    if (isPasswordRecoveryCallback(params)) {
+        passwordRecoveryCallbackDetected = true;
+        return;
+    }
     if (!params.has('error') && !params.has('error_description') && !params.has('error_code')) {
         return;
     }
@@ -2173,11 +2261,19 @@ function handleAuthCallbackFeedback() {
     }
 
     const message = (params.get('error_description') || params.get('error') || '').replace(/\+/g, ' ').trim()
-        ? `O link de confirmação já não é válido ou expirou. Estes links expiram normalmente ao fim de 1 hora. ${pendingConfirmationEmail ? 'Pode pedir um novo envio abaixo.' : 'Volte a iniciar o registo para receber novo email.'}`
-        : 'O link de confirmação já não é válido ou expirou.';
+        ? pendingConfirmationEmail
+            ? `O link de confirmação já não é válido ou expirou. Estes links expiram normalmente ao fim de 1 hora. Pode pedir um novo envio abaixo.`
+            : 'O link de recuperação já não é válido ou expirou. Peça um novo link para definir a password.'
+        : pendingConfirmationEmail
+            ? 'O link de confirmação já não é válido ou expirou.'
+            : 'O link de recuperação já não é válido ou expirou.';
 
     cleanAuthCallbackUrl();
-    openAuthModalForPendingConfirmation(message);
+    if (pendingConfirmationEmail) {
+        openAuthModalForPendingConfirmation(message);
+    } else {
+        openPasswordRecoveryRequestModal(message);
+    }
 }
 
 function isMediaInLibrary(mediaType: MediaType, mediaId: number): boolean {
@@ -5225,10 +5321,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const email = DOM.authEmailInput.value.trim();
         const password = DOM.authPasswordInput.value;
+        const passwordConfirm = DOM.authPasswordConfirmInput.value;
         const displayName = DOM.authDisplayNameInput.value.trim();
         clearAuthInlineFeedback();
 
-        if (!email || !password) {
+        if (authFormMode !== 'recovery_update' && !email) {
+            setAuthInlineFeedback('Indique o email da conta.');
+            setAuthFormLoadingState(false);
+            return;
+        }
+
+        if (authFormMode !== 'recovery_request' && !password) {
             setAuthInlineFeedback('Preencha email e password.');
             setAuthFormLoadingState(false);
             return;
@@ -5246,14 +5349,39 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (authFormMode === 'signup' && password.length < 8) {
+        if ((authFormMode === 'signup' || authFormMode === 'recovery_update') && password.length < 8) {
             setAuthInlineFeedback('A password deve ter pelo menos 8 caracteres.');
+            setAuthFormLoadingState(false);
+            return;
+        }
+
+        if (authFormMode === 'recovery_update' && password !== passwordConfirm) {
+            setAuthInlineFeedback('A confirmação da password não coincide.');
             setAuthFormLoadingState(false);
             return;
         }
 
         setAuthFormLoadingState(true);
         try {
+            if (authFormMode === 'recovery_request') {
+                await requestPasswordResetEmail(email);
+                setAuthFormLoadingState(false);
+                setAuthInlineFeedback(
+                    'Se existir uma conta com este email, enviámos um link para definir uma nova password. Verifique também a pasta de spam/lixo.',
+                    'info'
+                );
+                return;
+            }
+
+            if (authFormMode === 'recovery_update') {
+                await updateCurrentUserPassword(password);
+                passwordRecoveryCallbackDetected = false;
+                cleanAuthCallbackUrl();
+                closeAuthModal();
+                UI.showNotification('Password atualizada. A sua sessão mantém-se ativa.');
+                return;
+            }
+
             if (authFormMode === 'signup') {
                 const displayNameCheck = await checkDisplayNameAvailability(displayName);
                 if (!displayNameCheck.available) {
@@ -5328,6 +5456,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (authFormBusy) return;
         setAuthModalMode(authFormMode === 'login' ? 'signup' : 'login');
         DOM.authDisplayNameInput.value = '';
+    });
+    DOM.authForgotPasswordBtn?.addEventListener('click', () => {
+        if (authFormBusy) return;
+        openPasswordRecoveryRequestModal();
     });
     DOM.authModalCloseBtn?.addEventListener('click', closeAuthModal);
     DOM.authModal?.addEventListener('click', (e: MouseEvent) => {

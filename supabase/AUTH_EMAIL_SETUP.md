@@ -50,6 +50,58 @@ Leitura funcional:
 
 - o link de confirmação expira normalmente ao fim de `1 hora`
 
+## Recuperação de password
+
+O fluxo de recuperação está integrado na app através de `Esqueci-me da password`, no modal de entrada.
+
+No painel Supabase, em `Authentication -> URL Configuration`, manter autorizados os redirects da app:
+
+- `https://mediadex.app/**`
+- `https://staging.seriesbd.pages.dev/**`
+
+O URL principal do site deve manter-se em `https://mediadex.app`.
+
+Na secção `Authentication -> Email Templates -> Reset Password`, usar o seguinte template para manter o branding consistente:
+
+```html
+<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937; line-height: 1.5;">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <img
+      src="https://mediadex.app/assets/email/mediadex-logo.png?v=20260328"
+      alt="MediaDex"
+      width="160"
+      style="display:block; margin:0 auto; width:160px; max-width:160px; height:auto; border:0; outline:none; text-decoration:none;"
+    />
+  </div>
+
+  <h2 style="margin: 0 0 16px; font-size: 28px; color: #111827;">Redefina a sua password no MediaDex</h2>
+
+  <p>Recebemos um pedido para redefinir a password da sua conta <strong>MediaDex</strong>.</p>
+  <p>Para escolher uma nova password, use o botão abaixo.</p>
+
+  <div style="margin: 28px 0; text-align: center;">
+    <a
+      href="{{ .ConfirmationURL }}"
+      style="display: inline-block; background: #5da9d6; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 8px; font-weight: 700;"
+    >
+      Redefinir password
+    </a>
+  </div>
+
+  <p style="font-size: 14px; color: #4b5563;">Este link expira normalmente ao fim de 1 hora.</p>
+  <p style="font-size: 14px; color: #4b5563;">Se não pediu esta alteração, pode ignorar este email.</p>
+
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+
+  <p style="font-size: 12px; color: #6b7280; text-align: center;">
+    MediaDex<br />
+    Organize séries, filmes e livros num só lugar.
+  </p>
+</div>
+```
+
+Por segurança, a app apresenta sempre uma resposta genérica ao pedir o email: não confirma se o endereço existe na plataforma.
+
 ## Template
 
 Template HTML final para `Confirm signup`:

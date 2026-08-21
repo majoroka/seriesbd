@@ -527,8 +527,8 @@ export function closeLibrarySearchModal() {
     hideModal(DOM.librarySearchModal);
 }
 
-export function openAuthModal() {
-    showModal(DOM.authModal, DOM.authEmailInput);
+export function openAuthModal(focusTarget: HTMLElement = DOM.authEmailInput) {
+    showModal(DOM.authModal, focusTarget);
 }
 
 export function closeAuthModal() {

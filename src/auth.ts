@@ -173,6 +173,19 @@ export async function resendSignupConfirmationEmail(email: string): Promise<void
   if (error) throw error;
 }
 
+export async function requestPasswordResetEmail(email: string): Promise<void> {
+  const client = getSupabaseClient();
+  const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updateCurrentUserPassword(password: string): Promise<void> {
+  const client = getSupabaseClient();
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 export async function signOutCurrentUser(): Promise<void> {
   const client = getSupabaseClient();
   const { error } = await client.auth.signOut();
