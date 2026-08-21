@@ -10,6 +10,7 @@ export let myWatchlist: Series[] = [];
 export let myArchive: Series[] = [];
 export let currentSearchResults: Series[] = [];
 export let dashboardSuggestedMedia: Series[] = [];
+export let discoveryMedia: Series[] = [];
 export let charts: { [key: string]: any } = {};
 export let watchedState: WatchedState = {};
 export let userData: UserData = {};
@@ -29,6 +30,7 @@ export type DetailViewData = {
 };
 export let detailViewData: DetailViewData = { allEpisodes: [], episodeMap: {}, seasons: [] };
 export const STATE_MUTATION_EVENT_NAME = 'seriesdb:state-mutated';
+const DISCOVERY_MEDIA_CACHE_LIMIT = 600;
 
 function emitStateMutation(reason: string) {
     if (typeof document === 'undefined') return;
@@ -40,9 +42,58 @@ export function setMyWatchlist(data: Series[]) { myWatchlist = normalizeSeriesCo
 export function setMyArchive(data: Series[]) { myArchive = normalizeSeriesCollection(data); }
 export function setWatchedState(data: WatchedState) { watchedState = data; }
 export function setUserData(data: UserData) { userData = data; }
-export function setCurrentSearchResults(data: Series[]) { currentSearchResults = data.map(normalizeSeries); }
-export function setDashboardSuggestedMedia(data: Series[]) { dashboardSuggestedMedia = normalizeSeriesCollection(data); }
+export function setCurrentSearchResults(data: Series[]) {
+    currentSearchResults = data.map(normalizeSeries);
+    registerDiscoveryMedia(currentSearchResults);
+}
+export function setDashboardSuggestedMedia(data: Series[]) {
+    dashboardSuggestedMedia = normalizeSeriesCollection(data);
+    registerDiscoveryMedia(dashboardSuggestedMedia);
+}
 export function setCharts(data: { [key: string]: any }) { charts = data; }
+export function setDiscoveryMedia(data: Series[]) { discoveryMedia = normalizeSeriesCollection(data).slice(0, DISCOVERY_MEDIA_CACHE_LIMIT); }
+export function registerDiscoveryMedia(data: Series[]) {
+    const incoming = normalizeSeriesCollection(data);
+    if (incoming.length === 0) return;
+
+    const incomingMap = new Map<string, Series>();
+    const orderedKeysSet = new Set<string>();
+    const orderedKeys: string[] = [];
+
+    incoming.forEach((item) => {
+        const key = createMediaKey(item.media_type, item.id);
+        const existing = incomingMap.get(key);
+        incomingMap.set(key, existing ? {
+            ...existing,
+            ...item,
+            id: existing.id,
+            media_type: existing.media_type,
+        } : item);
+        if (!orderedKeysSet.has(key)) {
+            orderedKeysSet.add(key);
+            orderedKeys.push(key);
+        }
+    });
+
+    const merged: Series[] = [];
+    for (const key of orderedKeys) {
+        const item = incomingMap.get(key);
+        if (item) {
+            merged.push(item);
+        }
+    }
+
+    discoveryMedia.forEach((item) => {
+        const key = createMediaKey(item.media_type, item.id);
+        if (incomingMap.has(key)) return;
+        merged.push(item);
+    });
+
+    discoveryMedia = merged.slice(0, DISCOVERY_MEDIA_CACHE_LIMIT);
+}
+export function getDiscoveryMediaItem(mediaType: MediaType, mediaId: number): Series | undefined {
+    return discoveryMedia.find((item) => item.media_type === mediaType && item.id === mediaId);
+}
 export function getSeries(seriesId: number): Series | undefined {
     return [...myWatchlist, ...myArchive].find(s => s.media_type === 'series' && s.id === seriesId);
 }

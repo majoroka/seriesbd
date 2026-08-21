@@ -89,11 +89,11 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, ret
 
             const response = await fetch(url, options);
 
-            // Retry on transient errors (5xx, timeout and rate-limit), but not on generic client errors (4xx)
+            // Retry on transient server/network errors, but not on explicit rate limits.
+            // Repetir imediatamente um 429 só prolonga a mesma janela de bloqueio.
             if (
                 (response.status >= 500 && response.status < 600) ||
-                response.status === 408 ||
-                response.status === 429
+                response.status === 408
             ) {
                 throw new Error(`Server error: ${response.status}`);
             }
