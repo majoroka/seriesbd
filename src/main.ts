@@ -227,6 +227,7 @@ function cleanAuthCallbackUrl() {
         'code',
         'token',
         'token_hash',
+        'password_recovery',
     ];
     authParamNames.forEach((name) => url.searchParams.delete(name));
 
@@ -263,7 +264,8 @@ function isConfirmationLinkFailure(params: URLSearchParams): boolean {
 }
 
 function isPasswordRecoveryCallback(params: URLSearchParams): boolean {
-    return (params.get('type') || '').toLowerCase() === 'recovery';
+    return (params.get('type') || '').toLowerCase() === 'recovery'
+        || params.get('password_recovery') === '1';
 }
 
 function openAuthModalForPendingConfirmation(message: string) {
@@ -2158,18 +2160,19 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     const previousUserId = currentAuthenticatedUserId;
     setAuthenticatedUi(user);
     if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && user?.email) {
+        const isPasswordRecovery = event === 'PASSWORD_RECOVERY' || passwordRecoveryCallbackDetected;
         setPendingConfirmationEmail(null);
         onUserActivityForSessionTimeout();
         const isSameSessionRefresh = previousUserId === user.id;
         if (!isSameSessionRefresh) {
-            if (event === 'SIGNED_IN') {
+            if (event === 'SIGNED_IN' && !isPasswordRecovery) {
                 UI.showNotification(`Sessão iniciada: ${user.email}`);
             }
             void syncCloudStateAfterLogin(user.id)
                 .then((outcome) => handleLibrarySyncConflict(outcome))
                 .then(() => refreshLibrarySyncStatus(user.id, 'signed-in'));
         }
-        if (event === 'PASSWORD_RECOVERY') {
+        if (isPasswordRecovery) {
             passwordRecoveryCallbackDetected = false;
             cleanAuthCallbackUrl();
             openPasswordRecoveryUpdateModal();

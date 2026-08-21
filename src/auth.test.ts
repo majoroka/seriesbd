@@ -30,11 +30,11 @@ describe('password recovery auth helpers', () => {
     mocked.updateUser.mockResolvedValue({ error: null });
   });
 
-  it('requests a recovery email that returns to the current app origin', async () => {
+  it('requests a recovery email that identifies the password recovery callback', async () => {
     await requestPasswordResetEmail('member@example.com');
 
     expect(mocked.resetPasswordForEmail).toHaveBeenCalledWith('member@example.com', {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}/?password_recovery=1`,
     });
   });
 

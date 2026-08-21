@@ -175,7 +175,9 @@ export async function resendSignupConfirmationEmail(email: string): Promise<void
 
 export async function requestPasswordResetEmail(email: string): Promise<void> {
   const client = getSupabaseClient();
-  const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const redirectTo = typeof window !== 'undefined'
+    ? new URL('/?password_recovery=1', window.location.origin).toString()
+    : undefined;
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
