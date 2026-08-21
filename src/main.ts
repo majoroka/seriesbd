@@ -2222,15 +2222,15 @@ async function initializeAuthState() {
         const session = await getCurrentSession();
         const currentUser = session?.user ?? null;
         setAuthenticatedUi(currentUser);
+        if (currentUser && passwordRecoveryCallbackDetected) {
+            passwordRecoveryCallbackDetected = false;
+            cleanAuthCallbackUrl();
+            openPasswordRecoveryUpdateModal();
+        }
         if (currentUser) {
             const outcome = await syncCloudStateAfterLogin(currentUser.id);
             await handleLibrarySyncConflict(outcome);
             await refreshLibrarySyncStatus(currentUser.id, 'initial-auth');
-            if (passwordRecoveryCallbackDetected) {
-                passwordRecoveryCallbackDetected = false;
-                cleanAuthCallbackUrl();
-                openPasswordRecoveryUpdateModal();
-            }
         } else {
             await refreshLibrarySyncStatus(null, 'initial-auth-no-session');
         }
