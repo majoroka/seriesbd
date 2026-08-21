@@ -90,10 +90,73 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 
 ## Em aberto real
 
-1. monitorização pós-release
-2. melhorias futuras opcionais
-3. evolução funcional controlada
-4. disciplina operacional no bundle de auditoria sempre que houver nova entrega externa
+1. corrigir a vulnerabilidade transitiva `ws` reportada por `npm audit`
+2. recuperar uma suite de testes totalmente verde e instituir CI em cada PR
+3. criar uma camada recorrente de recuperação de dados orientada ao utilizador
+4. monitorização pós-release e evolução funcional controlada
+
+## Plano prioritário pós-relatório técnico (2026-08)
+
+Objetivo:
+- corrigir riscos reais de segurança, release e recuperação de dados;
+- evitar refatorizações e otimizações sem evidência de impacto para o utilizador.
+
+### P1 | Dependência vulnerável `ws`
+
+Prioridade: alta
+
+Problema confirmado:
+- `npm audit --omit=dev` reporta uma vulnerabilidade alta transitiva em `ws@8.18.3`;
+- a correção disponível atualiza `ws` para uma versão fora do intervalo vulnerável.
+
+Plano:
+- executar atualização controlada com `npm audit fix` ou atualização equivalente mínima no lockfile;
+- rever o diff de dependências para evitar upgrades colaterais desnecessários;
+- executar `npm run test:run` e `npm run build`;
+- confirmar `0` vulnerabilidades altas ou críticas no audit final.
+
+Critério de fecho:
+- dependência `ws` fora do intervalo vulnerável;
+- build e suite de testes sem regressões.
+
+### P2 | Release verificável e CI
+
+Prioridade: alta
+
+Problema confirmado:
+- a suite atual não está completamente verde: o teste de stale cache de notícias falha em `functions/api/news.test.js`;
+- não existe workflow versionado em `.github/workflows` para validar pull requests.
+
+Plano:
+- corrigir a causa do teste de notícias para que a suite seja determinística e passe integralmente;
+- adicionar workflow GitHub Actions em pull requests e em `main`;
+- executar `npm run verify:release` no workflow;
+- usar cache de dependências npm e versão Node LTS fixada.
+
+Critério de fecho:
+- `npm run test:run` totalmente verde;
+- `npm run verify:release` obrigatório no CI antes de merge;
+- falhas de release visíveis no separador `Actions` do GitHub.
+
+### P3 | Recuperação de dados pelo utilizador
+
+Prioridade: alta
+
+Contexto:
+- o sync cloud tem proteções contra overwrite destrutivo, conflitos explícitos e histórico de snapshots;
+- isto não substitui um backup independente, em especial enquanto o projeto Supabase não dispõe de backups automáticos no plano atual.
+
+Plano:
+- implementar o reminder `B1` de exportação periódica, com frequência inicial de `7 dias`;
+- mostrar apenas a utilizadores com sessão ativa;
+- permitir `Exportar agora`, `Lembrar mais tarde` e `Não voltar a mostrar`;
+- registar a decisão do utilizador de forma sincronizada, quando aplicável;
+- validar que a exportação continua restaurável por importação.
+
+Critério de fecho:
+- utilizador com sessão ativa recebe um lembrete não intrusivo após 7 dias;
+- consegue exportar dados em um passo;
+- não há perda de biblioteca, notas, progresso ou preferências no ficheiro exportado.
 
 ## Backlog futuro
 
@@ -118,6 +181,9 @@ Regras recomendadas:
 Critério de valor:
 - cria uma camada simples de backup manual recorrente
 - reduz dependência exclusiva do snapshot cloud atual
+
+Estado:
+- promovido ao sprint prioritário `P3`.
 
 ## Plano de consolidação
 
@@ -496,7 +562,19 @@ Só avançar se:
   - `I4` tradução automática apenas de sinopses, com cache
 - decisão atual:
   - não iniciar pela tradução automática
-  - lançar primeiro a infraestrutura i18n e o consumo locale-aware de metadados externos
+- lançar primeiro a infraestrutura i18n e o consumo locale-aware de metadados externos
+
+### Engenharia e performance condicionais
+
+Estes itens ficam em backlog. Só avançar quando houver métricas, crescimento de equipa ou regressão observável que justifique o custo:
+
+- lazy-load de `Chart.js` e code splitting do bundle, após medição de impacto em Core Web Vitals;
+- `manualChunks` apenas se a medição mostrar melhoria real de carregamento e cache;
+- extração incremental de domínios de `main.ts` e `ui.ts`, sem refatorização massiva;
+- virtualização da lista de episódios apenas se séries reais apresentarem degradação de render;
+- testes visuais/Storybook depois de CI e testes de fluxos críticos estarem consolidados;
+- novos retries apenas para pedidos idempotentes e falhas transitórias elegíveis; nunca reintroduzir retry automático em `429`;
+- atualizar `baseline-browser-mapping` e `caniuse-lite` numa manutenção normal de dependências.
 
 ### Livros
 
