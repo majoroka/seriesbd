@@ -99,6 +99,40 @@ describe('state transitions', () => {
     S.setMyArchive([]);
     S.setWatchedState({});
     S.setUserData({});
+    S.setCurrentSearchResults([]);
+    S.setDashboardSuggestedMedia([]);
+    S.setDiscoveryMedia([]);
+  });
+
+  it('registers discovery media and keeps the freshest payload per media key', () => {
+    const initialMovie: Series = {
+      id: 1000000123,
+      media_type: 'movie',
+      source_id: '123',
+      name: 'Discovery Movie',
+      overview: 'Short overview',
+      poster_path: '/poster-a.jpg',
+      backdrop_path: null,
+      first_air_date: '2026-01-01',
+      genres: [],
+    };
+
+    const enrichedMovie: Series = {
+      ...initialMovie,
+      overview: 'Longer overview from details',
+      backdrop_path: '/backdrop-a.jpg',
+      episode_run_time: 121,
+    };
+
+    S.registerDiscoveryMedia([initialMovie]);
+    expect(S.getDiscoveryMediaItem('movie', initialMovie.id)?.overview).toBe('Short overview');
+
+    S.registerDiscoveryMedia([enrichedMovie]);
+    const resolvedMovie = S.getDiscoveryMediaItem('movie', initialMovie.id);
+
+    expect(resolvedMovie?.overview).toBe('Longer overview from details');
+    expect(resolvedMovie?.episode_run_time).toBe(121);
+    expect(resolvedMovie?.backdrop_path).toBe('/backdrop-a.jpg');
   });
 
   it('marks and unmarks episodes while keeping watched state consistent', async () => {
