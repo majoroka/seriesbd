@@ -54,6 +54,8 @@ Leitura funcional:
 
 O fluxo de recuperação está integrado na app através de `Esqueci-me da password`, no modal de entrada.
 
+O link de recuperação regressa à app com `?password_recovery=1`; este marcador permite distinguir uma recuperação de password de um login normal, incluindo quando o Supabase usa o fluxo PKCE.
+
 No painel Supabase, em `Authentication -> URL Configuration`, manter autorizados os redirects da app:
 
 - `https://mediadex.app/**`
