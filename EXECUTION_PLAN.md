@@ -119,6 +119,31 @@ Critério de fecho:
 - dependência `ws` fora do intervalo vulnerável;
 - build e suite de testes sem regressões.
 
+Estado:
+- concluído em `2026-08-27`;
+- `ws` atualizado de `8.18.3` para `8.21.3` apenas no lockfile;
+- `npm audit --omit=dev` sem vulnerabilidades;
+- `npm run build` passou;
+- a suite mantém a falha de stale cache de notícias já registada no `P2`, sem nova regressão atribuída à atualização.
+
+### P1.1 | Segurança do toolchain de desenvolvimento
+
+Prioridade: alta
+
+Contexto:
+- o audit completo ainda reporta vulnerabilidades em ferramentas de desenvolvimento, incluindo `vite@7.3.1`, `vitest@4.0.18` e dependências de build do PWA;
+- não são dependências distribuídas no bundle de produção, mas afetam máquinas de desenvolvimento e CI.
+
+Plano:
+- atualizar Vite, Vitest e `vite-plugin-pwa` de forma compatível e conjunta;
+- rever alterações de configuração e de service worker geradas pelo PWA;
+- executar `npm ci`, `npm audit`, testes completos e build;
+- não expor o servidor Vite de desenvolvimento a redes não confiáveis até ao fecho.
+
+Critério de fecho:
+- `npm audit` sem vulnerabilidades críticas ou altas;
+- ambiente de desenvolvimento, testes e PWA validados após a atualização.
+
 ### P2 | Release verificável e CI
 
 Prioridade: alta
