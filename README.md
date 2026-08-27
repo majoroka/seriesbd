@@ -30,7 +30,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 
 ## Requisitos
 
-- Node.js 20 LTS (recomendado) e npm.
+- Node.js `22.20.0` e npm (a versão está fixada em [`.nvmrc`](./.nvmrc) e é usada pelo CI).
 - Projeto Supabase (para autenticação de utilizadores).
 - Contas TMDb e Trakt com chaves de API válidas.
 - Conta TVMaze (opcional; usar chave apenas se necessário no teu plano/limites).
