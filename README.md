@@ -17,6 +17,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - **Offline-First com PWA**: A aplicação funciona offline, sincronizando os seus dados localmente com IndexedDB.
 - **Temas Claro e Escuro**: Escolha o seu tema preferido para uma experiência de visualização mais confortável.
 - **Importação e Exportação**: Faça backup e restaure a sua biblioteca a qualquer momento.
+- **Lembrete de Backup**: Após sete dias, utilizadores autenticados recebem uma sugestão discreta para exportar a biblioteca, que pode ser adiada ou desativada.
 - **Sync Cloud Protegido**: A sincronização com Supabase passou a detetar conflitos sérios entre dispositivo e cloud, evitando overwrite destrutivo silencioso e mantendo histórico remoto de snapshots.
 - **Seguro**: As chaves de API são protegidas através de funções serverless na Cloudflare Pages, nunca sendo expostas no browser.
 
