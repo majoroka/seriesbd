@@ -199,11 +199,12 @@ Critério de fecho:
 - não há perda de biblioteca, notas, progresso ou preferências no ficheiro exportado.
 
 Estado:
-- implementação concluída localmente em `2026-08-27`;
+- concluído em `2026-08-27`;
 - lembrete integrado no centro de notificações, com `Exportar agora`, `Lembrar amanhã` e `Não voltar a mostrar`;
 - exportações normais também reiniciam o ciclo de 7 dias;
-- estado persistido localmente e preparado para sincronização em `user_settings`;
-- migration `20260827_000007_add_backup_reminder_settings.sql` e validação manual em staging pendentes antes do fecho definitivo;
+- estado persistido localmente e sincronizado em `user_settings`;
+- migration `20260827_000007_add_backup_reminder_settings.sql` aplicada no Supabase;
+- validação manual em staging concluída: lembrete apresentado, exportação criada e ciclo reiniciado;
 - `npm run verify:release` passou com `94` testes; `npm audit --audit-level=high` sem vulnerabilidades.
 
 ## Backlog futuro
@@ -231,7 +232,7 @@ Critério de valor:
 - reduz dependência exclusiva do snapshot cloud atual
 
 Estado:
-- promovido ao sprint prioritário `P3`.
+- concluído pelo sprint prioritário `P3` em `2026-08-27`.
 
 ## Plano de consolidação
 
