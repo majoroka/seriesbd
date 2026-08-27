@@ -150,16 +150,14 @@ describe('news function', () => {
   });
 
   it('serves stale cache when a previously successful feed later fails', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
-    fetchMock.mockImplementationOnce(async (input) => {
+    let feedsAvailable = true;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
-      if (url.includes('screenrant.com/feed')) return new Response(RSS_WITH_MEDIA, { status: 200 });
+      if (feedsAvailable && url.includes('screenrant.com/feed')) {
+        return new Response(RSS_WITH_MEDIA, { status: 200 });
+      }
       return new Response('failure', { status: 500 });
     });
-    fetchMock.mockImplementationOnce(async () => new Response('failure', { status: 500 }));
-    fetchMock.mockImplementationOnce(async () => new Response('failure', { status: 500 }));
-    fetchMock.mockImplementationOnce(async () => new Response('failure', { status: 500 }));
-    fetchMock.mockImplementationOnce(async () => new Response('failure', { status: 500 }));
 
     let response = await onRequest({
       request: new Request('https://example.com/api/news?limit=5', {
@@ -170,8 +168,8 @@ describe('news function', () => {
 
     expect(response.status).toBe(200);
 
+    feedsAvailable = false;
     fetchMock.mockClear();
-    fetchMock.mockImplementation(async () => new Response('failure', { status: 500 }));
 
     response = await onRequest({
       request: new Request('https://example.com/api/news?limit=5', {

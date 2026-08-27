@@ -171,6 +171,13 @@ Critério de fecho:
 - `npm run verify:release` obrigatório no CI antes de merge;
 - falhas de release visíveis no separador `Actions` do GitHub.
 
+Estado:
+- concluído em `2026-08-27`;
+- o teste de stale cache de notícias passou a simular todas as respostas dos feeds, sem chamadas de rede nem dependência da ordem dos fallbacks;
+- criada a validação GitHub Actions em pull requests e alterações a `main`;
+- o CI usa Node `22.20.0`, `npm ci`, cache npm, auditoria de vulnerabilidades altas/críticas e `npm run verify:release`;
+- `npm run verify:release` passou localmente com `90` testes e build/PWA concluídos.
+
 ### P3 | Recuperação de dados pelo utilizador
 
 Prioridade: alta
