@@ -6,6 +6,7 @@ export const ALL_SERIES_STATUS_FILTER_KEY: string = 'seriesdb.allSeriesStatusFil
 export const ALL_SERIES_MEDIA_FILTER_KEY: string = 'seriesdb.allSeriesMediaFilter';
 export const THEME_STORAGE_KEY: string = 'seriesdb.theme';
 export const TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY: string = 'seriesdb.topRated.excludeAsianAnimation';
+export const BACKUP_REMINDER_STATE_KEY: string = 'seriesdb.backupReminder.v1';
 export const SEASON_CACHE_DURATION: number = 7 * 24 * 60 * 60 * 1000; // 7 dias
 export const DASHBOARD_NEWS_ROLLOUT_QUERY_KEY: string = 'dashboardNews';
 export const DASHBOARD_NEWS_ROLLOUT_STORAGE_KEY: string = 'seriesdb.dashboardNewsRollout';

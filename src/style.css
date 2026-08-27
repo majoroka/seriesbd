@@ -797,6 +797,17 @@ body.light-theme .sidebar-submenu-shell {
     box-shadow: inset 0 0 0 1px rgba(var(--media-series-rgb), 0.18);
 }
 
+.notification-item--backup-reminder {
+    cursor: default;
+    border-color: rgba(var(--media-book-rgb), 0.55);
+    background: linear-gradient(135deg, var(--media-book-surface), var(--bg-light));
+}
+
+.notification-item--backup-reminder:hover {
+    transform: none;
+    border-color: rgba(var(--media-book-rgb), 0.7);
+}
+
 .notification-item-top {
     display: flex;
     align-items: baseline;
@@ -859,6 +870,49 @@ body.light-theme .sidebar-submenu-shell {
     border-color: rgba(var(--media-book-rgb), 0.55);
     color: var(--media-book-strong);
     background-color: var(--media-book-surface);
+}
+
+.backup-reminder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.38rem;
+}
+
+.backup-reminder-action {
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    padding: 0.35rem 0.5rem;
+    font-family: var(--font-main);
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.backup-reminder-action:focus-visible {
+    outline: 2px solid var(--primary-accent);
+    outline-offset: 2px;
+}
+
+.backup-reminder-action--primary {
+    border-color: var(--primary-accent);
+    background: var(--primary-accent);
+    color: #fff;
+}
+
+.backup-reminder-action--secondary,
+.backup-reminder-action--tertiary {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.backup-reminder-action--secondary:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+}
+
+.backup-reminder-action--tertiary:hover {
+    border-color: var(--secondary-accent);
+    color: var(--secondary-accent);
 }
 
 .notifications-empty {

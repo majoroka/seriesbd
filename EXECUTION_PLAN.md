@@ -198,6 +198,14 @@ Critério de fecho:
 - consegue exportar dados em um passo;
 - não há perda de biblioteca, notas, progresso ou preferências no ficheiro exportado.
 
+Estado:
+- implementação concluída localmente em `2026-08-27`;
+- lembrete integrado no centro de notificações, com `Exportar agora`, `Lembrar amanhã` e `Não voltar a mostrar`;
+- exportações normais também reiniciam o ciclo de 7 dias;
+- estado persistido localmente e preparado para sincronização em `user_settings`;
+- migration `20260827_000007_add_backup_reminder_settings.sql` e validação manual em staging pendentes antes do fecho definitivo;
+- `npm run verify:release` passou com `94` testes; `npm audit --audit-level=high` sem vulnerabilidades.
+
 ## Backlog futuro
 
 ### B1 | Reminder de export periódico ao utilizador

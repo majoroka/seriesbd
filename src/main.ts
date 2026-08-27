@@ -46,6 +46,16 @@ import {
     syncLibrarySnapshotAfterLogin,
 } from './librarySync';
 import { clampProgressPercent, clampUserNotes, MAX_IMPORT_FILE_SIZE_BYTES } from './dataGuards';
+import {
+    BackupReminderState,
+    disableBackupReminder,
+    getBackupReminderNotificationId,
+    isBackupReminderDue,
+    markBackupExported,
+    needsBackupReminderInitialization,
+    normalizeBackupReminderState,
+    postponeBackupReminder,
+} from './backupReminder';
 
 const OBSERVABILITY_STORAGE_KEY = 'seriesdb.observability.v1';
 const SYNC_AUDIT_STORAGE_KEY = 'seriesdb.syncAudit.v1';
@@ -91,12 +101,13 @@ type AppNotificationKind =
     | 'movie-upcoming'
     | 'movie-released'
     | 'book-upcoming'
-    | 'book-released';
+    | 'book-released'
+    | 'backup-reminder';
 type AppNotification = {
     id: string;
     kind: AppNotificationKind;
-    mediaType: MediaType;
-    mediaId: number;
+    mediaType: MediaType | null;
+    mediaId: number | null;
     title: string;
     description: string;
     dateIso: string;
@@ -528,10 +539,76 @@ async function dismissNotifications(notificationIds: string[]): Promise<void> {
 }
 
 async function clearNotificationsCenter(): Promise<void> {
-    const currentIds = notificationsCenterEntries.map((item) => item.id);
+    const backupReminder = notificationsCenterEntries.find((item) => item.kind === 'backup-reminder');
+    if (backupReminder) {
+        await postponeBackupReminderForUser();
+    }
+    const currentIds = notificationsCenterEntries
+        .filter((item) => item.kind !== 'backup-reminder')
+        .map((item) => item.id);
     await dismissNotifications(currentIds);
     notificationsCenterEntries = [];
     renderNotificationsMenu();
+}
+
+function hasExportableLibraryData(): boolean {
+    return S.myWatchlist.length > 0
+        || S.myArchive.length > 0
+        || Object.keys(S.watchedState).length > 0
+        || Object.keys(S.userData).length > 0;
+}
+
+async function getBackupReminderState(): Promise<BackupReminderState> {
+    const record = await db.kvStore.get(C.BACKUP_REMINDER_STATE_KEY);
+    const state = normalizeBackupReminderState(record?.value);
+    if (needsBackupReminderInitialization(record?.value)) {
+        await db.kvStore.put({ key: C.BACKUP_REMINDER_STATE_KEY, value: state });
+    }
+    return state;
+}
+
+async function saveBackupReminderState(state: BackupReminderState): Promise<void> {
+    await db.kvStore.put({ key: C.BACKUP_REMINDER_STATE_KEY, value: state });
+    await syncUserSettingsToRemoteIfNeeded();
+    await refreshNotificationsCenter();
+}
+
+async function markBackupReminderExported(): Promise<void> {
+    if (!currentAuthenticatedUserId) return;
+    const state = await getBackupReminderState();
+    await saveBackupReminderState(markBackupExported(state));
+}
+
+async function postponeBackupReminderForUser(): Promise<void> {
+    if (!currentAuthenticatedUserId) return;
+    const state = await getBackupReminderState();
+    await saveBackupReminderState(postponeBackupReminder(state));
+}
+
+async function disableBackupReminderForUser(): Promise<void> {
+    if (!currentAuthenticatedUserId) return;
+    const state = await getBackupReminderState();
+    await saveBackupReminderState(disableBackupReminder(state));
+}
+
+async function getBackupReminderNotification(readSet: Set<string>): Promise<AppNotification | null> {
+    if (!currentAuthenticatedUserId || !hasExportableLibraryData()) return null;
+    const state = await getBackupReminderState();
+    if (!isBackupReminderDue(state)) return null;
+
+    const id = getBackupReminderNotificationId(state);
+    return {
+        id,
+        kind: 'backup-reminder',
+        mediaType: null,
+        mediaId: null,
+        title: 'Proteja a sua biblioteca',
+        description: 'Faça uma exportação para manter uma cópia independente dos seus dados.',
+        dateIso: new Date().toISOString().slice(0, 10),
+        timestamp: Date.now(),
+        isFuture: true,
+        isRead: readSet.has(id),
+    };
 }
 
 function getMediaProgressForNotifications(media: Series): number {
@@ -720,9 +797,10 @@ function buildNotificationsFromLibrary(readSet: Set<string>, dismissedSet: Set<s
         .slice(0, NOTIFICATION_MAX_ITEMS);
 }
 
-function getNotificationMediaLabel(mediaType: MediaType): string {
+function getNotificationMediaLabel(mediaType: MediaType | null): string {
     if (mediaType === 'movie') return 'Filme';
     if (mediaType === 'book') return 'Livro';
+    if (mediaType === null) return 'Backup';
     return 'Série';
 }
 
@@ -917,13 +995,16 @@ function renderNotificationsMenu(): void {
     }
 
     notificationsCenterEntries.forEach((notification) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = `notification-item${notification.isRead ? '' : ' is-unread'}`;
-        item.setAttribute('data-notification-id', notification.id);
-        item.setAttribute('data-media-id', String(notification.mediaId));
-        item.setAttribute('data-media-type', notification.mediaType);
-        item.setAttribute('role', 'menuitem');
+        const isBackupReminder = notification.kind === 'backup-reminder';
+        const item = document.createElement(isBackupReminder ? 'article' : 'button');
+        if (item instanceof HTMLButtonElement) {
+            item.type = 'button';
+            item.setAttribute('data-notification-id', notification.id);
+            item.setAttribute('data-media-id', String(notification.mediaId));
+            item.setAttribute('data-media-type', notification.mediaType || '');
+            item.setAttribute('role', 'menuitem');
+        }
+        item.className = `notification-item${isBackupReminder ? ' notification-item--backup-reminder' : ''}${notification.isRead ? '' : ' is-unread'}`;
 
         const top = document.createElement('div');
         top.className = 'notification-item-top';
@@ -937,7 +1018,9 @@ function renderNotificationsMenu(): void {
         const notificationDate = parseDateOnly(notification.dateIso) ?? new Date(notification.timestamp);
         const formattedDate = formatNotificationDateLabel(notificationDate);
         date.textContent = formattedDate;
-        item.setAttribute('aria-label', `${notification.title}. ${notification.description}. ${getNotificationMediaLabel(notification.mediaType)}. ${formattedDate}.`);
+        if (item instanceof HTMLButtonElement) {
+            item.setAttribute('aria-label', `${notification.title}. ${notification.description}. ${getNotificationMediaLabel(notification.mediaType)}. ${formattedDate}.`);
+        }
 
         top.appendChild(title);
         top.appendChild(date);
@@ -956,6 +1039,23 @@ function renderNotificationsMenu(): void {
         item.appendChild(top);
         item.appendChild(description);
         item.appendChild(meta);
+        if (isBackupReminder) {
+            const actions = document.createElement('div');
+            actions.className = 'backup-reminder-actions';
+            [
+                ['export', 'Exportar agora', 'primary'],
+                ['snooze', 'Lembrar amanhã', 'secondary'],
+                ['disable', 'Não voltar a mostrar', 'tertiary'],
+            ].forEach(([action, label, variant]) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = `backup-reminder-action backup-reminder-action--${variant}`;
+                button.dataset.backupReminderAction = action;
+                button.textContent = label;
+                actions.appendChild(button);
+            });
+            item.appendChild(actions);
+        }
         DOM.notificationsMenuList.appendChild(item);
     });
 }
@@ -964,7 +1064,11 @@ async function refreshNotificationsCenter(): Promise<void> {
     await ensureNotificationReadStateLoaded();
     const readSet = getReadIdsForCurrentUser();
     const dismissedSet = getDismissedIdsForCurrentUser();
-    notificationsCenterEntries = buildNotificationsFromLibrary(readSet, dismissedSet);
+    const backupReminder = await getBackupReminderNotification(readSet);
+    const libraryNotifications = buildNotificationsFromLibrary(readSet, dismissedSet);
+    notificationsCenterEntries = backupReminder
+        ? [backupReminder, ...libraryNotifications].slice(0, NOTIFICATION_MAX_ITEMS)
+        : libraryNotifications;
     renderNotificationsMenu();
 }
 
@@ -1378,6 +1482,12 @@ type SyncedUserSettings = {
     unseen_view_mode: ViewMode;
     all_series_view_mode: ViewMode;
     exclude_asian_animation: boolean;
+    backup_reminder: BackupReminderState;
+};
+
+type RemoteSettingsPullResult = {
+    found: boolean;
+    backupReminderNeedsInitialization: boolean;
 };
 
 function normalizeViewMode(value: unknown, fallback: ViewMode = 'list'): ViewMode {
@@ -1445,6 +1555,7 @@ function mapSettingsMapToSyncedPayload(settingsMap: Map<string, unknown>): Synce
             settingsMap.get(C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY),
             true
         ),
+        backup_reminder: normalizeBackupReminderState(settingsMap.get(C.BACKUP_REMINDER_STATE_KEY)),
     };
 }
 
@@ -1456,6 +1567,7 @@ async function saveSyncedPayloadToLocalDb(payload: SyncedUserSettings): Promise<
         { key: C.UNSEEN_VIEW_MODE_KEY, value: payload.unseen_view_mode },
         { key: C.ALL_SERIES_VIEW_MODE_KEY, value: payload.all_series_view_mode },
         { key: C.TOP_RATED_EXCLUDE_ASIAN_ANIMATION_KEY, value: payload.exclude_asian_animation },
+        { key: C.BACKUP_REMINDER_STATE_KEY, value: payload.backup_reminder },
     ];
     await db.kvStore.bulkPut(kvItems);
 }
@@ -1475,17 +1587,21 @@ async function pushLocalSettingsToRemote(userId: string): Promise<void> {
     if (error) throw error;
 }
 
-async function pullRemoteSettingsToLocal(userId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
+async function pullRemoteSettingsToLocal(userId: string): Promise<RemoteSettingsPullResult> {
+    if (!isSupabaseConfigured()) {
+        return { found: false, backupReminderNeedsInitialization: true };
+    }
     const client = getSupabaseClient();
     const { data, error } = await client
         .from('user_settings')
-        .select('theme, watchlist_view_mode, archive_view_mode, unseen_view_mode, all_series_view_mode, exclude_asian_animation')
+        .select('theme, watchlist_view_mode, archive_view_mode, unseen_view_mode, all_series_view_mode, exclude_asian_animation, backup_reminder')
         .eq('user_id', userId)
         .maybeSingle();
 
     if (error) throw error;
-    if (!data) return false;
+    if (!data) {
+        return { found: false, backupReminderNeedsInitialization: true };
+    }
 
     const normalized: SyncedUserSettings = {
         theme: normalizeThemeMode(data.theme, 'dark'),
@@ -1494,16 +1610,20 @@ async function pullRemoteSettingsToLocal(userId: string): Promise<boolean> {
         unseen_view_mode: normalizeViewMode(data.unseen_view_mode, 'list'),
         all_series_view_mode: normalizeViewMode(data.all_series_view_mode, 'list'),
         exclude_asian_animation: normalizeBooleanSetting(data.exclude_asian_animation, true),
+        backup_reminder: normalizeBackupReminderState(data.backup_reminder),
     };
     await saveSyncedPayloadToLocalDb(normalized);
-    return true;
+    return {
+        found: true,
+        backupReminderNeedsInitialization: needsBackupReminderInitialization(data.backup_reminder),
+    };
 }
 
 async function syncUserSettingsAfterLogin(userId: string): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const pulledFromRemote = await pullRemoteSettingsToLocal(userId);
-        if (!pulledFromRemote) {
+        const remoteSettings = await pullRemoteSettingsToLocal(userId);
+        if (!remoteSettings.found || remoteSettings.backupReminderNeedsInitialization) {
             await pushLocalSettingsToRemote(userId);
         }
         const settingsMap = await readLocalSettingsMap();
@@ -1513,6 +1633,7 @@ async function syncUserSettingsAfterLogin(userId: string): Promise<void> {
         UI.renderAllSeries();
         UI.renderUnseen();
         UI.renderMediaDashboard();
+        await refreshNotificationsCenter();
     } catch (error) {
         console.error('[settings-sync] Falha ao sincronizar user_settings após login.', error);
     }
@@ -3493,6 +3614,7 @@ async function exportData(): Promise<void> {
             const writable = await handle.createWritable();
             await writable.write(blob);
             await writable.close();
+            await markBackupReminderExported();
             UI.showNotification('Dados exportados com sucesso!');
         } else {
             const url = URL.createObjectURL(blob);
@@ -3503,6 +3625,7 @@ async function exportData(): Promise<void> {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            await markBackupReminderExported();
             UI.showNotification('Download iniciado! Verifique a sua pasta de downloads.');
         }
     } catch (error) {
@@ -5135,6 +5258,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.notificationsMenuList?.addEventListener('click', async (event) => {
         const target = event.target as Element;
+        const backupAction = target.closest<HTMLButtonElement>('[data-backup-reminder-action]');
+        if (backupAction) {
+            event.stopPropagation();
+            const action = backupAction.dataset.backupReminderAction;
+            if (action === 'export') {
+                closeNotificationsMenu();
+                await exportData();
+            } else if (action === 'snooze') {
+                await postponeBackupReminderForUser();
+                UI.showNotification('Voltaremos a lembrar amanhã.');
+            } else if (action === 'disable') {
+                await disableBackupReminderForUser();
+                UI.showNotification('O lembrete de exportação foi desativado.');
+            }
+            return;
+        }
+
         const item = target.closest<HTMLButtonElement>('.notification-item');
         if (!item) return;
 
