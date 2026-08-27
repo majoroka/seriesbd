@@ -1469,28 +1469,53 @@ function buildDashboardNewsAttributionText(item: DashboardNewsItem): string {
     return `Fonte original: ${source}`;
 }
 
+function createDashboardNewsState(message: string, modifier = ''): HTMLElement {
+    const className = ['dashboard-news-state', modifier].filter(Boolean).join(' ');
+    return el('div', { class: className }, [el('p', { text: message })]);
+}
+
+function createDetailSeparator(): HTMLElement {
+    return el('span', { class: 'separator-dot', text: ' \u2022 ' });
+}
+
+function createOverviewProgress(progress: number, counter: string): HTMLElement {
+    const safeProgress = Math.max(0, Math.min(100, progress));
+    return el('div', { class: 'v2-overview-progress' }, [
+        el('div', { class: 'v2-progress-bar-container' }, [
+            el('div', { class: 'v2-progress-bar', style: `width: ${safeProgress}%;` }),
+        ]),
+        el('div', { class: 'v2-progress-text' }, [
+            el('span', { text: `${Math.round(safeProgress)}%` }),
+            el('span', { text: counter }),
+        ]),
+    ]);
+}
+
+function createSvgElement(tag: 'svg' | 'circle', attributes: Record<string, string>): SVGElement {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+    return element;
+}
+
 function renderDashboardNewsPanel(): void {
     if (!DOM.dashboardNewsList) return;
     if (!syncDashboardNewsPanelVisibility()) return;
     renderDashboardPanelFilters('news');
 
     if (dashboardNewsState === 'loading' && dashboardNewsEntries.length === 0) {
-        DOM.dashboardNewsList.innerHTML = `
-            <div class="dashboard-news-state dashboard-news-state--loading">
-                <p>A carregar notícias recentes...</p>
-            </div>
-        `;
+        DOM.dashboardNewsList.replaceChildren(createDashboardNewsState('A carregar notícias recentes...', 'dashboard-news-state--loading'));
         return;
     }
 
     if (dashboardNewsState === 'error' && dashboardNewsEntries.length === 0) {
-        DOM.dashboardNewsList.innerHTML = `
-            <div class="dashboard-news-state dashboard-news-state--error">
-                <p>Não foi possível carregar notícias neste momento.</p>
-                <button type="button" class="btn btn-secondary dashboard-news-retry-btn" id="dashboard-news-retry-btn">Tentar novamente</button>
-            </div>
-        `;
-        const retryBtn = document.getElementById('dashboard-news-retry-btn') as HTMLButtonElement | null;
+        const errorState = createDashboardNewsState('Não foi possível carregar notícias neste momento.', 'dashboard-news-state--error');
+        const retryBtn = el('button', {
+            type: 'button',
+            class: 'btn btn-secondary dashboard-news-retry-btn',
+            text: 'Tentar novamente',
+        }) as HTMLButtonElement;
+        errorState.appendChild(retryBtn);
+        DOM.dashboardNewsList.replaceChildren(errorState);
         retryBtn?.addEventListener('click', () => {
             dashboardNewsCacheExpiresAt = 0;
             dashboardNewsState = 'idle';
@@ -1502,15 +1527,14 @@ function renderDashboardNewsPanel(): void {
 
     const visibleItems = getVisibleDashboardNewsEntries();
     if (visibleItems.length === 0) {
-        DOM.dashboardNewsList.innerHTML = `
-            <div class="dashboard-news-state">
-                <p>${dashboardNewsEntries.length === 0 ? 'Ainda não existem notícias disponíveis.' : 'Sem notícias para este filtro.'}</p>
-            </div>
-        `;
+        const message = dashboardNewsEntries.length === 0
+            ? 'Ainda não existem notícias disponíveis.'
+            : 'Sem notícias para este filtro.';
+        DOM.dashboardNewsList.replaceChildren(createDashboardNewsState(message));
         return;
     }
 
-    DOM.dashboardNewsList.innerHTML = '';
+    DOM.dashboardNewsList.replaceChildren();
     visibleItems.forEach((item) => {
         const badgeClass = getDashboardNewsBadgeClass(item.mediaTypeHint);
         const article = el('a', {
@@ -3111,7 +3135,7 @@ export function renderMediaDetails(
     const progressCounter = mediaType === 'movie'
         ? (progressPercent >= 100 ? '100% concluído' : '0% concluído')
         : `${progressPercent}% leitura`;
-    const progressHTML = `<div class="v2-overview-progress"><div class="v2-progress-bar-container"><div class="v2-progress-bar" style="width: ${progressPercent}%;"></div></div><div class="v2-progress-text"><span>${Math.round(progressPercent)}%</span><span>${progressCounter}</span></div></div>`;
+    const progressElement = createOverviewProgress(progressPercent, progressCounter);
     const findMediaTrailerKey = () => {
         const videos = media.videos?.results;
         if (!Array.isArray(videos) || videos.length === 0) return null;
@@ -3169,7 +3193,7 @@ export function renderMediaDetails(
     ].filter((fact): fact is { type: 'text' | 'certification'; value: string } => Boolean(fact?.value && fact.value !== 'N/A'));
     const factsElements = topFacts.flatMap((fact, index) => {
         const nodes: (Node | HTMLElement)[] = [];
-        if (index > 0) nodes.push(el('span', { class: 'separator-dot', html: ' &bull; ' }));
+        if (index > 0) nodes.push(createDetailSeparator());
         nodes.push(fact.type === 'certification'
             ? el('span', { class: 'v2-certification', text: fact.value })
             : document.createTextNode(fact.value));
@@ -3264,13 +3288,14 @@ export function renderMediaDetails(
     const header = el('div', { class: 'v2-detail-header', style: effectiveBackdrop ? `background-image: url('${effectiveBackdrop}');` : '' }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
-                el('div', { class: 'v2-poster-wrapper media-detail-poster', html: progressHTML }, [
+                el('div', { class: 'v2-poster-wrapper media-detail-poster' }, [
                     createPosterImage(
                         posterPath,
                         `Poster de ${media.name}`,
                         'v2-poster',
                         '/placeholders/poster.svg'
-                    )
+                    ),
+                    progressElement,
                 ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
@@ -3399,7 +3424,7 @@ export function renderSeriesDetails(
     const facts = [{ type: 'text', value: premiereDate }, { type: 'certification', value: certification }, { type: 'text', value: genres }, { type: 'text', value: runtimeText }].filter(f => f.value);
     const factsElements = facts.flatMap((fact, index) => {
         const nodes = [];
-        if (index > 0) nodes.push(el('span', { class: 'separator-dot', html: ' &bull; ' }));
+        if (index > 0) nodes.push(createDetailSeparator());
         nodes.push(fact.type === 'certification' ? el('span', { class: 'v2-certification', text: fact.value }) : document.createTextNode(fact.value));
         return nodes;
     });
@@ -3432,7 +3457,7 @@ export function renderSeriesDetails(
     const totalEpisodes = seriesData.total_episodes || allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || 0), 0);
     const watchedCount = S.watchedState[seriesData.id]?.length || 0;
     const overallProgress = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
-    const progressHTML = `<div class="v2-overview-progress"><div class="v2-progress-bar-container"><div class="v2-progress-bar" style="width: ${overallProgress}%;"></div></div><div class="v2-progress-text"><span>${Math.round(overallProgress)}%</span><span>${watchedCount} / ${totalEpisodes} episódios</span></div></div>`;
+    const progressElement = createOverviewProgress(overallProgress, `${watchedCount} / ${totalEpisodes} episódios`);
     const tmdbRating = seriesData.vote_average || 0;
     const traktRating = traktSeriesData?.ratings?.rating || 0;
     const tvmazeRating = (typeof aggregatedSeriesData?.tvmazeData?.show?.rating?.average === 'number'
@@ -3490,13 +3515,14 @@ export function renderSeriesDetails(
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
-                el('div', { class: 'v2-poster-wrapper', html: progressHTML }, [
+                el('div', { class: 'v2-poster-wrapper' }, [
                     createPosterImage(
                         posterPath,
                         `Poster de ${seriesData.name}`,
                         'v2-poster',
                         '/placeholders/poster.svg'
-                    )
+                    ),
+                    progressElement,
                 ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
@@ -4283,16 +4309,19 @@ function renderStatsGlobalOverview(summary: StatsSummary, cache?: StatsComputati
 
     DOM.statsGlobalSummaryGrid.replaceChildren(
         ...metricCards.map((metric, metricIndex) => {
-            const card = el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' });
-            card.innerHTML = `
-                <h4 class="stats-global-summary-card-title">${metric.title}</h4>
-                <div class="stats-global-summary-donut-wrap">
-                    <div class="stats-global-summary-donut-figure">
-                        <canvas id="stats-global-summary-donut-${metricIndex}" class="stats-global-summary-donut-canvas" role="img" aria-label="${metric.title}"></canvas>
-                    </div>
-                </div>
-            `;
-            return card;
+            return el('article', { class: 'stats-global-summary-card stats-global-summary-card--donut' }, [
+                el('h4', { class: 'stats-global-summary-card-title', text: metric.title }),
+                el('div', { class: 'stats-global-summary-donut-wrap' }, [
+                    el('div', { class: 'stats-global-summary-donut-figure' }, [
+                        el('canvas', {
+                            id: `stats-global-summary-donut-${metricIndex}`,
+                            class: 'stats-global-summary-donut-canvas',
+                            role: 'img',
+                            'aria-label': metric.title,
+                        }),
+                    ]),
+                ]),
+            ]);
         }),
     );
 
@@ -4450,35 +4479,58 @@ function renderGlobalCompletionPanel(summary: StatsSummary, cache?: StatsComputa
                 : 0;
             const completedRatio = mediaSummary.totalItems > 0 ? Math.max(0, Math.min(100, (mediaSummary.completedItems / mediaSummary.totalItems) * 100)) : 0;
             const pendingRatio = Math.max(0, 100 - completedRatio);
-            const card = el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` });
-            card.innerHTML = `
-                <div class="stats-global-donut-figure">
-                    <svg viewBox="0 0 220 220" class="stats-global-donut-svg" aria-hidden="true">
-                        <circle class="stats-global-donut-track" cx="110" cy="110" r="74" stroke-width="34"></circle>
-                        <circle class="stats-global-donut-segment stats-global-donut-segment--pending" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke-dasharray:${pendingRatio} 100;stroke-dashoffset:0;"></circle>
-                        <circle class="stats-global-donut-segment stats-global-donut-segment--completed" cx="110" cy="110" r="74" stroke-width="34" pathLength="100" style="stroke:${visual.completed};stroke-dasharray:${completedRatio} 100;stroke-dashoffset:${-pendingRatio};"></circle>
-                    </svg>
-                    <div class="stats-global-donut-center">
-                        <strong>${mediaSummary.activeItems}</strong>
-                        <span>${visual.label} Ativas</span>
-                    </div>
-                </div>
-                <div class="stats-global-donut-meta">
-                    <div class="stats-global-donut-legend-row">
-                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--pending"></span>
-                        <span>${summary.meta.doughnutPendingLabel}</span>
-                    </div>
-                    <div class="stats-global-donut-legend-row">
-                        <span class="stats-global-donut-legend-dot stats-global-donut-legend-dot--completed" style="background:${visual.completed};"></span>
-                        <span>${summary.meta.doughnutConsumedLabel}</span>
-                    </div>
-                    <div class="stats-global-donut-stats">
-                        <span>${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos</span>
-                        <strong>${completionPercent}%</strong>
-                    </div>
-                </div>
-            `;
-            return card;
+            const svg = createSvgElement('svg', {
+                viewBox: '0 0 220 220',
+                class: 'stats-global-donut-svg',
+                'aria-hidden': 'true',
+            });
+            const circleAttributes = { cx: '110', cy: '110', r: '74', 'stroke-width': '34' };
+            const track = createSvgElement('circle', { ...circleAttributes, class: 'stats-global-donut-track' });
+            const pendingSegment = createSvgElement('circle', {
+                ...circleAttributes,
+                class: 'stats-global-donut-segment stats-global-donut-segment--pending',
+                pathLength: '100',
+            });
+            pendingSegment.style.setProperty('stroke-dasharray', `${pendingRatio} 100`);
+            pendingSegment.style.setProperty('stroke-dashoffset', '0');
+            const completedSegment = createSvgElement('circle', {
+                ...circleAttributes,
+                class: 'stats-global-donut-segment stats-global-donut-segment--completed',
+                pathLength: '100',
+            });
+            completedSegment.style.setProperty('stroke', visual.completed);
+            completedSegment.style.setProperty('stroke-dasharray', `${completedRatio} 100`);
+            completedSegment.style.setProperty('stroke-dashoffset', String(-pendingRatio));
+            svg.append(track, pendingSegment, completedSegment);
+
+            const completedDot = el('span', {
+                class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--completed',
+            });
+            completedDot.style.setProperty('background', visual.completed);
+
+            return el('article', { class: `stats-global-donut-card stats-global-donut-card--${visual.mediaType}` }, [
+                el('div', { class: 'stats-global-donut-figure' }, [
+                    svg,
+                    el('div', { class: 'stats-global-donut-center' }, [
+                        el('strong', { text: String(mediaSummary.activeItems) }),
+                        el('span', { text: `${visual.label} Ativas` }),
+                    ]),
+                ]),
+                el('div', { class: 'stats-global-donut-meta' }, [
+                    el('div', { class: 'stats-global-donut-legend-row' }, [
+                        el('span', { class: 'stats-global-donut-legend-dot stats-global-donut-legend-dot--pending' }),
+                        el('span', { text: summary.meta.doughnutPendingLabel }),
+                    ]),
+                    el('div', { class: 'stats-global-donut-legend-row' }, [
+                        completedDot,
+                        el('span', { text: summary.meta.doughnutConsumedLabel }),
+                    ]),
+                    el('div', { class: 'stats-global-donut-stats' }, [
+                        el('span', { text: `${mediaSummary.completedItems}/${mediaSummary.totalItems} concluídos` }),
+                        el('strong', { text: `${completionPercent}%` }),
+                    ]),
+                ]),
+            ]);
         }))
     );
 

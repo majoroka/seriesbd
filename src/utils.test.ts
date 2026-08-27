@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration, getTranslatedSeasonName, formatDate } from './utils';
+import { el, formatDuration, getTranslatedSeasonName, formatDate } from './utils';
+
+describe('el', () => {
+  it('rejects raw HTML so callers must use safe DOM nodes or text', () => {
+    expect(() => el('div', { html: '<img src=x onerror=alert(1)>' })).toThrow('Raw HTML is not supported');
+  });
+});
 
 describe('formatDuration', () => {
   it('should format 0 minutes correctly', () => {

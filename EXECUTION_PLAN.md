@@ -253,6 +253,13 @@ Critério de fecho:
 - redução material dos casos mais arriscados
 - sem regressões visuais relevantes
 
+Estado:
+- implementação concluída em `2026-08-27`;
+- inventário concluído: eliminados os usos diretos e indiretos de `innerHTML` no cliente;
+- estados de notícias, cartões de estatísticas e progresso de detalhes passam a ser criados com nós DOM seguros;
+- `el()` rejeita explicitamente HTML bruto e tem teste de regressão;
+- aguarda validação visual em `staging` antes do fecho formal.
+
 ### Sprint C2 | Endpoints e Hardening
 
 Objetivo:

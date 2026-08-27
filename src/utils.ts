@@ -3,7 +3,7 @@ import type { Chart } from 'chart.js';
 /**
  * Creates a DOM element with specified properties and children. A helper to prevent XSS.
  * @param {string} tag The HTML tag for the element.
- * @param {object} props Properties to set on the element. Special keys: 'text' for textContent, 'html' for innerHTML (use with caution).
+ * @param {object} props Properties to set on the element. The special key 'text' sets textContent.
  * @param {Array<Node|string>} children Child elements or text nodes to append.
  * @returns {HTMLElement} The created element.
  */
@@ -12,8 +12,8 @@ export function el(tag: string, props: Record<string, any> = {}, children: (Node
     Object.entries(props).forEach(([key, value]) => {
         if (key === 'text') {
             element.textContent = value;
-        } else if (key === 'html') { // Use only for trusted, static HTML
-            element.innerHTML = value;
+        } else if (key === 'html') {
+            throw new Error('Raw HTML is not supported by el. Use DOM nodes or text content.');
         } else {
             element.setAttribute(key, value);
         }
