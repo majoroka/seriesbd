@@ -144,6 +144,14 @@ Critério de fecho:
 - `npm audit` sem vulnerabilidades críticas ou altas;
 - ambiente de desenvolvimento, testes e PWA validados após a atualização.
 
+Estado:
+- concluído em `2026-08-27`;
+- Vite atualizado para `7.3.6`, Vitest para `4.1.11` e `vite-plugin-pwa` para `1.3.0`;
+- atualizações transitivas de `esbuild`, `form-data`, `nanoid`, `picomatch` e `postcss` aplicadas dentro dos intervalos compatíveis;
+- `npm audit` e `npm audit --omit=dev` sem vulnerabilidades;
+- `npm ci` e `npm run build` passaram, incluindo a geração do service worker;
+- a suite mantém apenas a falha de stale cache de notícias já registada no `P2`, sem nova regressão atribuída à atualização.
+
 ### P2 | Release verificável e CI
 
 Prioridade: alta
