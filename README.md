@@ -1,6 +1,6 @@
 # seriesBD
 
-Aplicação web para organizar e acompanhar consumo de media (séries, filmes e livros) usando dados do TMDb, Trakt, TVMaze, Google Books e Open Library. Permite gerir uma biblioteca pessoal, acompanhar progresso, pesquisar conteúdos, consultar tendências/estreias e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
+Aplicação web para organizar e acompanhar consumo de media (séries, filmes e livros) usando dados do TMDb, Trakt, TVMaze, Simkl, Google Books e Open Library. Permite gerir uma biblioteca pessoal, acompanhar progresso, pesquisar conteúdos, consultar tendências/estreias e exportar estatísticas, tudo num ambiente pensado para funcionamento offline via PWA e IndexedDB.
 
 Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 
@@ -9,7 +9,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - **Biblioteca Pessoal**: Organize as suas séries nas secções `Quero Ver`, `A Ver`, `Arquivo` e `Todas`. Alterne entre uma **vista de lista** detalhada e uma **vista em grelha** focada nos posters.
 - **Acompanhamento de Progresso**: Marque episódios e temporadas como vistos e acompanhe o seu progresso visualmente. Séries fora da biblioteca podem ser adicionadas automaticamente quando o progresso começa a ser registado.
 - **Lifecycle de Séries Mais Fiável**: Séries ativas transitam automaticamente entre `Quero Ver`, `A Ver` e `Concluídos` conforme episódios já lançados, incluindo regresso automático a `A Ver` quando saem episódios novos.
-- **Vista de Detalhes V2**: Uma interface moderna e imersiva para cada série, com backdrop dinâmico, informações de elenco, classificações públicas (TMDb + Trakt), trailers e gestão de progresso.
+- **Vista de Detalhes V2**: Uma interface moderna e imersiva para séries e filmes, com backdrop dinâmico, informações de elenco, classificações públicas multi-provider, trailers e gestão de progresso.
 - **Descoberta de Séries**: Encontre novas séries com a pesquisa integrada ou explore as secções de **tendências** (diárias e semanais), Top Rated e próximas estreias.
 - **Sugestões Personalizadas**: O dashboard usa géneros reais da biblioteca para curadoria de séries e filmes, com rotação controlada e menor repetição recente.
 - **Estatísticas Detalhadas**: Visualize o tempo total assistido, número de episódios vistos e analise os seus hábitos com gráficos de géneros, anos de lançamento e muito mais.
@@ -26,7 +26,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - **Frontend:** Vite + TypeScript + HTML/CSS modularizados.
 - **Estado e persistência:** Dexie (IndexedDB) com cache de temporadas e KV store para preferências.
 - **UI e gráficos:** Chart.js, Font Awesome, animações personalizadas em `ui.ts`.
-- **Automação:** Cloudflare Pages Functions para proxies TMDb/Trakt/TVMaze, vite-plugin-pwa para assets offline.
+- **Automação:** Cloudflare Pages Functions para proxies TMDb/Trakt/TVMaze/Simkl, vite-plugin-pwa para assets offline.
 - **Testes:** Vitest + Testing Library (ambiente jsdom).
 
 ## Requisitos
@@ -34,6 +34,7 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 - Node.js `22.20.0` e npm (a versão está fixada em [`.nvmrc`](./.nvmrc) e é usada pelo CI).
 - Projeto Supabase (para autenticação de utilizadores).
 - Contas TMDb e Trakt com chaves de API válidas.
+- Cliente Simkl com `SIMKL_CLIENT_ID` configurado apenas nas variáveis Cloudflare.
 - Conta TVMaze (opcional; usar chave apenas se necessário no teu plano/limites).
 - Conta Cloudflare (Pages) com repositório GitHub ligado.
 
@@ -50,7 +51,8 @@ Plano de execução e estado atual: [EXECUTION_PLAN.md](./EXECUTION_PLAN.md).
 
    ```env
    TMDB_API_KEY=...
-   TRAKT_API_KEY=...
+  TRAKT_API_KEY=...
+  SIMKL_CLIENT_ID=...
    TVMAZE_API_KEY=... # opcional
    GOOGLE_BOOKS_API_KEY=... # opcional (books)
    HEARTBEAT_TOKEN=... # opcional, recomendado para proteger /api/heartbeat
@@ -203,10 +205,11 @@ Resultado:
   - `Restaurar da cloud`
   - `Substituir cloud com este dispositivo`
 - Nos **detalhes da série**, os dados Trakt tentam resolução por TMDb ID, IMDb ID e nome/ano (fallback progressivo).
+- Simkl é um provider público opcional de detalhes de séries e filmes: usa apenas resolução por IMDb/TMDb, acrescenta avaliação e serve de fallback para trailer, sinopse e certificação, sem escrever dados de utilizador.
 - A sinopse dos detalhes usa agregação multi-fonte com prioridade linguística `pt-PT` -> `pt` -> `en`; na ausência de PT, é escolhido o texto em inglês mais completo.
-- O bloco de avaliações dos detalhes mostra 3 fontes quando disponíveis (TMDb, Trakt e TVMaze), com anéis concêntricos mais finos para acomodar a 3.ª métrica.
+- O bloco de avaliações dos detalhes mostra as fontes disponíveis (TMDb, Trakt, TVMaze e Simkl), com anéis concêntricos e legenda por provider.
 - O matching cross-provider prioriza `imdb_id`; quando recorre a nome/ano, aplica score mínimo e descarta matches fracos para evitar dados errados.
-- O botão de trailer usa Trakt quando disponível e fallback TMDb (`en-US`) quando necessário.
+- O botão de trailer usa Trakt quando disponível, TMDb (`en-US`) como fallback e Simkl como último fallback.
 - Sem sessão iniciada, a primeira mutação relevante mostra um aviso único por sessão a explicar que os dados podem ficar apenas neste dispositivo até existir conta/sync.
 - Se a Trakt devolver HTML de bloqueio (Cloudflare), a função devolve erro JSON `502` para facilitar diagnóstico em vez de quebrar silenciosamente.
 - Observabilidade mínima ativa:

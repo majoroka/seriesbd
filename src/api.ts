@@ -8,6 +8,7 @@ import {
     DashboardNewsResponse,
     TMDbSeriesDetails,
     TMDbCredits,
+    SimklData,
     TraktData,
     TraktSeason,
     TMDbSeason,
@@ -20,6 +21,7 @@ import { fromScopedMovieId, normalizeSeries, normalizeSeriesCollection, toScoped
 
 const API_BASE_TMDB = '/api/tmdb';
 const API_BASE_TRAKT = '/api/trakt';
+const API_BASE_SIMKL = '/api/simkl';
 const API_BASE_TVMAZE = '/api/tvmaze';
 const API_BASE_NEWS = '/api/news';
 const RETRY_FAST = { retries: 2, backoff: 250 };
@@ -1019,6 +1021,121 @@ export async function fetchTraktData(
     }
 }
 
+type SimklSearchResult = {
+    type?: string;
+    ids?: { simkl?: number | string };
+};
+
+type SimklDetails = {
+    ratings?: { simkl?: { rating?: number; votes?: number } };
+    trailers?: Array<{ youtube?: string | null }>;
+    overview?: string | null;
+    certification?: string | null;
+};
+
+function normalizeSimklRating(value: unknown): number | null {
+    const rating = Number(value);
+    if (!Number.isFinite(rating) || rating <= 0 || rating > 10) return null;
+    return Number(rating.toFixed(1));
+}
+
+function normalizeSimklTrailerKey(value: unknown): string | null {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return null;
+
+    try {
+        const url = new URL(rawValue);
+        if (url.hostname.includes('youtu.be')) return url.pathname.slice(1).split('/')[0] || null;
+        if (url.hostname.includes('youtube.com')) {
+            return url.searchParams.get('v') || url.pathname.split('/').filter(Boolean).pop() || null;
+        }
+    } catch {
+        // Simkl usually supplies a YouTube key directly.
+    }
+
+    return /^[A-Za-z0-9_-]{6,}$/.test(rawValue) ? rawValue : null;
+}
+
+function isExpectedSimklType(type: unknown, mediaType: 'series' | 'movie'): boolean {
+    if (mediaType === 'movie') return type === 'movie';
+    return type === 'tv' || type === 'show';
+}
+
+async function fetchSimklJson<T>(url: string, signal: AbortSignal | null): Promise<T | null> {
+    try {
+        const response = await fetch(url, { signal: signal || undefined });
+        if (!response.ok) {
+            console.warn(`[simkl] Pedido falhou com estado ${response.status}.`, { url: url.split('?')[0] });
+            return null;
+        }
+        return await response.json() as T;
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn('[simkl] Pedido falhou. A continuar sem dados Simkl.', { url: url.split('?')[0], error });
+        return null;
+    }
+}
+
+/**
+ * Obtém dados públicos opcionais da Simkl por identificadores externos.
+ * A pesquisa é feita apenas no detalhe individual, nunca em lote nem com endpoints /sync.
+ */
+export async function fetchSimklData(
+    mediaType: 'series' | 'movie',
+    tmdbId: number,
+    signal: AbortSignal | null,
+    fallbackImdbId?: string | null
+): Promise<SimklData | null> {
+    const type = mediaType === 'series' ? 'tv' : 'movie';
+    const lookupUrls: string[] = [];
+
+    if (fallbackImdbId) {
+        lookupUrls.push(`${API_BASE_SIMKL}/search/id?imdb=${encodeURIComponent(fallbackImdbId)}`);
+    }
+    if (Number.isFinite(tmdbId) && tmdbId > 0) {
+        lookupUrls.push(`${API_BASE_SIMKL}/search/id?tmdb=${encodeURIComponent(String(tmdbId))}&type=${type}`);
+    }
+    let simklId: number | null = null;
+    for (const lookupUrl of lookupUrls) {
+        const matches = await fetchSimklJson<SimklSearchResult[]>(lookupUrl, signal);
+        if (!Array.isArray(matches)) continue;
+        const match = matches.find((item) => {
+            const id = Number(item?.ids?.simkl);
+            return isExpectedSimklType(item?.type, mediaType) && Number.isInteger(id) && id > 0;
+        });
+        if (match) {
+            simklId = Number(match.ids?.simkl);
+            break;
+        }
+    }
+
+    if (!simklId) return null;
+
+    const detailsPath = mediaType === 'series' ? 'tv' : 'movies';
+    const details = await fetchSimklJson<SimklDetails>(`${API_BASE_SIMKL}/${detailsPath}/${simklId}`, signal);
+    if (!details) return null;
+
+    const rating = normalizeSimklRating(details.ratings?.simkl?.rating);
+    const trailerKey = details.trailers
+        ?.map((trailer) => normalizeSimklTrailerKey(trailer?.youtube))
+        .find(Boolean) || null;
+
+    return {
+        ratings: rating === null
+            ? null
+            : {
+                rating,
+                votes: Math.max(0, Number(details.ratings?.simkl?.votes) || 0),
+            },
+        trailerKey,
+        simklId,
+        overview: isMeaningfulOverview(details.overview) ? sanitizeOverview(details.overview || '') : null,
+        certification: typeof details.certification === 'string' && details.certification.trim()
+            ? details.certification.trim()
+            : null,
+    };
+}
+
 /**
  * Resolve dados de uma série no TVMaze com lookup por IMDb e fallback por nome/ano.
  * @param signal - O sinal para abortar o pedido.
@@ -1180,7 +1297,7 @@ async function safeOptionalRequest<T>(label: string, request: () => Promise<T>):
 }
 
 /**
- * Agrega metadados de série entre TMDb/Trakt/TVMaze com prioridade de idioma:
+ * Agrega metadados de série entre TMDb/Trakt/Simkl/TVMaze com prioridade de idioma:
  * pt-PT -> pt -> en (escolhendo o texto EN mais completo quando PT faltar).
  */
 export async function fetchAggregatedSeriesMetadata({
@@ -1188,6 +1305,7 @@ export async function fetchAggregatedSeriesMetadata({
     signal,
     tmdbOverviewPt,
     traktData,
+    simklData,
     fallbackTitle,
     fallbackYear,
     fallbackImdbId,
@@ -1196,6 +1314,7 @@ export async function fetchAggregatedSeriesMetadata({
     signal: AbortSignal | null;
     tmdbOverviewPt?: string | null;
     traktData?: TraktData | null;
+    simklData?: SimklData | null;
     fallbackTitle?: string;
     fallbackYear?: number;
     fallbackImdbId?: string | null;
@@ -1237,6 +1356,10 @@ export async function fetchAggregatedSeriesMetadata({
         overviewCandidates.push(createOverviewCandidate('trakt', 'en', traktData?.overview as string));
     }
 
+    if (isMeaningfulOverview(simklData?.overview)) {
+        overviewCandidates.push(createOverviewCandidate('simkl', 'en', simklData?.overview as string));
+    }
+
     const tvmazeOverview = tvmazeData?.show?.summaryText || tvmazeData?.show?.summaryHtml || '';
     if (isMeaningfulOverview(tvmazeOverview)) {
         overviewCandidates.push(
@@ -1245,16 +1368,20 @@ export async function fetchAggregatedSeriesMetadata({
     }
 
     const selectedOverview = pickBestOverviewCandidate(overviewCandidates);
-    const certification = typeof traktData?.certification === 'string' && traktData.certification.trim()
+    const traktCertification = typeof traktData?.certification === 'string' && traktData.certification.trim()
         ? traktData.certification.trim()
         : null;
+    const simklCertification = typeof simklData?.certification === 'string' && simklData.certification.trim()
+        ? simklData.certification.trim()
+        : null;
+    const certification = traktCertification || simklCertification;
 
     return {
         overview: selectedOverview?.text || null,
         overviewSource: selectedOverview?.source || null,
         overviewLanguage: selectedOverview?.language || null,
         certification,
-        certificationSource: certification ? 'trakt' : null,
+        certificationSource: traktCertification ? 'trakt' : simklCertification ? 'simkl' : null,
         overviewCandidates,
         tvmazeData: tvmazeData || null,
     };

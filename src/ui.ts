@@ -18,7 +18,7 @@ import * as S from './state';
 import * as API from './api';
 import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from './constants';
 import Chart, { ChartType } from 'chart.js/auto';
-import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
+import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, SimklData, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey, normalizeSeriesCollection } from './media';
 import {
     getEffectiveReleasedEpisodeCount,
@@ -3086,7 +3086,8 @@ export function renderMediaDetails(
     media: Series,
     options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean },
     externalReviews: ExternalReview[] = [],
-    creditsData: TMDbCredits | null = null
+    creditsData: TMDbCredits | null = null,
+    simklData: SimklData | null = null
 ) {
     const detailSection = DOM.seriesViewSection;
     clearElementChildren(detailSection);
@@ -3154,26 +3155,36 @@ export function renderMediaDetails(
         }
         return youtubeVideos[0]?.key || null;
     };
-    const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() : null;
-    const ratingEntries = publicRatingValue > 0
-        ? [{
+    const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() || simklData?.trailerKey || null : null;
+    const simklRating = simklData?.ratings?.rating || 0;
+    const ratingEntries = [
+        ...(publicRatingValue > 0 ? [{
             key: mediaType === 'movie' ? 'tmdb' : 'books',
             label: mediaType === 'movie' ? 'TMDb' : sourceProviderLabel,
             value: publicRatingValue,
             color: mediaType === 'movie' ? 'var(--primary-accent)' : 'var(--tvmaze-accent)',
-        }]
-        : [];
+        }] : []),
+        ...(mediaType === 'movie' && simklRating > 0 ? [{
+            key: 'simkl',
+            label: 'Simkl',
+            value: simklRating,
+            color: 'var(--simkl-accent)',
+        }] : []),
+    ];
     const averageRating = ratingEntries.length > 0
         ? ratingEntries.reduce((sum, entry) => sum + entry.value, 0) / ratingEntries.length
         : 0;
+    const mediaRatingRingClasses = ratingEntries.length >= 3
+        ? ['outer', 'middle', 'inner']
+        : ratingEntries.length === 2 ? ['outer', 'middle'] : ['outer'];
     const publicRatingsElement = ratingEntries.length > 0 ? el('div', { class: 'v2-public-ratings' }, [
         el('p', { class: 'v2-action-label', text: 'Avaliações' }),
         el('div', { class: 'concentric-chart-wrapper' }, [
-            el('div', { class: 'concentric-chart rings-1' }, [
-                el('div', {
-                    class: 'chart-ring outer',
-                    style: `--progress: ${ratingEntries[0].value * 10}%; --color: ${ratingEntries[0].color};`
-                }),
+            el('div', { class: `concentric-chart rings-${ratingEntries.length}` }, [
+                ...ratingEntries.map((entry, index) => el('div', {
+                    class: `chart-ring ${mediaRatingRingClasses[index]}`,
+                    style: `--progress: ${entry.value * 10}%; --color: ${entry.color};`
+                })),
                 el('div', { class: 'chart-center' }, [el('span', { class: 'chart-average', text: averageRating.toFixed(1) })])
             ]),
             el('div', { class: 'chart-legend' }, ratingEntries.map((entry) =>
@@ -3339,7 +3350,7 @@ export function renderMediaDetails(
                     ]),
                     el('div', { class: 'v2-overview' }, [
                         el('h3', { text: 'Sinopse' }),
-                        el('p', { text: getSafeOverviewText(media.overview) })
+                        el('p', { text: getSafeOverviewText(media.overview || simklData?.overview || '') })
                     ]),
                     el('div', { class: 'v2-additional-facts' }, [
                         el('div', { class: 'v2-metadata-grid' }, [
@@ -3403,6 +3414,7 @@ export function renderSeriesDetails(
     allTMDbSeasonsData: TMDbSeason[],
     creditsData: TMDbCredits,
     traktSeriesData: TraktData | null,
+    simklSeriesData: SimklData | null,
     traktSeasonsData: TraktSeason[] | null,
     aggregatedSeriesData: AggregatedSeriesMetadata | null = null,
     externalReviews: ExternalReview[] = []
@@ -3460,12 +3472,14 @@ export function renderSeriesDetails(
     const progressElement = createOverviewProgress(overallProgress, `${watchedCount} / ${totalEpisodes} episódios`);
     const tmdbRating = seriesData.vote_average || 0;
     const traktRating = traktSeriesData?.ratings?.rating || 0;
+    const simklRating = simklSeriesData?.ratings?.rating || 0;
     const tvmazeRating = (typeof aggregatedSeriesData?.tvmazeData?.show?.rating?.average === 'number'
         ? aggregatedSeriesData.tvmazeData.show.rating.average
         : 0) || 0;
     const ratingEntries = [
         { key: 'tmdb', label: 'TMDb', value: tmdbRating, color: 'var(--primary-accent)' },
         { key: 'trakt', label: 'Trakt', value: traktRating, color: 'var(--secondary-accent)' },
+        { key: 'simkl', label: 'Simkl', value: simklRating, color: 'var(--simkl-accent)' },
         { key: 'tvmaze', label: 'TVMaze', value: tvmazeRating, color: 'var(--tvmaze-accent)' },
     ].filter(entry => entry.value > 0);
     const ratingsCount = ratingEntries.length;
@@ -3509,9 +3523,11 @@ export function renderSeriesDetails(
         return youtubeVideos[0].key;
     };
     if (!finalTrailerKey) finalTrailerKey = findTMDbTrailer(seriesData.videos);
+    if (!finalTrailerKey) finalTrailerKey = simklSeriesData?.trailerKey || null;
     const tmdbOverview = seriesData.overview || '';
     const traktOverview = traktSeriesData?.overview || '';
-    const finalOverview = getSafeOverviewText(aggregatedSeriesData?.overview || tmdbOverview || traktOverview);
+    const simklOverview = simklSeriesData?.overview || '';
+    const finalOverview = getSafeOverviewText(aggregatedSeriesData?.overview || tmdbOverview || traktOverview || simklOverview);
     const headerElement = el('div', { class: 'v2-detail-header', style: `background-image: url('${backdropPath}');` }, [
         el('div', { class: 'v2-header-custom-bg' }, [
             el('div', { class: 'v2-header-content' }, [
