@@ -22,6 +22,7 @@ Objetivo:
 - Últimas melhorias de UX aplicadas ao dashboard, onboarding e menus de topo
 - Hardening do sync cloud concluído no escopo `S1-S10`, com conflitos explícitos, histórico de snapshots e ações manuais de recuperação
 - Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
+- Integração Simkl concluída e validada em `staging` como provider opcional de enriquecimento para séries e filmes
 
 ## Resumo executivo
 
@@ -88,12 +89,31 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
 - `R4` bundle auditável com checksum e metadata de commit concluído
 - `R5` remoção da regra ampla de cache remota no service worker concluída
 
-## Em aberto real
+## Prioridades ativas pós-Simkl
 
-1. corrigir a vulnerabilidade transitiva `ws` reportada por `npm audit`
-2. recuperar uma suite de testes totalmente verde e instituir CI em cada PR
-3. criar uma camada recorrente de recuperação de dados orientada ao utilizador
-4. monitorização pós-release e evolução funcional controlada
+1. **Proteção de dados:** manter exportação recorrente e definir uma cópia de recuperação independente do Supabase.
+2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
+3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
+4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
+
+### U1 | Atualização pontual UX/UI
+
+Objetivo:
+- aumentar clareza e confiança nos fluxos existentes, sem abrir um projeto de redesign.
+
+Âmbito:
+- tornar mais explícitos os estados de carregamento, fallback e indisponibilidade de providers nos detalhes;
+- manter mensagens de sync, exportação, restauro e conflito claras e orientadas à ação;
+- rever empty states, erros e feedback após ações relevantes em desktop e mobile;
+- aplicar ajustes apenas quando houver observação concreta de fricção ou inconsistência.
+
+Fora de âmbito:
+- alteração estrutural do dashboard ou da navegação;
+- criação de novas áreas de produto;
+- redesign visual amplo.
+
+Estado:
+- manutenção evolutiva contínua, priorizada após segurança de dados e estabilidade operacional.
 
 ## Plano prioritário pós-relatório técnico (2026-08)
 
@@ -234,6 +254,32 @@ Critério de valor:
 Estado:
 - concluído pelo sprint prioritário `P3` em `2026-08-27`.
 
+### B2 | Cópia independente de recuperação
+
+Prioridade:
+- alta, antes de novas funcionalidades de produto.
+
+Objetivo:
+- garantir uma segunda cópia recuperável da biblioteca que não dependa apenas do projeto Supabase nem do browser atual.
+
+Operação imediata sem código:
+- aceitar o lembrete semanal e guardar o ficheiro exportado numa pasta versionada de iCloud Drive, Google Drive, Dropbox ou equivalente;
+- manter pelo menos as últimas `4` exportações semanais;
+- executar trimestralmente um teste de restauro num browser limpo, sem substituir a biblioteca principal.
+
+Evolução técnica a avaliar:
+- backup server-side diário de snapshots para armazenamento privado independente, com retenção definida, integridade verificável e procedimento documentado de restauro;
+- nunca usar esta cópia para sobrescrever dados automaticamente;
+- avançar apenas após decisão sobre custo, retenção, acesso administrativo e requisitos de privacidade.
+
+Critério de fecho:
+- existe uma cópia independente recente;
+- um restauro de teste confirma biblioteca, progresso, notas e preferências;
+- o processo de recuperação está documentado e não depende de memória individual.
+
+Estado:
+- planeado; a operação manual semanal pode começar já, sem alteração da app.
+
 ## Plano proposto: Integração Simkl
 
 ### Sprint I1 | Simkl como provider de enriquecimento
@@ -300,10 +346,27 @@ Critério de fecho:
 - não existem alterações no histórico, biblioteca, progresso, notas ou sync Supabase.
 
 Estado:
-- implementação concluída em `2026-08-28`, pendente de validação em `staging`;
+- implementação e validação em `staging` concluídas em `2026-08-28`;
 - `SIMKL_CLIENT_ID` configurado manualmente nos ambientes Cloudflare `Preview` e `Production`;
 - o proxy aceita apenas leituras públicas de catálogo e não usa OAuth, `SIMKL_CLIENT_SECRET` nem endpoints `/sync/*`;
-- pendente: validação manual de amostra e consulta de métricas Simkl após o rollout.
+- a avaliação Simkl foi confirmada nos detalhes, com fallback não destrutivo para trailer, sinopse e certificação;
+- o rollout para produção segue exclusivamente o fluxo normal `staging` -> PR -> checks -> `main`;
+- monitorização normal de erros/limites Simkl passa a fazer parte da manutenção operacional.
+
+### T1 | Trakt em observação
+
+Decisão atual:
+- manter a integração Trakt tal como está, sem investimento adicional enquanto não houver mudança na modalidade gratuita ou possibilidade clara de recuperar a aplicação API anterior;
+- aceitar temporariamente a indisponibilidade da avaliação Trakt; Simkl fornece redundância para avaliação, trailer, sinopse e certificação;
+- não adicionar novas dependências nem novos fluxos sobre Trakt enquanto a app API devolver `403`.
+
+Quando reavaliar:
+- mudança dos termos gratuitos da Trakt;
+- recuperação comprovada da aplicação API;
+- aumento material de latência ou erros que justifique remover as chamadas Trakt da app.
+
+Estado:
+- em observação, sem implementação planeada.
 
 ## Plano de consolidação
 
@@ -329,7 +392,8 @@ Estado:
 - inventário concluído: eliminados os usos diretos e indiretos de `innerHTML` no cliente;
 - estados de notícias, cartões de estatísticas e progresso de detalhes passam a ser criados com nós DOM seguros;
 - `el()` rejeita explicitamente HTML bruto e tem teste de regressão;
-- aguarda validação visual em `staging` antes do fecho formal.
+- validação visual em `staging` concluída sem regressões relevantes;
+- sprint fechado formalmente em `2026-08-28`.
 
 ### Sprint C2 | Endpoints e Hardening
 
@@ -347,6 +411,13 @@ Critério de fecho:
 - respostas públicas mínimas e consistentes
 - HSTS ativo em produção
 - contratos de API preservados
+
+Estado:
+- concluído no escopo atual em `2026-08-28`;
+- `display-name-available` tem validação e limitação de pedidos cobertas por testes;
+- funções Cloudflare aplicam HSTS, CORS explícito, validação de métodos/input e headers de observabilidade partilhados;
+- proxies sanitizam headers upstream e devolvem erros públicos mínimos em endpoints endurecidos, incluindo Simkl;
+- contratos de consumo do frontend foram preservados por testes e builds de release.
 
 ### Sprint C3 | Runtime e Legado Netlify
 
