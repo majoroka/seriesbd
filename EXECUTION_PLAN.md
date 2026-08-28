@@ -234,6 +234,75 @@ Critério de valor:
 Estado:
 - concluído pelo sprint prioritário `P3` em `2026-08-27`.
 
+## Plano proposto: Integração Simkl
+
+### Sprint I1 | Simkl como provider de enriquecimento
+
+Objetivo:
+- adicionar Simkl como fonte opcional de dados para séries e filmes, sem substituir TMDb, TVMaze ou Trakt;
+- recuperar redundância para avaliações e trailers enquanto a aplicação Trakt não estiver disponível;
+- manter Supabase e a biblioteca MediaDex como fonte de verdade dos dados do utilizador.
+
+Fora de âmbito:
+- login OAuth Simkl;
+- importação, exportação ou sincronização da biblioteca/histórico Simkl;
+- chamadas aos endpoints `/sync/*`, incluindo `activities` e `all-items`;
+- alteração dos providers de livros.
+
+Fase I1.0 | Pré-requisitos e prova de cobertura
+
+Tarefas:
+- confirmar que a aplicação Simkl está ativa e que os termos da modalidade gratuita são compatíveis com o MediaDex;
+- configurar apenas `SIMKL_CLIENT_ID` nos ambientes Cloudflare `Preview` e `Production`;
+- selecionar uma amostra de 10 a 15 séries e filmes com IDs TMDb/IMDb, incluindo títulos antigos, recentes e portugueses;
+- verificar manualmente cobertura de match, avaliação pública, trailer, sinopse, certificação e episódios;
+- não configurar nem utilizar `SIMKL_CLIENT_SECRET` nesta fase.
+
+Critério de avanço:
+- cobertura aceitável na amostra;
+- chamadas de catálogo bem-sucedidas sem utilizar sync de utilizador;
+- decisão explícita de avançar para implementação.
+
+Fase I1.1 | Proxy e adaptador normalizado
+
+Tarefas:
+- criar proxy Cloudflare `/api/simkl` com allowlist de endpoints, validação de input, CORS e erros públicos mínimos;
+- acrescentar no proxy os parâmetros obrigatórios `client_id`, `app-name`, `app-version` e `User-Agent`;
+- manter o `SIMKL_CLIENT_ID` fora do browser;
+- implementar cache, deduplicação de pedidos em voo, timeout e tratamento de rate limit;
+- resolver conteúdo por IDs TMDb/IMDb, com fallback título/ano apenas quando necessário;
+- normalizar a resposta Simkl num contrato interno independente do provider.
+
+Fase I1.2 | Enriquecimento progressivo e precedência
+
+Tarefas:
+- carregar Simkl em paralelo com TVMaze/Trakt, sem bloquear o detalhe base TMDb;
+- mostrar avaliação Simkl como fonte autónoma, sem alterar as restantes avaliações;
+- usar trailer Simkl apenas como fallback quando TMDb não disponibilizar vídeo YouTube;
+- usar sinopse e certificação Simkl apenas como fallback, sem substituir conteúdo PT-PT existente do TMDb;
+- avaliar episódios e calendário Simkl apenas como validação complementar, preservando TMDb como referência para estado e progresso;
+- manter falha Simkl silenciosa para o utilizador, com observabilidade técnica suficiente.
+
+Fase I1.3 | Testes, rollout e validação
+
+Tarefas:
+- criar fixtures para match por IMDb, TMDb, título/ano, sem match, rate limit e indisponibilidade;
+- validar que nenhum dado local/Supabase é escrito pela integração;
+- testar em `staging` a amostra definida em I1.0 e comparar fontes apresentadas;
+- verificar API Analytics Simkl após testes, sem erros `4xx` inesperados nem padrões excessivos de pedidos;
+- executar `npm run verify:release` e abrir PR normal de `staging` para `main`.
+
+Critério de fecho:
+- TMDb, TVMaze, Trakt e Simkl coexistem sem regressões;
+- as avaliações identificam claramente a respetiva fonte;
+- falhas ou limites Simkl não impedem a abertura de detalhes;
+- não existem alterações no histórico, biblioteca, progresso, notas ou sync Supabase.
+
+Estado:
+- planeado em `2026-08-28`;
+- aguarda execução manual da fase I1.0 e decisão de avanço;
+- não existe implementação Simkl no repositório.
+
 ## Plano de consolidação
 
 ### Sprint C1 | Segurança Frontend
