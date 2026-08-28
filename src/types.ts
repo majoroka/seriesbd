@@ -162,6 +162,19 @@ export interface TraktData {
     certification: string | null;
 }
 
+export interface SimklRatings {
+    rating: number;
+    votes: number;
+}
+
+export interface SimklData {
+    ratings: SimklRatings | null;
+    trailerKey: string | null;
+    simklId?: number;
+    overview: string | null;
+    certification: string | null;
+}
+
 export interface TraktSeason {
     number: number;
     episodes: { number: number; overview: string | null }[];
@@ -198,7 +211,7 @@ export interface TVMazeResolveData {
     show: TVMazeShow | null;
 }
 
-export type ProviderSource = 'tmdb' | 'trakt' | 'tvmaze';
+export type ProviderSource = 'tmdb' | 'trakt' | 'simkl' | 'tvmaze';
 
 export interface AggregatedOverviewCandidate {
     source: ProviderSource;

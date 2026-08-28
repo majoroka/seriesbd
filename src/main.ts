@@ -2887,7 +2887,7 @@ async function displaySeriesDetails(seriesId: number) {
         );
         currentDetailedSeriesData = seriesData;
         S.setDetailViewData({ allEpisodes: [], episodeMap: {}, seasons: [] });
-        UI.renderSeriesDetails(seriesData, [], { cast: [] }, null, null, null, []);
+        UI.renderSeriesDetails(seriesData, [], { cast: [] }, null, null, null, null, []);
         await setupDetailViewActions(seriesData);
 
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
@@ -2916,12 +2916,24 @@ async function displaySeriesDetails(seriesId: number) {
                     return null;
                 });
 
+                const simklPromise = API.fetchSimklData(
+                    'series',
+                    seriesId,
+                    signal,
+                    seriesData.external_ids?.imdb_id
+                ).catch((error) => {
+                    if (error instanceof Error && error.name === 'AbortError') throw error;
+                    console.warn('Falha ao carregar dados Simkl da série.', error);
+                    return null;
+                });
+
                 const creditsData = await creditsPromise;
                 if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
-                UI.renderSeriesDetails(seriesData, [], creditsData, null, null, null, []);
+                UI.renderSeriesDetails(seriesData, [], creditsData, null, null, null, null, []);
                 await setupDetailViewActions(seriesData);
 
                 const traktSeriesData = await traktPromise;
+                const simklSeriesData = await simklPromise;
                 if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
 
                 if (traktSeriesData?.traktId) {
@@ -2964,6 +2976,7 @@ async function displaySeriesDetails(seriesId: number) {
                     signal,
                     tmdbOverviewPt: seriesData.overview,
                     traktData: traktSeriesData,
+                    simklData: simklSeriesData,
                     fallbackTitle: seriesData.name,
                     fallbackYear,
                     fallbackImdbId: seriesData.external_ids?.imdb_id,
@@ -3035,7 +3048,7 @@ async function displaySeriesDetails(seriesId: number) {
                     seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
                 });
 
-                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
+                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, simklSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
                 await setupDetailViewActions(seriesData);
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') return;
@@ -3126,7 +3139,7 @@ async function displayMovieDetails(media: Series): Promise<void> {
     const detailOptions = { progressPercent, isInLibrary, isArchived };
     UI.renderMediaDetails(movieDetails, detailOptions, [], null);
 
-    const [movieCredits, externalReviews] = await Promise.all([
+    const [movieCredits, externalReviews, simklData] = await Promise.all([
         runObservedSection(
             'series-details',
             `/api/tmdb/movie/${movieDetails.source_id || media.source_id || media.id}/credits`,
@@ -3142,10 +3155,19 @@ async function displayMovieDetails(media: Series): Promise<void> {
             console.warn('Falha ao carregar reviews externas do filme.', error);
             return [];
         }),
+        API.fetchSimklData(
+            'movie',
+            movieDetails.source_id || media.source_id || media.id,
+            signal
+        ).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar dados Simkl do filme.', error);
+            return null;
+        }),
     ]);
 
     if (signal.aborted) return;
-    UI.renderMediaDetails(movieDetails, detailOptions, externalReviews, movieCredits);
+    UI.renderMediaDetails(movieDetails, detailOptions, externalReviews, movieCredits, simklData);
 }
 
 function getMediaDetailObservabilitySection(mediaType: MediaType): ObservabilitySection {

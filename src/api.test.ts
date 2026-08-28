@@ -9,7 +9,7 @@ vi.mock('./db', () => ({
   },
 }));
 
-import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchTmdbExternalReviews, fetchTraktData } from './api';
+import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchSimklData, fetchTmdbExternalReviews, fetchTraktData } from './api';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -166,6 +166,55 @@ describe('fetchTraktData', () => {
     expect(data?.traktId).toBe(888);
     expect(data?.trailerKey).toBe('xyz789');
     expect(data?.ratings).toEqual({ rating: 8.9, votes: 1500 });
+  });
+});
+
+describe('fetchSimklData', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('resolves a series by IMDb and normalizes optional public metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/simkl/search/id?imdb=tt123')) {
+        return jsonResponse([{ type: 'tv', ids: { simkl: 321 } }]);
+      }
+      if (url.includes('/api/simkl/tv/321')) {
+        return jsonResponse({
+          ratings: { simkl: { rating: 8.7, votes: 42 } },
+          trailers: [{ youtube: 'simklTrailer' }],
+          overview: 'Overview from Simkl.',
+          certification: 'TV-14',
+        });
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchSimklData('series', 123, null, 'tt123');
+
+    expect(data).toEqual({
+      simklId: 321,
+      ratings: { rating: 8.7, votes: 42 },
+      trailerKey: 'simklTrailer',
+      overview: 'Overview from Simkl.',
+      certification: 'TV-14',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses TMDb as a fallback lookup and fails open on unavailable details', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/simkl/search/id?tmdb=456&type=movie')) {
+        return jsonResponse([{ type: 'movie', ids: { simkl: 654 } }]);
+      }
+      if (url.includes('/api/simkl/movies/654')) return jsonResponse({ error: 'limited' }, 429);
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchSimklData('movie', 456, null);
+    expect(data).toBeNull();
   });
 });
 

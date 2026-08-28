@@ -2,11 +2,11 @@
 
 ## Visão geral
 
-O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb, Trakt e TVMaze) são feitas através de **Cloudflare Pages Functions** que atuam como proxies e protegem as chaves de API.
+O **seriesBD** é uma single-page application construída com Vite e TypeScript. A UI é renderizada inteiramente no browser e a persistência é local (IndexedDB), o que permite funcionamento offline. As integrações externas (TMDb, Trakt, TVMaze e Simkl) são feitas através de **Cloudflare Pages Functions** que atuam como proxies e protegem as chaves de API.
 
 ```text
 ┌───────────┐        ┌────────────────────────────┐        ┌────────────────────────┐
-│  Browser  │ <────> │ Cloudflare Pages Functions │ <────> │ APIs externas (TMDb/Trakt/TVMaze) │
+│  Browser  │ <────> │ Cloudflare Pages Functions │ <────> │ APIs externas (TMDb/Trakt/TVMaze/Simkl) │
 └───────────┘        └────────────────────────────┘        └────────────────────────┘
         │
         ▼
@@ -31,7 +31,7 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 - Centraliza a criação de elementos (`el`), manipula classes e contém lógica de interação (p.ex. marcar episódio visto, abrir trailer).
 - Produz e gere instâncias Chart.js com opções de renderização adaptativas para mobile e suporta exportação a PNG/CSV via utilitários.
 - Implementa duas vistas de detalhes de série: a original e uma nova **vista V2** mais imersiva com backdrop dinâmico.
-- O bloco de ratings da vista V2 usa anéis concêntricos dinâmicos (TMDb/Trakt/TVMaze) e legenda por provider.
+- O bloco de ratings da vista V2 usa anéis concêntricos dinâmicos (TMDb/Trakt/TVMaze/Simkl) e legenda por provider.
 - Emite eventos personalizados (`display-series-details`) para desacoplar interações do fluxo em `main.ts`.
 
 ### `src/state.ts`
@@ -44,11 +44,12 @@ O **seriesBD** é uma single-page application construída com Vite e TypeScript.
 
 ### `src/api.ts`
 
-- Implementa o cliente para TMDb/Trakt/TVMaze/Books consumindo os proxies `/api/tmdb`, `/api/trakt`, `/api/tvmaze` e `/api/books`.
+- Implementa o cliente para TMDb/Trakt/TVMaze/Simkl/Books consumindo os proxies `/api/tmdb`, `/api/trakt`, `/api/tvmaze`, `/api/simkl` e `/api/books`.
 - Garante uniformização de erros e parâmetros (locale `pt-PT`, fallback de `AbortController`).
 - Mantém cache de temporadas em IndexedDB (`getSeasonDetailsWithCache`), evitando refetch de dados estáticos por 7 dias.
 - Expõe métodos para tendências diárias/semanais, top rated, estreias recentes, detalhes, créditos e vídeos.
 - `fetchTraktData` aplica fallback progressivo de matching (TMDb ID -> IMDb ID -> nome/ano) e fallback de ratings/trailer a partir de `extended=full` quando endpoints dedicados falham.
+- `fetchSimklData` resolve apenas por IMDb/TMDb para séries e filmes, normaliza rating/trailer/sinopse/certificação e falha de forma opcional. O proxy Simkl bloqueia OAuth e `/sync/*`.
 - O fallback por nome/ano na Trakt usa score mínimo; matches fracos são descartados para reduzir falsos positivos.
 - `fetchTVMazeResolvedShow` resolve séries no TVMaze por IMDb ID e fallback por nome/ano (`/api/tvmaze/resolve/show`), devolvendo payload normalizado.
 - `fetchAggregatedSeriesMetadata` agrega sinopse/certificação entre fontes com prioridade de idioma `pt-PT` -> `pt` -> `en`, escolhendo EN mais completo quando não existe PT.

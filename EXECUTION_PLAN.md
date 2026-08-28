@@ -269,8 +269,9 @@ Tarefas:
 - criar proxy Cloudflare `/api/simkl` com allowlist de endpoints, validação de input, CORS e erros públicos mínimos;
 - acrescentar no proxy os parâmetros obrigatórios `client_id`, `app-name`, `app-version` e `User-Agent`;
 - manter o `SIMKL_CLIENT_ID` fora do browser;
-- implementar cache, deduplicação de pedidos em voo, timeout e tratamento de rate limit;
-- resolver conteúdo por IDs TMDb/IMDb, com fallback título/ano apenas quando necessário;
+- limitar o proxy a `/search/id`, `/tv/:id` e `/movies/:id`, bloqueando explicitamente `/sync/*`;
+- aplicar rate limit por origem e tratar respostas upstream sem expor o respetivo corpo;
+- resolver conteúdo apenas por IDs TMDb/IMDb para evitar matches textuais incorretos;
 - normalizar a resposta Simkl num contrato interno independente do provider.
 
 Fase I1.2 | Enriquecimento progressivo e precedência
@@ -286,7 +287,7 @@ Tarefas:
 Fase I1.3 | Testes, rollout e validação
 
 Tarefas:
-- criar fixtures para match por IMDb, TMDb, título/ano, sem match, rate limit e indisponibilidade;
+- criar fixtures para match por IMDb, TMDb, sem match, rate limit e indisponibilidade;
 - validar que nenhum dado local/Supabase é escrito pela integração;
 - testar em `staging` a amostra definida em I1.0 e comparar fontes apresentadas;
 - verificar API Analytics Simkl após testes, sem erros `4xx` inesperados nem padrões excessivos de pedidos;
@@ -299,9 +300,10 @@ Critério de fecho:
 - não existem alterações no histórico, biblioteca, progresso, notas ou sync Supabase.
 
 Estado:
-- planeado em `2026-08-28`;
-- aguarda execução manual da fase I1.0 e decisão de avanço;
-- não existe implementação Simkl no repositório.
+- implementação concluída em `2026-08-28`, pendente de validação em `staging`;
+- `SIMKL_CLIENT_ID` configurado manualmente nos ambientes Cloudflare `Preview` e `Production`;
+- o proxy aceita apenas leituras públicas de catálogo e não usa OAuth, `SIMKL_CLIENT_SECRET` nem endpoints `/sync/*`;
+- pendente: validação manual de amostra e consulta de métricas Simkl após o rollout.
 
 ## Plano de consolidação
 
