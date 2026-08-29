@@ -280,6 +280,51 @@ Critério de fecho:
 Estado:
 - planeado; a operação manual semanal pode começar já, sem alteração da app.
 
+## Plano ativo: Partilha pública de conteúdos
+
+Objetivo:
+- permitir partilhar uma série, filme ou livro sem expor dados privados da biblioteca, progresso, notas, avaliação pessoal ou sessão;
+- manter a ficha pública acessível num browser sem sessão e sem depender do estado local do dispositivo que criou o link.
+
+### Sprint S1 | Contrato de URL pública e descoberta técnica
+
+Decisões fechadas:
+- a URL canónica será um caminho real, não o hash de navegação interna atual;
+- séries e filmes usarão o respetivo ID TMDb como identificador autoritativo:
+  - `/partilhar/serie/<tmdbId>`
+  - `/partilhar/filme/<tmdbId>`
+- livros usarão provider e identificador de catálogo codificado:
+  - `/partilhar/livro/<provider>/<sourceId-codificado>`;
+- o título poderá ser acrescentado futuramente apenas como slug decorativo; nunca será usado para resolver o conteúdo;
+- quando um livro não tiver `source_id` recuperável, a implementação posterior usará ISBN como fallback explícito; se também não existir, a partilha desse registo ficará indisponível de forma honesta;
+- todos os links devem ser construídos a partir do domínio ativo (`location.origin`), para funcionarem igualmente em `staging` e produção.
+
+Descoberta confirmada:
+- a app atual usa `#series-view-section` apenas para mostrar a secção; o hash não contém tipo nem ID de conteúdo;
+- séries já podem ser carregadas por ID TMDb, mas filmes e livros dependem hoje de memória local, resultados de pesquisa ou discovery;
+- o redirect SPA atual aceita caminhos públicos e devolve `index.html`, mas a inicialização de visitante sem sessão termina no dashboard antes de interpretar uma ficha pública;
+- o parser da rota pública terá de correr antes desse retorno e criar um objeto transitório apenas para renderizar o detalhe público;
+- cartões sociais com Open Graph por título exigirão, no sprint respetivo, uma resposta server-side/edge para crawlers: uma SPA estática não chega para gerar metatags específicas por URL.
+
+Proteções de privacidade:
+- a URL não pode incluir `user_id`, `device_id`, estado de biblioteca, progresso, notas, avaliações pessoais, email ou parâmetros Supabase;
+- uma rota inválida, removida ou sem fonte pública mostrará apenas uma mensagem de conteúdo indisponível, sem revelar se o título existe na biblioteca de alguém;
+- abrir um link público não poderá criar sessão, adicionar conteúdo, escrever IndexedDB nem iniciar sync.
+
+Fora de âmbito S1:
+- botão ou menu de partilha;
+- integração com WhatsApp, Facebook, X, email ou partilha nativa;
+- metatags Open Graph, imagem social ou páginas de preview;
+- alterações aos detalhes atuais, à biblioteca ou ao sync.
+
+Critério de fecho:
+- contrato de URL por tipo documentado e sem dependência de dados privados;
+- limitações de deep-link, visitante sem sessão, livros e crawlers identificadas antes de alterar runtime;
+- S2 pode implementar o parser e a vista pública com testes de rota determinísticos.
+
+Estado:
+- concluído em `2026-08-29`; não houve alteração de comportamento da app neste sprint.
+
 ## Plano proposto: Integração Simkl
 
 ### Sprint I1 | Simkl como provider de enriquecimento
