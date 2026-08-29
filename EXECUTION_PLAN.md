@@ -390,6 +390,7 @@ Implementado:
 - fallback genérico seguro para Goodreads, provider indisponível ou falha de catálogo, sem expor dados de utilizador;
 - escaping de HTML, validação estrita de rota e preservação dos headers de segurança da resposta estática;
 - cache público curto para previews sociais, independente de sessão, IndexedDB, Supabase ou sync.
+- reforço do arranque de partilhas: a rota pública é reavaliada antes de cada inicialização e tem prioridade sobre qualquer detalhe ou sessão local já existente.
 
 Validação automática concluída:
 - testes para série, livro, rota inválida e falha de provider;
