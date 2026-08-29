@@ -370,13 +370,41 @@ Validação automática concluída:
 - `git diff --check` passou;
 - `npx tsc --noEmit` mantém apenas sete diagnósticos pré-existentes fora do S3, sem erro novo atribuído a este sprint.
 
-Validação manual pendente:
-- smoke em desktop e telemóvel para série, filme e livro, incluindo cópia de link e uma opção de destino.
+Validação manual concluída:
+- smoke confirmado em desktop e telemóvel para série, filme e livro, incluindo cópia de link e destinos de partilha.
 
 Critério de fecho:
 - partilhar não altera biblioteca, sessão, IndexedDB ou sync;
 - o URL copiado abre a ficha pública correta sem sessão;
 - menu é operável por rato e teclado e não causa regressão nas ações existentes do detalhe.
+
+Estado:
+- concluído funcionalmente em `2026-08-29`.
+
+### Sprint S4 | Previews sociais Open Graph no edge
+
+Implementado:
+- função Cloudflare Pages em `/partilhar/*` que preserva a SPA, mas injeta metatags por conteúdo no HTML entregue pelo edge;
+- `title`, descrição, canonical URL, Open Graph e Twitter Card para séries, filmes e livros Google Books/Open Library;
+- metadados públicos obtidos diretamente do catálogo: TMDb para séries/filmes, Google Books ou Open Library para livros;
+- fallback genérico seguro para Goodreads, provider indisponível ou falha de catálogo, sem expor dados de utilizador;
+- escaping de HTML, validação estrita de rota e preservação dos headers de segurança da resposta estática;
+- cache público curto para previews sociais, independente de sessão, IndexedDB, Supabase ou sync.
+
+Validação automática concluída:
+- testes para série, livro, rota inválida e falha de provider;
+- `npm run verify:release` passou com `111` testes e build/PWA concluídos;
+- `git diff --check` passou.
+
+Validação manual pendente:
+- em `staging`, abrir uma rota `/partilhar/...` e confirmar no código-fonte que existe apenas um `title`, `og:title`, `og:description`, `og:image` e `canonical`;
+- confirmar que a SPA continua a abrir a ficha pública sem sessão;
+- usar o debugger de uma rede social para confirmar título, descrição e imagem no preview, sabendo que cada plataforma pode manter cache próprio.
+
+Critério de fecho:
+- crawlers recebem uma ficha identificável por conteúdo sem executar JavaScript;
+- utilizadores continuam a receber a SPA e o detalhe público do S2;
+- nenhum dado privado é processado, inserido no HTML ou incluído no cache edge.
 
 Estado:
 - concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
