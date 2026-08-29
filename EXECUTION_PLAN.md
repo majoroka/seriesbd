@@ -397,10 +397,10 @@ Validação automática concluída:
 - `npm run verify:release` passou com `111` testes e build/PWA concluídos;
 - `git diff --check` passou.
 
-Validação manual pendente:
-- em `staging`, abrir uma rota `/partilhar/...` e confirmar no código-fonte que existe apenas um `title`, `og:title`, `og:description`, `og:image` e `canonical`;
-- confirmar que a SPA continua a abrir a ficha pública sem sessão;
-- usar o debugger de uma rede social para confirmar título, descrição e imagem no preview, sabendo que cada plataforma pode manter cache próprio.
+Validação manual concluída:
+- em `staging`, a rota pública abre a ficha correta sem sessão e preserva o URL canónico, sem `#series-view-section`;
+- o browser recebe `title`, `og:title`, `og:description`, `og:image` e `canonical` específicos do conteúdo;
+- a partilha gera a URL pública canónica e não a rota genérica interna da SPA.
 
 Critério de fecho:
 - crawlers recebem uma ficha identificável por conteúdo sem executar JavaScript;
@@ -408,7 +408,37 @@ Critério de fecho:
 - nenhum dado privado é processado, inserido no HTML ou incluído no cache edge.
 
 Estado:
-- concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
+- concluído funcionalmente em `2026-08-29`.
+
+### Sprint S5 | Testes e rollout
+
+Implementado:
+- teste de interface isolado para a ação de partilha em detalhes de série, filme e livro;
+- validação do menu de partilha, URL pública por tipo, botão de cópia e destinos de fallback;
+- confirmação de que os controlos existentes continuam presentes:
+  - filmes: voltar, atualizar, arquivar e eliminar;
+  - livros: adicionar à biblioteca e guardar progresso;
+  - séries: voltar, marcar episódios, atualizar metadados, adicionar e eliminar;
+- confirmação de que a ficha pública mantém a partilha, mas não expõe ações que alteram biblioteca, progresso ou avaliação pessoal.
+
+Validação automática concluída:
+- `18` ficheiros de teste e `115` testes passaram;
+- `npm run verify:release` passou, incluindo build de produção e PWA;
+- `git diff --check` passou.
+
+Validação manual e rollout pendentes:
+- validar em `staging`, em desktop e telemóvel, uma série, filme e livro, com e sem capa;
+- confirmar com e sem sessão que partilhar, copiar e abrir o link num browser limpo não altera a biblioteca nem mostra dados privados;
+- confirmar que voltar, atualizar, eliminar, arquivar, marcar episódios e guardar progresso continuam funcionais;
+- após a validação, abrir PR de `staging` para `main`, aguardar `Test and build` e Cloudflare Pages, e fazer merge apenas com os checks aprovados.
+
+Critério de fecho:
+- as três fichas suportam partilha sem regressão nas ações existentes;
+- links públicos funcionam sem sessão e sem acesso a dados pessoais;
+- deploy em `main` concluído pelos checks obrigatórios.
+
+Estado:
+- cobertura automatizada concluída em `2026-08-29`; aguarda validação manual em `staging` e rollout controlado.
 
 ## Plano proposto: Integração Simkl
 
