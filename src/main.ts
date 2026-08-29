@@ -153,6 +153,11 @@ let lastLibrarySyncStatusSummary: LibrarySyncStatusSummary | null = null;
 let syncAuditEntries: SyncAuditEntry[] = [];
 const nextAiredRetryAt = new Map<number, number>();
 
+function resolvePublicShareEntryFromLocation(): void {
+    isPublicShareEntry = isPublicSharePath(window.location.pathname);
+    publicShareRoute = parsePublicShareRoute(window.location.pathname);
+}
+
 const INACTIVITY_LOGOUT_TIMEOUT_MS = 30 * 60 * 1000;
 const INACTIVITY_ACTIVITY_THROTTLE_MS = 10 * 1000;
 const NOTIFICATIONS_READ_STATE_KEY = 'seriesdb.notifications.readState.v1';
@@ -4122,6 +4127,8 @@ async function replaceCloudWithLocalManually(): Promise<void> {
 
 async function initializeApp(): Promise<void> {
     try {
+        // A public link must win over any already-loaded local view or auth state.
+        resolvePublicShareEntryFromLocation();
         if (isPublicShareEntry) {
             clearInMemoryLibraryState();
             if (publicShareRoute) {
@@ -5900,8 +5907,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }) as EventListener);
 
     void (async () => {
-        isPublicShareEntry = isPublicSharePath(window.location.pathname);
-        publicShareRoute = parsePublicShareRoute(window.location.pathname);
+        resolvePublicShareEntryFromLocation();
         handleAuthCallbackFeedback();
         await initializeAuthState({ isPublicView: isPublicShareEntry });
         await initializeApp();
