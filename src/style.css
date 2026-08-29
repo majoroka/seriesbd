@@ -3907,6 +3907,58 @@ body.light-theme .network-logo {
     flex-shrink: 0;
 }
 
+.content-share-wrapper {
+    position: relative;
+}
+
+.content-share-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.55rem);
+    right: 0;
+    display: grid;
+    min-width: 11.5rem;
+    padding: 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 0.75rem;
+    background: rgba(21, 23, 29, 0.98);
+    box-shadow: 0 0.85rem 2.25rem rgba(0, 0, 0, 0.4);
+}
+
+.content-share-menu[hidden] {
+    display: none;
+}
+
+.content-share-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 0;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.content-share-menu-item:hover,
+.content-share-menu-item:focus-visible {
+    background: rgba(93, 169, 214, 0.24);
+    outline: none;
+}
+
+@media (max-width: 560px) {
+    .content-share-menu {
+        right: auto;
+        left: 0;
+    }
+}
+
 .v2-facts {
     display: flex;
     align-items: center;

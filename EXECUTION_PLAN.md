@@ -355,6 +355,32 @@ Critério de fecho:
 Estado:
 - concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
 
+### Sprint S3 | Ações de partilha no detalhe
+
+Implementado:
+- botão `Partilhar` no conjunto de ações dos detalhes de séries, filmes e livros, incluindo fichas públicas em leitura;
+- links construídos apenas com as rotas públicas do S1/S2 e o domínio ativo, sem estado de biblioteca, progresso, notas, avaliação pessoal, sessão ou identificadores de utilizador;
+- partilha nativa em dispositivos tácteis compatíveis com Web Share API;
+- menu acessível de fallback para copiar link, WhatsApp, Facebook, X e email, com fecho por clique exterior ou `Escape`;
+- livros sem provider público suportado não recebem um link potencialmente inválido.
+
+Validação automática concluída:
+- testes unitários para URLs por tipo e destinos de partilha, confirmando que os dados privados não entram nos links;
+- `npm run verify:release` passou com `107` testes e build/PWA concluídos;
+- `git diff --check` passou;
+- `npx tsc --noEmit` mantém apenas sete diagnósticos pré-existentes fora do S3, sem erro novo atribuído a este sprint.
+
+Validação manual pendente:
+- smoke em desktop e telemóvel para série, filme e livro, incluindo cópia de link e uma opção de destino.
+
+Critério de fecho:
+- partilhar não altera biblioteca, sessão, IndexedDB ou sync;
+- o URL copiado abre a ficha pública correta sem sessão;
+- menu é operável por rato e teclado e não causa regressão nas ações existentes do detalhe.
+
+Estado:
+- concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
+
 ## Plano proposto: Integração Simkl
 
 ### Sprint I1 | Simkl como provider de enriquecimento
