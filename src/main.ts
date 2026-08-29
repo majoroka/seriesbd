@@ -20,6 +20,7 @@ import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeries
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
 import { createPublicShareMedia, isPublicSharePath, parsePublicShareRoute, type PublicShareRoute } from './publicShare';
+import { copyContentShareUrl, shouldUseNativeContentShare } from './contentShare';
 import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
@@ -2877,6 +2878,36 @@ function navigateBackFromSeriesDetails() {
     }
 }
 
+function setContentShareMenuOpen(isOpen: boolean): void {
+    const button = document.getElementById('content-share-btn') as HTMLButtonElement | null;
+    const menu = document.getElementById('content-share-menu') as HTMLElement | null;
+    if (!button || !menu) return;
+    menu.hidden = !isOpen;
+    button.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen) menu.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+}
+
+async function handleContentShare(button: HTMLElement): Promise<void> {
+    const url = button.dataset.shareUrl;
+    const title = button.dataset.shareTitle || 'MediaDex';
+    const text = button.dataset.shareText || 'Descobre este conteúdo no MediaDex.';
+    if (!url) return;
+
+    if (shouldUseNativeContentShare()) {
+        try {
+            await navigator.share({ title, text, url });
+            setContentShareMenuOpen(false);
+            return;
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') return;
+            console.warn('Não foi possível abrir a partilha nativa.', error);
+        }
+    }
+
+    const menu = document.getElementById('content-share-menu');
+    setContentShareMenuOpen(menu?.hidden !== false);
+}
+
 
 
 async function displaySeriesDetails(seriesId: number, options: { isPublicView?: boolean } = {}) {
@@ -4908,6 +4939,29 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.dashboard.addEventListener('click', async (e) => {
         const target = e.target as Element;
 
+        const contentShareBtn = target.closest('#content-share-btn') as HTMLElement | null;
+        if (contentShareBtn) {
+            await handleContentShare(contentShareBtn);
+            return;
+        }
+
+        const contentShareCopyBtn = target.closest('[data-share-copy]') as HTMLElement | null;
+        if (contentShareCopyBtn) {
+            const shareButton = document.getElementById('content-share-btn') as HTMLElement | null;
+            const url = shareButton?.dataset.shareUrl;
+            if (url) {
+                const copied = await copyContentShareUrl(url);
+                UI.showNotification(copied ? 'Link copiado para a área de transferência.' : 'Não foi possível copiar o link.');
+            }
+            setContentShareMenuOpen(false);
+            return;
+        }
+
+        if (target.closest('.content-share-menu a')) {
+            setContentShareMenuOpen(false);
+            return;
+        }
+
         const removeBtn = target.closest('.remove-btn');
         if (removeBtn) {
             e.stopPropagation(); // Impede que o clique "borbulhe" para o watchlist-item
@@ -5463,6 +5517,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (DOM.notificationsMenu && DOM.notificationsBtn && !DOM.notificationsMenu.contains(target) && !DOM.notificationsBtn.contains(target)) {
             closeNotificationsMenu();
         }
+        const contentShareWrapper = document.querySelector('.content-share-wrapper');
+        if (contentShareWrapper && !contentShareWrapper.contains(target)) {
+            setContentShareMenuOpen(false);
+        }
         if (
             mobileTopbarPanelOpen &&
             DOM.mobileTopbarControls &&
@@ -5480,6 +5538,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notificationsMenuOpen) {
             closeNotificationsMenu();
             DOM.notificationsBtn?.focus();
+        }
+        const contentShareButton = document.getElementById('content-share-btn') as HTMLButtonElement | null;
+        const contentShareMenu = document.getElementById('content-share-menu');
+        if (contentShareMenu && !contentShareMenu.hidden) {
+            setContentShareMenuOpen(false);
+            contentShareButton?.focus();
         }
         if (mobileTopbarPanelOpen) {
             closeMobileTopbarPanel();

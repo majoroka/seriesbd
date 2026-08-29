@@ -20,6 +20,7 @@ import { DASHBOARD_NEWS_ENHANCED_ENABLED, isDashboardNewsRolloutEnabled } from '
 import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, SimklData, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey, normalizeSeriesCollection } from './media';
+import { createContentShareText, createPublicContentShareUrl, getContentShareDestinations, type ShareableMedia } from './contentShare';
 import {
     getEffectiveReleasedEpisodeCount,
     getSeriesLibraryStatus as getSeriesLifecycleStatus,
@@ -69,6 +70,43 @@ function getMediaTypeLabel(mediaType: MediaType): string {
 function getMediaTypeChipClass(mediaType: MediaType, extraClass = ''): string {
     const base = `media-type-chip media-type-chip--${mediaType}`;
     return extraClass ? `${base} ${extraClass}` : base;
+}
+
+function createContentShareAction(media: ShareableMedia): HTMLElement | null {
+    const url = createPublicContentShareUrl(media, window.location.origin);
+    if (!url) return null;
+
+    const title = `${media.name} | MediaDex`;
+    const text = createContentShareText(media);
+    const destinations = getContentShareDestinations(title, text, url);
+    return el('div', { class: 'content-share-wrapper' }, [
+        el('button', {
+            id: 'content-share-btn',
+            class: 'v2-action-btn icon-only',
+            type: 'button',
+            title: 'Partilhar',
+            'aria-label': 'Partilhar',
+            'aria-haspopup': 'menu',
+            'aria-expanded': 'false',
+            'aria-controls': 'content-share-menu',
+            'data-share-url': url,
+            'data-share-title': title,
+            'data-share-text': text,
+        }, [el('i', { class: 'fas fa-share-alt' })]),
+        el('div', { id: 'content-share-menu', class: 'content-share-menu', role: 'menu', hidden: 'true', 'aria-label': 'Opções de partilha' }, [
+            el('button', { type: 'button', class: 'content-share-menu-item', role: 'menuitem', 'data-share-copy': 'true' }, [
+                el('i', { class: 'fas fa-link' }),
+                ' Copiar link',
+            ]),
+            ...destinations.map((destination) => el('a', {
+                class: 'content-share-menu-item',
+                href: destination.href,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                role: 'menuitem',
+            }, [el('i', { class: destination.iconClass }), ` ${destination.label}`])),
+        ]),
+    ]);
 }
 
 function buildExternalImageProxyUrl(rawUrl: string): string {
@@ -3234,6 +3272,7 @@ export function renderMediaDetails(
         el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
             el('i', { class: 'fas fa-arrow-left' }),
         ]),
+        createContentShareAction(media),
     ];
 
     if (!isPublicView) {
@@ -3560,6 +3599,7 @@ export function renderSeriesDetails(
                             el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
                                 el('i', { class: 'fas fa-arrow-left' }),
                             ]),
+                            createContentShareAction(seriesData),
                             !isPublicView ? el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
                                 el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos', 'aria-label': 'Marcar todos os episódios como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
                                 el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados', 'aria-label': 'Atualizar Metadados da Série' }, [el('i', { class: 'fas fa-sync-alt' })]),
