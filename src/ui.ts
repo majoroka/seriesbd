@@ -258,14 +258,14 @@ function getMediaRating(series: Series): number {
 }
 
 // UI Update Functions
-export function showSection(targetId: string) {
+export function showSection(targetId: string, options: { preserveLocation?: boolean } = {}) {
     DOM.mainContentSections.forEach(section => {
         section.style.display = 'none';
     });
 
     // Update URL hash without causing a page jump or adding to history
     const newHash = `#${targetId}`;
-    if (history.replaceState) {
+    if (!options.preserveLocation && history.replaceState) {
         // This prevents the page from jumping and creating a new history entry
         history.replaceState(null, '', newHash);
     }
@@ -3084,7 +3084,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
 
 export function renderMediaDetails(
     media: Series,
-    options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean },
+    options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean; isPublicView?: boolean },
     externalReviews: ExternalReview[] = [],
     creditsData: TMDbCredits | null = null,
     simklData: SimklData | null = null
@@ -3093,6 +3093,7 @@ export function renderMediaDetails(
     clearElementChildren(detailSection);
 
     const mediaType = media.media_type || 'series';
+    const isPublicView = options.isPublicView === true;
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
     const releaseYear = media.first_air_date ? `(${new Date(media.first_air_date).getFullYear()})` : '';
     const releaseDate = media.first_air_date && !Number.isNaN(new Date(media.first_air_date).getTime())
@@ -3136,7 +3137,7 @@ export function renderMediaDetails(
     const progressCounter = mediaType === 'movie'
         ? (progressPercent >= 100 ? '100% concluído' : '0% concluído')
         : `${progressPercent}% leitura`;
-    const progressElement = createOverviewProgress(progressPercent, progressCounter);
+    const progressElement = isPublicView ? null : createOverviewProgress(progressPercent, progressCounter);
     const findMediaTrailerKey = () => {
         const videos = media.videos?.results;
         if (!Array.isArray(videos) || videos.length === 0) return null;
@@ -3212,7 +3213,7 @@ export function renderMediaDetails(
     });
     const metadataItems = mediaType === 'movie'
         ? [
-            { label: 'Status', value: progressLabel },
+            ...(isPublicView ? [] : [{ label: 'Status', value: progressLabel }]),
             { label: 'Géneros', value: genres },
             { label: 'Duração', value: runtimeText },
             { label: 'Fonte', value: sourceProviderLabel },
@@ -3220,12 +3221,12 @@ export function renderMediaDetails(
             { label: 'País', value: countriesText },
         ]
         : [
-            { label: 'Estado Leitura', value: progressLabel },
+            ...(isPublicView ? [] : [{ label: 'Estado Leitura', value: progressLabel }]),
             { label: 'Autor', value: authorText },
             { label: 'Publicado', value: releaseDate },
             { label: 'Fonte', value: sourceProviderLabel },
             { label: 'ISBN', value: isbnText },
-            { label: 'Progresso', value: `${progressPercent}%` },
+            ...(isPublicView ? [] : [{ label: 'Progresso', value: `${progressPercent}%` }]),
             { label: 'Géneros', value: genres },
         ];
 
@@ -3233,12 +3234,17 @@ export function renderMediaDetails(
         el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
             el('i', { class: 'fas fa-arrow-left' }),
         ]),
-        el('button', { id: 'media-refresh-details-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Atualizar detalhes', 'aria-label': 'Atualizar detalhes' }, [
-            el('i', { class: 'fas fa-sync-alt' }),
-        ]),
     ];
 
-    if (options.isInLibrary) {
+    if (!isPublicView) {
+        actionButtons.push(
+            el('button', { id: 'media-refresh-details-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Atualizar detalhes', 'aria-label': 'Atualizar detalhes' }, [
+                el('i', { class: 'fas fa-sync-alt' }),
+            ]),
+        );
+    }
+
+    if (!isPublicView && options.isInLibrary) {
         actionButtons.push(
             el('button', {
                 id: 'media-archive-toggle-btn',
@@ -3255,7 +3261,7 @@ export function renderMediaDetails(
                 'aria-label': 'Remover da biblioteca'
             }, [el('i', { class: 'fas fa-trash-alt' })]),
         );
-    } else {
+    } else if (!isPublicView) {
         actionButtons.push(
             el('button', {
                 id: 'media-add-watchlist-btn',
@@ -3267,7 +3273,7 @@ export function renderMediaDetails(
         );
     }
 
-    const progressControls = mediaType === 'movie'
+    const progressControls = isPublicView ? null : mediaType === 'movie'
         ? el('div', { class: 'media-progress-controls' }, [
             el('button', {
                 id: 'movie-toggle-seen-btn',
@@ -3322,7 +3328,7 @@ export function renderMediaDetails(
                     el('div', { class: 'v2-actions' }, [
                         el('div', { class: 'v2-all-ratings-wrapper' }, [
                             el('div', { class: 'v2-ratings-group' }, [
-                                el('div', { class: 'user-rating-container v2-user-rating' }, [
+                                !isPublicView ? el('div', { class: 'user-rating-container v2-user-rating' }, [
                                     el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
                                     el('div', {
                                         class: 'star-rating',
@@ -3337,7 +3343,7 @@ export function renderMediaDetails(
                                             el('span', { class: 'star-number', text: value })
                                         ]);
                                     })),
-                                ]),
+                                ]) : null,
                                 publicRatingsElement,
                             ])
                         ]),
@@ -3372,6 +3378,7 @@ export function renderMediaDetails(
     detailSection.dataset.seriesId = String(media.id);
     detailSection.dataset.mediaType = mediaType;
     detailSection.dataset.mediaId = String(media.id);
+    detailSection.dataset.publicView = String(isPublicView);
 
     const bodyContentContainer = el('div', { class: 'v2-body-content' });
     if (mediaType === 'movie' && creditsData) {
@@ -3385,8 +3392,9 @@ export function renderMediaDetails(
         if (moviePeopleElement) bodyContentContainer.appendChild(moviePeopleElement);
     }
 
-    [
-        el('div', { class: 'v2-info-card collapsible' }, [
+    const mediaDetailCards: HTMLElement[] = [];
+    if (!isPublicView) {
+        mediaDetailCards.push(el('div', { class: 'v2-info-card collapsible' }, [
             el('details', {}, [
                 el('summary', { text: 'As Minhas Notas' }),
                 el('textarea', {
@@ -3398,14 +3406,15 @@ export function renderMediaDetails(
                     text: currentUserNotes
                 })
             ])
-        ]),
-        renderExternalReviewsCard(
-            externalReviews,
-            mediaType === 'book'
-                ? 'As fontes atuais deste livro não disponibilizam reviews externas textuais.'
-                : 'Não existem reviews externas disponíveis para este conteúdo.'
-        )
-    ].forEach((node) => bodyContentContainer.appendChild(node));
+        ]));
+    }
+    mediaDetailCards.push(renderExternalReviewsCard(
+        externalReviews,
+        mediaType === 'book'
+            ? 'As fontes atuais deste livro não disponibilizam reviews externas textuais.'
+            : 'Não existem reviews externas disponíveis para este conteúdo.'
+    ));
+    mediaDetailCards.forEach((node) => bodyContentContainer.appendChild(node));
     detailSection.appendChild(bodyContentContainer);
 }
 
@@ -3417,9 +3426,11 @@ export function renderSeriesDetails(
     simklSeriesData: SimklData | null,
     traktSeasonsData: TraktSeason[] | null,
     aggregatedSeriesData: AggregatedSeriesMetadata | null = null,
-    externalReviews: ExternalReview[] = []
+    externalReviews: ExternalReview[] = [],
+    options: { isPublicView?: boolean } = {}
 ) {
     const detailSection = DOM.seriesViewSection;
+    const isPublicView = options.isPublicView === true;
     clearElementChildren(detailSection);
     const backdropPath = seriesData.backdrop_path ? `https://image.tmdb.org/t/p/w1280${seriesData.backdrop_path}` : '';
     const posterPath = seriesData.poster_path ? `https://image.tmdb.org/t/p/w300_and_h450_bestv2${seriesData.poster_path}` : '/placeholders/poster.svg';
@@ -3538,7 +3549,7 @@ export function renderSeriesDetails(
                         'v2-poster',
                         '/placeholders/poster.svg'
                     ),
-                    progressElement,
+                    isPublicView ? null : progressElement,
                 ]),
                 el('div', { class: 'v2-details-wrapper' }, [
                     el('div', { class: 'v2-title' }, [
@@ -3549,29 +3560,29 @@ export function renderSeriesDetails(
                             el('button', { id: 'back-to-previous-section-btn', class: 'v2-action-btn icon-only', type: 'button', title: 'Voltar à secção anterior', 'aria-label': 'Voltar à secção anterior' }, [
                                 el('i', { class: 'fas fa-arrow-left' }),
                             ]),
-                            el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
+                            !isPublicView ? el('div', { id: 'library-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries na biblioteca
                                 el('button', { id: 'mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Marcar todos como vistos', 'aria-label': 'Marcar todos os episódios como vistos' }, [el('i', { class: 'fas fa-check-double' })]),
                                 el('button', { id: 'refresh-metadata-btn', class: 'v2-action-btn icon-only', title: 'Atualizar Metadados', 'aria-label': 'Atualizar Metadados da Série' }, [el('i', { class: 'fas fa-sync-alt' })]),
                                 el('button', { id: 'v2-remove-series-btn', class: 'v2-action-btn icon-only', title: 'Remover série da biblioteca', 'aria-label': 'Remover série da biblioteca' }, [el('i', { class: 'fas fa-trash-alt' })]),
-                            ]),
-                            el('div', { id: 'discover-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries novas
+                            ]) : null,
+                            !isPublicView ? el('div', { id: 'discover-actions', style: 'display: none; gap: 1rem;' }, [ // Ações para séries novas
                                 el('button', { id: 'add-to-watchlist-btn', class: 'v2-action-btn icon-only', title: 'Adicionar à Biblioteca', 'aria-label': 'Adicionar à Biblioteca' }, [el('i', { class: 'fas fa-plus' })]),
                                 el('button', { id: 'add-and-mark-all-seen-btn', class: 'v2-action-btn icon-only', title: 'Adicionar e Marcar Tudo Como Visto', 'aria-label': 'Adicionar e Marcar Tudo Como Visto' }, [el('i', { class: 'fas fa-check-double' })]),
-                            ]),
+                            ]) : null,
                         ])
                     ]),
                     el('div', { class: 'v2-facts' }, factsElements),
                     el('div', { class: 'v2-actions' }, [ // Ações principais como ratings e trailer
                         el('div', { class: 'v2-all-ratings-wrapper' }, [
                             el('div', { class: 'v2-ratings-group' }, [
-                                el('div', { class: 'user-rating-container v2-user-rating' }, [
+                                !isPublicView ? el('div', { class: 'user-rating-container v2-user-rating' }, [
                                     el('p', { class: 'v2-action-label', text: 'A Minha Avaliação' }),
                                     el('div', { class: 'star-rating', 'data-series-id': String(seriesData.id) }, Array.from({ length: 10 }, (_, i) => {
                                         const value = i + 1;
                                         const starClass = value <= currentUserRating ? 'fas' : 'far';
                                         return el('div', { class: 'star-container', 'data-value': value }, [el('i', { class: `${starClass} fa-star star-icon` }), el('span', { class: 'star-number', text: value })]);
                                     })),
-                                ]),
+                                ]) : null,
                                 publicRatingsElement,
                             ])
                         ])
@@ -3596,6 +3607,9 @@ export function renderSeriesDetails(
     ]);
     detailSection.appendChild(headerElement);
     detailSection.dataset.seriesId = String(seriesData.id);
+    detailSection.dataset.mediaType = 'series';
+    detailSection.dataset.mediaId = String(seriesData.id);
+    detailSection.dataset.publicView = String(isPublicView);
 
     const bodyContentContainer = el('div', { class: 'v2-body-content' });
     const peopleElement = renderPeopleInfoCard(
@@ -3610,14 +3624,16 @@ export function renderSeriesDetails(
     );
     if (peopleElement) bodyContentContainer.appendChild(peopleElement);
 
-    const currentUserNotes = currentUserData.notes || '';
-    const userNotesElement = el('div', { class: 'v2-info-card collapsible' }, [
-        el('details', {}, [
-            el('summary', { text: 'As Minhas Notas' }),
-            el('textarea', { class: 'user-notes-textarea', 'data-series-id': String(seriesData.id), placeholder: 'Escreva aqui as suas notas pessoais sobre esta série...', text: currentUserNotes })
-        ])
-    ]);
-    bodyContentContainer.appendChild(userNotesElement);
+    if (!isPublicView) {
+        const currentUserNotes = currentUserData.notes || '';
+        const userNotesElement = el('div', { class: 'v2-info-card collapsible' }, [
+            el('details', {}, [
+                el('summary', { text: 'As Minhas Notas' }),
+                el('textarea', { class: 'user-notes-textarea', 'data-series-id': String(seriesData.id), placeholder: 'Escreva aqui as suas notas pessoais sobre esta série...', text: currentUserNotes })
+            ])
+        ]);
+        bodyContentContainer.appendChild(userNotesElement);
+    }
 
     bodyContentContainer.appendChild(
         renderExternalReviewsCard(
@@ -3625,6 +3641,11 @@ export function renderSeriesDetails(
             'Não existem reviews externas disponíveis para esta série.'
         )
     );
+
+    if (isPublicView) {
+        detailSection.appendChild(bodyContentContainer);
+        return;
+    }
 
     const seasonsContainer = el('div', { class: 'v2-seasons-container' });
     const traktSeasonPosters: { [key: number]: { thumb?: string, full?: string } } = {};

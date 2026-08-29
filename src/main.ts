@@ -19,6 +19,7 @@ import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
+import { createPublicShareMedia, isPublicSharePath, parsePublicShareRoute, type PublicShareRoute } from './publicShare';
 import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
@@ -127,6 +128,8 @@ let passwordRecoveryCallbackDetected = false;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let currentDetailedSeriesData: TMDbSeriesDetails | null = null;
+let publicShareRoute: PublicShareRoute | null = null;
+let isPublicShareEntry = false;
 let librarySyncTimer: number | null = null;
 let isApplyingRemoteLibrarySnapshot = false;
 let selectedSearchMediaType: MediaType = 'series';
@@ -2291,9 +2294,11 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
             if (event === 'SIGNED_IN' && !isPasswordRecovery) {
                 UI.showNotification(`Sessão iniciada: ${user.email}`);
             }
-            void syncCloudStateAfterLogin(user.id)
-                .then((outcome) => handleLibrarySyncConflict(outcome))
-                .then(() => refreshLibrarySyncStatus(user.id, 'signed-in'));
+            if (!isPublicShareEntry) {
+                void syncCloudStateAfterLogin(user.id)
+                    .then((outcome) => handleLibrarySyncConflict(outcome))
+                    .then(() => refreshLibrarySyncStatus(user.id, 'signed-in'));
+            }
         }
         if (isPasswordRecovery) {
             passwordRecoveryCallbackDetected = false;
@@ -2320,7 +2325,8 @@ function handleAuthStateChange(event: AuthChangeEvent, user: User | null) {
     }
 }
 
-async function initializeAuthState() {
+async function initializeAuthState(options: { isPublicView?: boolean } = {}) {
+    const isPublicView = options.isPublicView === true;
     ensureInactivityActivityListeners();
     if (!isSupabaseConfigured()) {
         setAuthenticatedUi(null);
@@ -2350,11 +2356,11 @@ async function initializeAuthState() {
             cleanAuthCallbackUrl();
             openPasswordRecoveryUpdateModal();
         }
-        if (currentUser) {
+        if (currentUser && !isPublicView) {
             const outcome = await syncCloudStateAfterLogin(currentUser.id);
             await handleLibrarySyncConflict(outcome);
             await refreshLibrarySyncStatus(currentUser.id, 'initial-auth');
-        } else {
+        } else if (!isPublicView) {
             await refreshLibrarySyncStatus(null, 'initial-auth-no-session');
         }
     } catch (error) {
@@ -2854,6 +2860,10 @@ function captureDetailReturnContext() {
 }
 
 function navigateBackFromSeriesDetails() {
+    if (isPublicShareEntry) {
+        window.location.assign('/');
+        return;
+    }
     const fallbackSection = 'watchlist-section';
     const targetSection = detailReturnContext?.sectionId || fallbackSection;
     const targetScrollTop = detailReturnContext?.scrollTop ?? 0;
@@ -2869,15 +2879,16 @@ function navigateBackFromSeriesDetails() {
 
 
 
-async function displaySeriesDetails(seriesId: number) {
+async function displaySeriesDetails(seriesId: number, options: { isPublicView?: boolean } = {}) {
+    const isPublicView = options.isPublicView === true;
     S.resetDetailViewAbortController();
     currentDetailedSeriesData = null;
     const signal = S.detailViewAbortController.signal;
 
     try {
-        captureDetailReturnContext();
+        if (!isPublicView) captureDetailReturnContext();
         setElementMessage(DOM.seriesViewSection, 'A carregar detalhes da série...');
-        UI.showSection('series-view-section');
+        UI.showSection('series-view-section', { preserveLocation: isPublicView });
         
         const seriesData = await runObservedSection(
             'series-details',
@@ -2887,8 +2898,8 @@ async function displaySeriesDetails(seriesId: number) {
         );
         currentDetailedSeriesData = seriesData;
         S.setDetailViewData({ allEpisodes: [], episodeMap: {}, seasons: [] });
-        UI.renderSeriesDetails(seriesData, [], { cast: [] }, null, null, null, null, []);
-        await setupDetailViewActions(seriesData);
+        UI.renderSeriesDetails(seriesData, [], { cast: [] }, null, null, null, null, [], { isPublicView });
+        if (!isPublicView) await setupDetailViewActions(seriesData);
 
         const fallbackYear = seriesData.first_air_date ? Number(seriesData.first_air_date.split('-')[0]) : undefined;
         const fallbackOriginalTitle = seriesData.original_name && seriesData.original_name !== seriesData.name
@@ -2929,8 +2940,8 @@ async function displaySeriesDetails(seriesId: number) {
 
                 const creditsData = await creditsPromise;
                 if (signal.aborted || currentDetailedSeriesData?.id !== seriesId) return;
-                UI.renderSeriesDetails(seriesData, [], creditsData, null, null, null, null, []);
-                await setupDetailViewActions(seriesData);
+                UI.renderSeriesDetails(seriesData, [], creditsData, null, null, null, null, [], { isPublicView });
+                if (!isPublicView) await setupDetailViewActions(seriesData);
 
                 const traktSeriesData = await traktPromise;
                 const simklSeriesData = await simklPromise;
@@ -2985,9 +2996,9 @@ async function displaySeriesDetails(seriesId: number) {
                     console.warn('Falha na agregação de metadados (P3-02). A continuar com dados base.', error);
                     return null;
                 });
-                const seasonsToFetch = seriesData.seasons.filter(s => s.season_number !== 0);
+                const seasonsToFetch = isPublicView ? [] : seriesData.seasons.filter(s => s.season_number !== 0);
                 const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
-                const traktSeasonPromise = API.fetchTraktSeasonsData(traktId, signal);
+                const traktSeasonPromise = isPublicView ? Promise.resolve(null) : API.fetchTraktSeasonsData(traktId, signal);
                 const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
                     if (error instanceof Error && error.name === 'AbortError') throw error;
                     console.warn('Falha ao carregar reviews externas da série.', error);
@@ -3017,7 +3028,7 @@ async function displaySeriesDetails(seriesId: number) {
                     .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
                     .map(res => res.value);
                 const authoritativeTotalEpisodes = allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || season.episode_count || 0), 0);
-                if (authoritativeTotalEpisodes > 0) {
+                if (!isPublicView && authoritativeTotalEpisodes > 0) {
                     seriesData.total_episodes = authoritativeTotalEpisodes;
                     const localSeries = S.getSeries(seriesId);
                     if (localSeries && localSeries.total_episodes !== authoritativeTotalEpisodes) {
@@ -3027,29 +3038,30 @@ async function displaySeriesDetails(seriesId: number) {
                     }
                 }
 
-                const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
-                const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
-                    id: ep.id,
-                    season_number: ep.season_number,
-                    episode_number: ep.episode_number,
-                }));
+                if (!isPublicView) {
+                    const allEpisodesForSeries = allTMDbSeasonsData.flatMap(season => season.episodes);
+                    const allEpisodesMeta = allEpisodesForSeries.map(ep => ({
+                        id: ep.id,
+                        season_number: ep.season_number,
+                        episode_number: ep.episode_number,
+                    }));
 
-                const episodeToSeasonMap: { [key: number]: number } = {};
-                allTMDbSeasonsData.forEach(season => {
-                    season.episodes.forEach((episode: Episode) => {
-                        episodeToSeasonMap[episode.id] = season.season_number!;
+                    const episodeToSeasonMap: { [key: number]: number } = {};
+                    allTMDbSeasonsData.forEach(season => {
+                        season.episodes.forEach((episode: Episode) => {
+                            episodeToSeasonMap[episode.id] = season.season_number!;
+                        });
                     });
-                });
+                    const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
+                    S.setDetailViewData({
+                        allEpisodes: allEpisodesMeta,
+                        episodeMap: episodeToSeasonMap,
+                        seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
+                    });
+                }
 
-                const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
-                S.setDetailViewData({
-                    allEpisodes: allEpisodesMeta,
-                    episodeMap: episodeToSeasonMap,
-                    seasons: seasons.map(s => ({ season_number: s.season_number, episode_count: s.episode_count })),
-                });
-
-                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, simklSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews);
-                await setupDetailViewActions(seriesData);
+                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, simklSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews, { isPublicView });
+                if (!isPublicView) await setupDetailViewActions(seriesData);
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') return;
                 console.warn('Falha ao enriquecer progressivamente o detalhe da série.', error);
@@ -3072,6 +3084,10 @@ async function displaySeriesDetails(seriesId: number) {
         console.error('Erro ao exibir detalhes da série:', typedError.message);
         setElementMessage(DOM.seriesViewSection, 'Não foi possível carregar os detalhes da série. Tente novamente mais tarde.');
         const status = getErrorStatus(typedError);
+        if (isPublicView) {
+            renderPublicShareUnavailable();
+            return;
+        }
         if (status === 429) {
             UI.showNotification('Demasiados pedidos em pouco tempo. Tente novamente dentro de 1 minuto.');
             return;
@@ -3080,12 +3096,13 @@ async function displaySeriesDetails(seriesId: number) {
     }
 }
 
-async function displayMovieDetails(media: Series): Promise<void> {
+async function displayMovieDetails(media: Series, options: { isPublicView?: boolean } = {}): Promise<void> {
+    const isPublicView = options.isPublicView === true;
     S.resetDetailViewAbortController();
     const signal = S.detailViewAbortController.signal;
-    captureDetailReturnContext();
+    if (!isPublicView) captureDetailReturnContext();
     setElementMessage(DOM.seriesViewSection, 'A carregar detalhes do filme...');
-    UI.showSection('series-view-section');
+    UI.showSection('series-view-section', { preserveLocation: isPublicView });
 
     let movieDetails: Series;
     try {
@@ -3098,6 +3115,10 @@ async function displayMovieDetails(media: Series): Promise<void> {
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         const status = getErrorStatus(error);
+        if (isPublicView) {
+            renderPublicShareUnavailable();
+            return;
+        }
         renderFallbackMovieDetails(
             S.getDiscoveryMediaItem('movie', media.id) || media,
             {
@@ -3111,10 +3132,10 @@ async function displayMovieDetails(media: Series): Promise<void> {
 
     if (signal.aborted) return;
 
-    updateCurrentSearchResultMedia(movieDetails);
+    if (!isPublicView) updateCurrentSearchResultMedia(movieDetails);
 
-    const isInLibrary = isMediaInLibrary('movie', movieDetails.id);
-    if (isInLibrary) {
+    const isInLibrary = !isPublicView && isMediaInLibrary('movie', movieDetails.id);
+    if (!isPublicView && isInLibrary) {
         const storedMovie = S.getMediaItem('movie', movieDetails.id);
         const mergedMovie = storedMovie
             ? {
@@ -3134,9 +3155,9 @@ async function displayMovieDetails(media: Series): Promise<void> {
             await S.updateSeries(mergedMovie);
         }
     }
-    const isArchived = S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
-    const progressPercent = getMediaProgressPercent('movie', movieDetails.id);
-    const detailOptions = { progressPercent, isInLibrary, isArchived };
+    const isArchived = !isPublicView && S.myArchive.some(item => item.media_type === 'movie' && item.id === movieDetails.id);
+    const progressPercent = isPublicView ? 0 : getMediaProgressPercent('movie', movieDetails.id);
+    const detailOptions = { progressPercent, isInLibrary, isArchived, isPublicView };
     UI.renderMediaDetails(movieDetails, detailOptions, [], null);
 
     const [movieCredits, externalReviews, simklData] = await Promise.all([
@@ -3201,19 +3222,21 @@ function persistRefreshedBookDetails(bookDetails: Series): Promise<void> | null 
     return shouldPersistBookRefresh ? S.updateSeries(mergedBook) : null;
 }
 
-function renderBookDetailView(bookDetails: Series): void {
-    const isInLibrary = isMediaInLibrary('book', bookDetails.id);
-    const isArchived = S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
-    const progressPercent = getMediaProgressPercent('book', bookDetails.id);
-    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived }, []);
+function renderBookDetailView(bookDetails: Series, options: { isPublicView?: boolean } = {}): void {
+    const isPublicView = options.isPublicView === true;
+    const isInLibrary = !isPublicView && isMediaInLibrary('book', bookDetails.id);
+    const isArchived = !isPublicView && S.myArchive.some(item => item.media_type === 'book' && item.id === bookDetails.id);
+    const progressPercent = isPublicView ? 0 : getMediaProgressPercent('book', bookDetails.id);
+    UI.renderMediaDetails(bookDetails, { progressPercent, isInLibrary, isArchived, isPublicView }, []);
 }
 
-async function displayBookDetails(media: Series): Promise<void> {
+async function displayBookDetails(media: Series, options: { isPublicView?: boolean } = {}): Promise<void> {
+    const isPublicView = options.isPublicView === true;
     S.resetDetailViewAbortController();
     const signal = S.detailViewAbortController.signal;
-    captureDetailReturnContext();
-    UI.showSection('series-view-section');
-    renderBookDetailView(media);
+    if (!isPublicView) captureDetailReturnContext();
+    UI.showSection('series-view-section', { preserveLocation: isPublicView });
+    renderBookDetailView(media, { isPublicView });
 
     try {
         const bookDetails = await runObservedSection(
@@ -3225,13 +3248,19 @@ async function displayBookDetails(media: Series): Promise<void> {
 
         if (signal.aborted) return;
 
-        updateCurrentSearchResultMedia(bookDetails);
-        await persistRefreshedBookDetails(bookDetails);
-        renderBookDetailView(bookDetails);
+        if (!isPublicView) {
+            updateCurrentSearchResultMedia(bookDetails);
+            await persistRefreshedBookDetails(bookDetails);
+        }
+        renderBookDetailView(bookDetails, { isPublicView });
     } catch (error) {
         const typedError = error as Error;
         if (typedError.name === 'AbortError') return;
         console.warn('Falha ao enriquecer o detalhe do livro. A vista base foi mantida.', typedError);
+        if (isPublicView) {
+            renderPublicShareUnavailable();
+            return;
+        }
         UI.showNotification('Alguns detalhes do livro não puderam ser atualizados.');
     }
 }
@@ -3270,6 +3299,32 @@ async function displayMediaDetails(mediaType: MediaType, mediaId: number) {
         setElementMessage(DOM.seriesViewSection, 'Não foi possível carregar os detalhes deste conteúdo.');
         UI.showNotification(`Erro ao carregar detalhes: ${typedError.message}`);
     }
+}
+
+function renderPublicShareUnavailable(): void {
+    S.resetDetailViewAbortController();
+    currentDetailedSeriesData = null;
+    UI.showSection('series-view-section', { preserveLocation: true });
+    DOM.seriesViewSection.dataset.publicView = 'true';
+    setElementMessage(DOM.seriesViewSection, 'Este conteúdo partilhado não está disponível.');
+}
+
+async function displayPublicShareDetails(route: PublicShareRoute): Promise<void> {
+    detailReturnContext = null;
+    currentDetailedSeriesData = null;
+
+    if (route.mediaType === 'series') {
+        await displaySeriesDetails(route.tmdbId, { isPublicView: true });
+        return;
+    }
+
+    const publicMedia = createPublicShareMedia(route);
+    if (route.mediaType === 'movie') {
+        await displayMovieDetails(publicMedia, { isPublicView: true });
+        return;
+    }
+
+    await displayBookDetails(publicMedia, { isPublicView: true });
 }
 
 async function handleAddSeries(seriesData: TMDbSeriesDetails, button: HTMLButtonElement | null) {
@@ -4036,6 +4091,16 @@ async function replaceCloudWithLocalManually(): Promise<void> {
 
 async function initializeApp(): Promise<void> {
     try {
+        if (isPublicShareEntry) {
+            clearInMemoryLibraryState();
+            if (publicShareRoute) {
+                await displayPublicShareDetails(publicShareRoute);
+            } else {
+                renderPublicShareUnavailable();
+            }
+            return;
+        }
+
         if (localStorage.getItem('seriesdb.watchlist')) {
             await S.migrateFromLocalStorage();
         }
@@ -5771,8 +5836,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }) as EventListener);
 
     void (async () => {
+        isPublicShareEntry = isPublicSharePath(window.location.pathname);
+        publicShareRoute = parsePublicShareRoute(window.location.pathname);
         handleAuthCallbackFeedback();
-        await initializeAuthState();
+        await initializeAuthState({ isPublicView: isPublicShareEntry });
         await initializeApp();
     })();
 });

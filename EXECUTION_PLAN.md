@@ -325,6 +325,36 @@ Critério de fecho:
 Estado:
 - concluído em `2026-08-29`; não houve alteração de comportamento da app neste sprint.
 
+### Sprint S2 | Deep-link e detalhe público em leitura
+
+Implementado:
+- parser determinístico para `/partilhar/serie/<tmdbId>`, `/partilhar/filme/<tmdbId>` e `/partilhar/livro/<provider>/<sourceId-codificado>`;
+- validação estrita de IDs TMDb, providers de livros e codificação de `sourceId` antes de qualquer pedido remoto;
+- carregamento da ficha pública antes de migração local, carregamento da biblioteca ou sync cloud;
+- preservação do caminho público no browser, sem o substituir por `#series-view-section`;
+- objetos transitórios para filmes e livros, sem dados de utilizador ou biblioteca;
+- modo de detalhe público em leitura para séries, filmes e livros:
+  - sem adicionar, remover, arquivar, atualizar metadados, marcar episódios, alterar progresso, avaliação pessoal ou notas;
+  - sem barras de progresso ou temporadas interativas;
+  - mantém apenas informação editorial pública, avaliações públicas, trailer, créditos e reviews externas disponíveis;
+- resposta genérica para rotas inválidas, conteúdo removido ou falha de provider;
+- botão de voltar de uma partilha regressa à raiz da app, evitando mostrar uma biblioteca que não foi carregada neste fluxo.
+
+Validação:
+- testes unitários de parsing, validação de inputs, livros codificados e criação de dados transitórios sem estado pessoal;
+- `npm run test:run` passou com `104` testes;
+- `npm run build` passou, incluindo geração PWA;
+- `git diff --check` passou;
+- a verificação adicional `npx tsc --noEmit` mantém apenas diagnósticos pré-existentes fora do S2, sem erro novo atribuído a este sprint.
+
+Critério de fecho:
+- links públicos abrem uma ficha sem sessão e sem depender de IndexedDB, pesquisa ou discovery local;
+- não existe caminho visual para mutar biblioteca, progresso, notas ou avaliações pessoais;
+- rotas inválidas falham de forma genérica e segura.
+
+Estado:
+- concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
+
 ## Plano proposto: Integração Simkl
 
 ### Sprint I1 | Simkl como provider de enriquecimento
