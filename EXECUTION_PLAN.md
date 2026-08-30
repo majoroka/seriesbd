@@ -22,18 +22,19 @@ Objetivo:
 - Últimas melhorias de UX aplicadas ao dashboard, onboarding e menus de topo
 - Hardening do sync cloud concluído no escopo `S1-S10`, com conflitos explícitos, histórico de snapshots e ações manuais de recuperação
 - Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
-- Integração Simkl concluída e validada em `staging` como provider opcional de enriquecimento para séries e filmes
+- Partilha pública `S1-S5` concluída e integrada em `main` pelo PR `#83`, com rotas públicas, Open Graph e rollout validado
+- Integração Simkl concluída e ativa como provider opcional de enriquecimento para séries e filmes
 
 ## Resumo executivo
 
 A app já está funcionalmente madura e em produção controlada.
 
-O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
+O foco atual é manutenção evolutiva controlada:
 
-1. reduzir risco técnico
-2. endurecer segurança e operação
-3. estabilizar dados e sync
-4. melhorar acessibilidade, performance e consistência visual
+1. garantir uma cópia de recuperação independente do Supabase
+2. manter providers externos e sync sob observação
+3. preservar a disciplina de release e os checks obrigatórios
+4. corrigir apenas fricção UX/UI observada em uso real
 
 ## Concluído
 
@@ -71,6 +72,12 @@ O foco deixou de ser adicionar grandes blocos de funcionalidade e passou a ser:
   - séries
   - filmes
   - livros com estado vazio honesto
+- Partilha pública de séries, filmes e livros:
+  - links canónicos sem dados privados
+  - detalhe público em leitura sem sessão
+  - Web Share API e fallback para cópia, WhatsApp, Facebook, X e email
+  - previews sociais Open Graph e Twitter Card no edge
+- Simkl como provider público complementar para avaliações e fallbacks editoriais de séries e filmes
 
 ### Consolidação e hardening
 
@@ -115,7 +122,7 @@ Fora de âmbito:
 Estado:
 - manutenção evolutiva contínua, priorizada após segurança de dados e estabilidade operacional.
 
-## Plano prioritário pós-relatório técnico (2026-08)
+## Prioridades concluídas pós-relatório técnico (2026-08)
 
 Objetivo:
 - corrigir riscos reais de segurança, release e recuperação de dados;
@@ -144,7 +151,7 @@ Estado:
 - `ws` atualizado de `8.18.3` para `8.21.3` apenas no lockfile;
 - `npm audit --omit=dev` sem vulnerabilidades;
 - `npm run build` passou;
-- a suite mantém a falha de stale cache de notícias já registada no `P2`, sem nova regressão atribuída à atualização.
+- a suite de testes passou integralmente após o fecho do `P2`, sem regressão atribuída à atualização.
 
 ### P1.1 | Segurança do toolchain de desenvolvimento
 
@@ -170,7 +177,7 @@ Estado:
 - atualizações transitivas de `esbuild`, `form-data`, `nanoid`, `picomatch` e `postcss` aplicadas dentro dos intervalos compatíveis;
 - `npm audit` e `npm audit --omit=dev` sem vulnerabilidades;
 - `npm ci` e `npm run build` passaram, incluindo a geração do service worker;
-- a suite mantém apenas a falha de stale cache de notícias já registada no `P2`, sem nova regressão atribuída à atualização.
+- a suite de testes passou integralmente após o fecho do `P2`, sem regressão atribuída à atualização.
 
 ### P2 | Release verificável e CI
 
@@ -196,7 +203,8 @@ Estado:
 - o teste de stale cache de notícias passou a simular todas as respostas dos feeds, sem chamadas de rede nem dependência da ordem dos fallbacks;
 - criada a validação GitHub Actions em pull requests e alterações a `main`;
 - o CI usa Node `22.20.0`, `npm ci`, cache npm, auditoria de vulnerabilidades altas/críticas e `npm run verify:release`;
-- `npm run verify:release` passou localmente com `90` testes e build/PWA concluídos.
+- o workflow `Test and build` está configurado como check obrigatório para merge em `main`;
+- a validação mais recente passou com `115` testes e build/PWA concluídos.
 
 ### P3 | Recuperação de dados pelo utilizador
 
@@ -227,7 +235,7 @@ Estado:
 - validação manual em staging concluída: lembrete apresentado, exportação criada e ciclo reiniciado;
 - `npm run verify:release` passou com `94` testes; `npm audit --audit-level=high` sem vulnerabilidades.
 
-## Backlog futuro
+## Recuperação de dados: histórico e pendência
 
 ### B1 | Reminder de export periódico ao utilizador
 
@@ -280,7 +288,7 @@ Critério de fecho:
 Estado:
 - planeado; a operação manual semanal pode começar já, sem alteração da app.
 
-## Plano ativo: Partilha pública de conteúdos
+## Funcionalidade concluída: Partilha pública de conteúdos
 
 Objetivo:
 - permitir partilhar uma série, filme ou livro sem expor dados privados da biblioteca, progresso, notas, avaliação pessoal ou sessão;
@@ -353,7 +361,7 @@ Critério de fecho:
 - rotas inválidas falham de forma genérica e segura.
 
 Estado:
-- concluído localmente em `2026-08-29`; requer validação manual em `staging` antes do merge.
+- concluído e validado em `staging` e produção pelo rollout `S5` / PR `#83`.
 
 ### Sprint S3 | Ações de partilha no detalhe
 
@@ -426,11 +434,11 @@ Validação automática concluída:
 - `npm run verify:release` passou, incluindo build de produção e PWA;
 - `git diff --check` passou.
 
-Validação manual e rollout pendentes:
-- validar em `staging`, em desktop e telemóvel, uma série, filme e livro, com e sem capa;
-- confirmar com e sem sessão que partilhar, copiar e abrir o link num browser limpo não altera a biblioteca nem mostra dados privados;
-- confirmar que voltar, atualizar, eliminar, arquivar, marcar episódios e guardar progresso continuam funcionais;
-- após a validação, abrir PR de `staging` para `main`, aguardar `Test and build` e Cloudflare Pages, e fazer merge apenas com os checks aprovados.
+Validação manual e rollout concluídos:
+- validação em `staging` de série, filme e livro, em desktop e telemóvel;
+- links copiados e abertos em browser limpo, com e sem sessão, sem expor ou alterar biblioteca, progresso, notas ou avaliações pessoais;
+- confirmação de que voltar, atualizar, eliminar, arquivar, marcar episódios e guardar progresso continuam funcionais;
+- PR `#83` de `staging` para `main` aprovado, com `Test and build` e Cloudflare Pages concluídos antes do merge.
 
 Critério de fecho:
 - as três fichas suportam partilha sem regressão nas ações existentes;
@@ -438,9 +446,9 @@ Critério de fecho:
 - deploy em `main` concluído pelos checks obrigatórios.
 
 Estado:
-- cobertura automatizada concluída em `2026-08-29`; aguarda validação manual em `staging` e rollout controlado.
+- concluído em produção em `2026-08-30`.
 
-## Plano proposto: Integração Simkl
+## Funcionalidade concluída: Integração Simkl
 
 ### Sprint I1 | Simkl como provider de enriquecimento
 
@@ -506,11 +514,11 @@ Critério de fecho:
 - não existem alterações no histórico, biblioteca, progresso, notas ou sync Supabase.
 
 Estado:
-- implementação e validação em `staging` concluídas em `2026-08-28`;
+- implementação, validação e rollout concluídos em `2026-08-28`;
 - `SIMKL_CLIENT_ID` configurado manualmente nos ambientes Cloudflare `Preview` e `Production`;
 - o proxy aceita apenas leituras públicas de catálogo e não usa OAuth, `SIMKL_CLIENT_SECRET` nem endpoints `/sync/*`;
 - a avaliação Simkl foi confirmada nos detalhes, com fallback não destrutivo para trailer, sinopse e certificação;
-- o rollout para produção segue exclusivamente o fluxo normal `staging` -> PR -> checks -> `main`;
+- o rollout para produção seguiu o fluxo normal `staging` -> PR -> checks -> `main`;
 - monitorização normal de erros/limites Simkl passa a fazer parte da manutenção operacional.
 
 ### T1 | Trakt em observação
@@ -595,10 +603,11 @@ Critério de fecho:
 - menos dívida operacional
 - sem quebra de `staging` ou `main`
 
-Estado atual do sprint:
+Estado:
 - Cloudflare confirmado como runtime canónico de produção, preview e estratégia local suportada
 - `npm run dev` migrado para `vite` com proxy `/api/*` para origem Cloudflare configurável
 - legado Netlify removido do fluxo local e do repositório
+- concluído no escopo atual; qualquer alteração futura de runtime requer uma necessidade operacional concreta
 
 ### Sprint C4 | Dados, Import/Export e Snapshots
 
@@ -617,12 +626,13 @@ Critério de fecho:
 - export/sync preservados
 - sem regressão de notas, progresso e biblioteca
 
-Estado atual do sprint:
+Estado:
 - limite explícito para ficheiros de importação
 - notas de utilizador truncadas de forma consistente para evitar payloads descontrolados
 - progresso normalizado com clamp `0..100` em import, migração e sync remoto
 - migração legada de `localStorage` com parsing seguro para JSON inválido
 - snapshots locais/remotos rejeitados quando excedem o tamanho máximo suportado
+- concluído no escopo atual; a cópia independente `B2` continua deliberadamente fora deste sprint
 
 ### Sprint C5 | Acessibilidade Sistemática
 
@@ -638,6 +648,10 @@ Tarefas:
 Critério de fecho:
 - flows principais navegáveis por teclado
 - modais, menu da conta, notificações e detalhes revistos
+
+Estado:
+- concluído no escopo atual;
+- melhorias adicionais de acessibilidade passam a ser tratadas pela manutenção `U1`, quando houver evidência de fricção ou falha concreta.
 
 ### Sprint C6 | Performance de Vistas Densas
 
@@ -655,11 +669,12 @@ Critério de fecho:
 - melhorias guiadas por medição
 - sem regressão visual
 
-Estado atual do sprint:
+Estado:
 - `resize` do header móvel com debounce para evitar trabalho repetido em cascata
 - métricas do dashboard consolidadas num único cálculo por render
 - estatísticas com cache local por ciclo de render para evitar filtros, listas e resumos duplicados
 - removido um render redundante da dashboard no arranque
+- concluído no escopo atual; code-splitting e virtualização mantêm-se condicionais a métricas reais.
 
 ### Sprint C7 | Design System Mínimo
 
@@ -677,13 +692,14 @@ Critério de fecho:
 - menor heterogeneidade entre áreas
 - revisão visual desktop/tablet/mobile aprovada
 
-Estado atual do sprint:
+Estado:
 - empty states consolidados com tipografia e espaçamento coerentes
 - modais principais alinhados por grupos de estilo partilhados em vez de CSS repetido
 - títulos de modais de conta e listas avaliadas com hierarquia visual mais consistente
 - sem redesenho estrutural nem alteração de fluxo
+- concluído no escopo atual; ajustes futuros seguem a manutenção `U1`, não um redesign global.
 
-## Ordem recomendada
+## Sequência concluída de consolidação
 
 1. `C1 Segurança Frontend`
 2. `C2 Endpoints e Hardening`
@@ -810,7 +826,7 @@ Critério de fecho:
 - privilégios diretos de `insert/update` na tabela deixam de ser necessários ao cliente
 - documentação Supabase alinhada com a nova migration
 
-## Fase seguinte
+## Funcionalidade concluída: Fallback editorial de livros
 
 ### F1 | Fallback Editorial de Livros
 
@@ -831,11 +847,12 @@ Critério de fecho:
 - `Presença` mantém fallback rigoroso por `ISBN`
 - `Goodreads` entra apenas quando os providers anteriores deixam lacunas
 
-Estado atual da fase:
+Estado:
 - implementado fallback editorial tardio com Goodreads
 - `Goodreads` entra apenas após `Presença`
 - endpoint `/api/books/fallback` suporta `provider=goodreads` e pesquisa por título
 - frontend reconhece `Goodreads` como origem possível
+- concluído no escopo atual; novas fontes editoriais automáticas exigem prova de valor antes de serem reabertas.
 
 ## Como acompanhar cada sprint
 
