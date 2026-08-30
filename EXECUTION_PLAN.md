@@ -286,7 +286,11 @@ Critério de fecho:
 - o processo de recuperação está documentado e não depende de memória individual.
 
 Estado:
-- planeado; a operação manual semanal pode começar já, sem alteração da app.
+- operação manual iniciada em `2026-08-30`:
+  - pasta de recuperação criada em iCloud Drive;
+  - primeira exportação da biblioteca guardada fora do Supabase e do browser;
+- pendente manter as últimas `4` exportações semanais e executar o primeiro teste trimestral de restauro num browser limpo;
+- backup server-side independente continua uma evolução técnica a avaliar, não uma dependência do processo manual atual.
 
 ## Funcionalidade concluída: Partilha pública de conteúdos
 
