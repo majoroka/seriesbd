@@ -122,6 +122,42 @@ Fora de âmbito:
 Estado:
 - manutenção evolutiva contínua, priorizada após segurança de dados e estabilidade operacional.
 
+### U2 | Conclusão rápida de filmes e livros na pesquisa
+
+Prioridade:
+- próxima intervenção UX planeada; melhora a recuperação de histórico sem alterar providers, Supabase ou o modelo de sync.
+
+Problema observado:
+- os resultados de pesquisa de séries apresentam duas ações: adicionar a `Quero Ver` e adicionar/marcar episódios lançados como vistos;
+- filmes e livros apresentam apenas a ação de adicionar, obrigando a abrir cada detalhe para concluir o conteúdo;
+- esta assimetria torna a recuperação de histórico mais lenta e menos coerente entre tipos de media.
+
+Comportamento a implementar:
+- série:
+  - `+`: adicionar a `Quero Ver`;
+  - `✓✓`: adicionar e marcar os episódios já lançados como vistos, aplicando o lifecycle normal da série;
+- filme:
+  - `+`: adicionar a `Quero Ver`;
+  - `✓`: adicionar, gravar progresso `100%` e mover para `Arquivo`;
+- livro:
+  - `+`: adicionar a `Quero Ver`;
+  - `✓`: adicionar, gravar progresso de leitura `100%` e mover para `Arquivo`.
+
+Regras de segurança e consistência:
+- reutilizar a lógica atual de progresso e transição de secção, sem criar regras especiais por título;
+- respeitar o aviso único de mutação relevante sem sessão iniciada;
+- após a ação, atualizar o resultado para `Na Biblioteca`, sem manter botões desatualizados;
+- não alterar providers, dados remotos, schema Supabase ou a política de sync.
+
+Validação exigida:
+- testes unitários para série, filme e livro nas duas ações rápidas;
+- confirmar para filme/livro progresso `100%`, presença no `Arquivo` e ausência de duplicação;
+- confirmar para série a preservação da lógica por episódios já lançados;
+- validação manual em `staging` com e sem sessão, seguida do fluxo normal `staging` -> PR -> checks -> `main`.
+
+Estado:
+- planeado para a próxima sessão de implementação.
+
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 
 Objetivo:
