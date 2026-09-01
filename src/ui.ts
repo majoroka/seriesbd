@@ -21,6 +21,7 @@ import Chart, { ChartType } from 'chart.js/auto';
 import { Series, TMDbSeriesDetails, TMDbSeason, TMDbCredits, TMDbCrewPerson, SimklData, TraktData, TraktSeason, Episode, Genre, AggregatedSeriesMetadata, MediaType, DashboardNewsItem, NewsMediaTypeHint, ExternalReview } from './types';
 import { createMediaKey, normalizeSeriesCollection } from './media';
 import { createContentShareText, createPublicContentShareUrl, getContentShareDestinations, type ShareableMedia } from './contentShare';
+import { getSearchQuickCompletion } from './searchQuickCompletion';
 import {
     getEffectiveReleasedEpisodeCount,
     getSeriesLibraryStatus as getSeriesLifecycleStatus,
@@ -687,25 +688,24 @@ export function renderSearchResults(resultsList: Series[]) {
         const mediaTypeLabel = getMediaTypeLabel(mediaType);
         const isInLibrary = S.myWatchlist.some(s => s.media_type === mediaType && s.id === series.id)
             || S.myArchive.some(s => s.media_type === mediaType && s.id === series.id);
-        const allowMarkAllSeen = mediaType === 'series';
+        const quickCompletion = getSearchQuickCompletion(mediaType);
         
         const actionButtons = isInLibrary 
             ? el('div', { class: 'search-result-actions' }, [el('span', { class: 'in-library-label' }, ['Na Biblioteca ', el('i', { class: 'fas fa-check-circle' })])])
             : el('div', { class: 'search-result-actions' }, [
                 el('button', {
-                    class: 'v2-action-btn icon-only add-series-quick-btn',
-                    'data-series-id': String(series.id),
+                    class: 'v2-action-btn icon-only add-media-quick-btn',
+                    'data-media-id': String(series.id),
                     'data-media-type': mediaType,
                     title: `Adicionar ${mediaTypeLabel.toLowerCase()} à Biblioteca`
                 }, [el('i', { class: 'fas fa-plus' })]),
-                allowMarkAllSeen
-                    ? el('button', {
-                        class: 'v2-action-btn icon-only mark-all-seen-quick-btn',
-                        'data-series-id': String(series.id),
-                        'data-media-type': mediaType,
-                        title: 'Adicionar e Marcar Tudo Como Visto'
-                    }, [el('i', { class: 'fas fa-check-double' })])
-                    : null
+                el('button', {
+                    class: 'v2-action-btn icon-only complete-media-quick-btn',
+                    'data-media-id': String(series.id),
+                    'data-media-type': mediaType,
+                    title: quickCompletion.title,
+                    'aria-label': quickCompletion.title,
+                }, [el('i', { class: quickCompletion.iconClass })])
             ]);
 
         const item = el('div', { class: 'search-result-item', 'data-series-id': String(series.id), 'data-media-type': mediaType }, [
