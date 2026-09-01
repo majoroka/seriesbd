@@ -155,8 +155,29 @@ Validação exigida:
 - confirmar para série a preservação da lógica por episódios já lançados;
 - validação manual em `staging` com e sem sessão, seguida do fluxo normal `staging` -> PR -> checks -> `main`.
 
+Implementado:
+- resultados de pesquisa de filmes e livros passam a apresentar as duas ações rápidas, à semelhança das séries;
+- a ação de conclusão rápida grava `100%` em filmes/livros e reutiliza a transição normal para `Arquivo`;
+- séries mantêm a marcação de episódios lançados como vistos, sem alterar o lifecycle existente;
+- após qualquer ação rápida, o resultado é renderizado novamente como `Na Biblioteca` para não deixar botões obsoletos;
+- regra partilhada e testável define títulos, ícones e o progresso final por tipo de media.
+
+Validação automática concluída:
+- testes de interface para os dois botões em série, filme e livro;
+- testes para transição de séries por episódios lançados e filmes/livros por progresso `100%`;
+- `npm run verify:release` passou com `120` testes e build/PWA concluídos;
+- `git diff --check` passou;
+- `npx tsc --noEmit` mantém apenas os sete diagnósticos pré-existentes, sem erro novo atribuído ao U2.
+
+Validação manual pendente:
+- em `staging`, pesquisar um filme e um livro ainda fora da biblioteca e confirmar `+` e `✓`;
+- confirmar que `✓` coloca ambos no `Arquivo` com progresso `100%`, sem duplicação;
+- confirmar numa série que `✓✓` preserva a regra de episódios já lançados;
+- repetir ao menos uma ação sem sessão, confirmando o aviso único de persistência local;
+- após validação, seguir `staging` -> PR -> checks -> `main`.
+
 Estado:
-- planeado para a próxima sessão de implementação.
+- implementação e validação automática concluídas em `2026-09-01`; aguarda validação manual em `staging` e rollout controlado.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 

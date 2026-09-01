@@ -21,6 +21,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
 import { createPublicShareMedia, isPublicSharePath, parsePublicShareRoute, type PublicShareRoute } from './publicShare';
 import { copyContentShareUrl, shouldUseNativeContentShare } from './contentShare';
+import { getSearchQuickCompletion } from './searchQuickCompletion';
 import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
@@ -3405,19 +3406,41 @@ async function handleAddAndMarkAllSeen(seriesData: TMDbSeriesDetails, button: HT
     }
 }
 
-async function handleQuickAdd(series: Series, button: HTMLButtonElement) {
+async function handleQuickAdd(series: Series) {
     await addMediaToWatchlist(series);
-    UI.markButtonAsAdded(button, 'Adicionado');
+    UI.renderSearchResults(S.currentSearchResults);
 }
 
-async function handleQuickAddAndMarkAllSeen(series: Series, button: HTMLButtonElement) {
-    if (series.media_type !== 'series') {
-        await addMediaToWatchlist(series);
-        UI.markButtonAsAdded(button, 'Adicionado');
-        return;
+async function handleQuickCompletion(series: Series, button: HTMLButtonElement) {
+    button.disabled = true;
+    const mediaType = series.media_type || 'series';
+    const completion = getSearchQuickCompletion(mediaType);
+
+    try {
+        if (completion.mode === 'released-episodes') {
+            await addAndMarkAllAsSeen(series);
+            await refreshLibraryViewsAfterMediaChange('series');
+            UI.showNotification('Série adicionada e episódios lançados marcados como vistos.');
+        } else {
+            if (mediaType !== 'movie' && mediaType !== 'book') {
+                throw new Error(`Tipo de media não suportado para conclusão rápida: ${mediaType}`);
+            }
+            await addMediaToWatchlist(series);
+            await S.updateMediaProgress(mediaType, series.id, completion.progressPercent);
+            await syncMediaLibrarySectionWithProgress(mediaType, series.id, completion.progressPercent);
+            await refreshLibraryViewsAfterMediaChange(mediaType);
+            UI.showNotification(mediaType === 'movie'
+                ? 'Filme adicionado, marcado como visto e movido para Arquivo.'
+                : 'Livro adicionado, marcado como lido e movido para Arquivo.');
+        }
+
+        // The result immediately reflects the final library state instead of stale action buttons.
+        UI.renderSearchResults(S.currentSearchResults);
+    } catch (error) {
+        console.error('Erro ao concluir conteúdo a partir da pesquisa:', error);
+        UI.showNotification('Não foi possível concluir este conteúdo.');
+        button.disabled = false;
     }
-    await addAndMarkAllAsSeen(series);
-    UI.markButtonAsAdded(button, 'Visto');
 }
 
 async function ensureSeriesInLibraryForEpisodeProgress(seriesId: number): Promise<boolean> {
@@ -4982,24 +5005,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const addSeriesQuickBtn = target.closest('.add-series-quick-btn');
-        if (addSeriesQuickBtn) {
-            const seriesId = parseInt((addSeriesQuickBtn as HTMLElement).dataset.seriesId!, 10);
-            const mediaType = parseMediaType((addSeriesQuickBtn as HTMLElement).dataset.mediaType);
-            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId && s.media_type === mediaType);
+        const addMediaQuickBtn = target.closest('.add-media-quick-btn');
+        if (addMediaQuickBtn) {
+            const mediaId = parseInt((addMediaQuickBtn as HTMLElement).dataset.mediaId!, 10);
+            const mediaType = parseMediaType((addMediaQuickBtn as HTMLElement).dataset.mediaType);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === mediaId && s.media_type === mediaType);
             if (seriesToAdd) {
-                await handleQuickAdd(seriesToAdd, addSeriesQuickBtn as HTMLButtonElement);
+                await handleQuickAdd(seriesToAdd);
             }
             return;
         }
 
-        const markAllSeenQuickBtn = target.closest('.mark-all-seen-quick-btn');
-        if (markAllSeenQuickBtn) {
-            const seriesId = parseInt((markAllSeenQuickBtn as HTMLElement).dataset.seriesId!, 10);
-            const mediaType = parseMediaType((markAllSeenQuickBtn as HTMLElement).dataset.mediaType);
-            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === seriesId && s.media_type === mediaType);
+        const completeMediaQuickBtn = target.closest('.complete-media-quick-btn');
+        if (completeMediaQuickBtn) {
+            const mediaId = parseInt((completeMediaQuickBtn as HTMLElement).dataset.mediaId!, 10);
+            const mediaType = parseMediaType((completeMediaQuickBtn as HTMLElement).dataset.mediaType);
+            const seriesToAdd = S.currentSearchResults.find((s: Series) => s.id === mediaId && s.media_type === mediaType);
             if (seriesToAdd) {
-                await handleQuickAddAndMarkAllSeen(seriesToAdd, markAllSeenQuickBtn as HTMLButtonElement);
+                await handleQuickCompletion(seriesToAdd, completeMediaQuickBtn as HTMLButtonElement);
             }
             return;
         }
