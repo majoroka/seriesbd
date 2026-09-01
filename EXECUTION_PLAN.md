@@ -176,7 +176,7 @@ Validação manual concluída:
 - não foram detetados erros na validação manual.
 
 Rollout pendente:
-- abrir PR de `staging` para `main`, aguardar os checks obrigatórios e fazer merge.
+- incluir `U2` e `U3` no mesmo PR de `staging` para `main`, aguardar os checks obrigatórios e fazer merge.
 
 Estado:
 - pronto para rollout controlado em `main` após validação manual concluída em `2026-09-01`.
@@ -198,12 +198,13 @@ Validação automática:
 - `npm run verify:release` passou com `120` testes e build/PWA concluídos;
 - `git diff --check` passou.
 
-Validação manual pendente:
-- confirmar em telemóvel episódios com data, títulos longos e estados visto/não visto;
-- confirmar em desktop que a lista mantém exatamente a apresentação anterior.
+Validação manual concluída:
+- em `staging`, confirmada a data após `SxxExx`, seguida de título e ícone de sinopse na linha seguinte;
+- títulos, estados visto/não visto e acesso à sinopse funcionam sem regressão;
+- desktop mantém a apresentação anterior.
 
 Estado:
-- implementado em `staging`; aguarda validação manual e rollout normal.
+- validado em `staging`; pronto para rollout conjunto com `U2` no fluxo normal.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 
