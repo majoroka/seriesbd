@@ -181,6 +181,30 @@ Rollout pendente:
 Estado:
 - pronto para rollout controlado em `main` após validação manual concluída em `2026-09-01`.
 
+### U3 | Data de episódio na lista mobile
+
+Problema observado:
+- a lista desktop apresenta data, duração, título e acesso à sinopse em colunas;
+- em ecrãs móveis, a data era ocultada apesar de já estar disponível no episódio, reduzindo o contexto de episódios lançados e futuros.
+
+Implementado:
+- exclusivamente até ao breakpoint `768px`, cada cartão de episódio apresenta:
+  - código `SxxExx` e data de exibição na primeira linha;
+  - título e ícone de sinopse na linha seguinte;
+- o estado visto/não visto, imagem, modal de sinopse e duração oculta mantêm a lógica anterior;
+- desktop e tablet acima de `768px` permanecem inalterados.
+
+Validação automática:
+- `npm run verify:release` passou com `120` testes e build/PWA concluídos;
+- `git diff --check` passou.
+
+Validação manual pendente:
+- confirmar em telemóvel episódios com data, títulos longos e estados visto/não visto;
+- confirmar em desktop que a lista mantém exatamente a apresentação anterior.
+
+Estado:
+- implementado em `staging`; aguarda validação manual e rollout normal.
+
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 
 Objetivo:

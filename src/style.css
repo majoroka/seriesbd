@@ -5518,24 +5518,47 @@ body.light-theme .network-logo {
         display: none;
     }
     .episode-item {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1rem;
-        grid-template-columns: none;
+        display: grid;
+        grid-template-columns: 2.25rem max-content minmax(0, 1fr) auto;
+        grid-template-areas:
+            "still still still still"
+            "status number date date"
+            "status title title actions";
+        gap: 0.5rem 0.75rem;
         padding: 1rem;
     }
     .episode-still {
-        flex-basis: 100%;
+        grid-area: still;
         width: 100%;
         height: auto;
         margin-bottom: 0.75rem;
-        order: -1;
+    }
+    .status-icon {
+        grid-area: status;
+        align-self: center;
+    }
+    .episode-number {
+        grid-area: number;
+        align-self: center;
+    }
+    .episode-air-date {
+        display: block;
+        grid-area: date;
+        align-self: center;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--text-secondary);
     }
     .episode-title {
-        flex-grow: 1;
+        grid-area: title;
+        min-width: 0;
+        margin: 0;
     }
     .episode-actions {
-        margin-left: auto;
+        grid-area: actions;
+        margin-left: 0;
+        align-self: center;
     }
     .episode-runtime {
         display: none;
