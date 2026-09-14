@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Series, WatchedStateItem, UserDataItem, KVStoreItem, SeasonCacheItem } from './types';
+import { EpisodeMetadataFallbackCacheItem, Series, WatchedStateItem, UserDataItem, KVStoreItem, SeasonCacheItem } from './types';
 import { createMediaKey, parseMediaKey } from './media';
 
 export class MySubClassedDexie extends Dexie {
@@ -9,6 +9,7 @@ export class MySubClassedDexie extends Dexie {
   userData!: Table<UserDataItem>;
   kvStore!: Table<KVStoreItem>;
   seasonCache!: Table<SeasonCacheItem, [number, number]>;
+  episodeMetadataCache!: Table<EpisodeMetadataFallbackCacheItem, [number, number]>;
 
   constructor() {
     super('seriesDB');
@@ -57,6 +58,15 @@ export class MySubClassedDexie extends Dexie {
         record.media_key = createMediaKey(parsed.media_type, parsed.media_id);
         record.seriesId = parsed.media_id;
       });
+    });
+    this.version(5).stores({
+      watchlist: 'id, media_type, [media_type+id]',
+      archive: 'id, media_type, [media_type+id]',
+      watchedState: '[seriesId+episodeId], media_key, media_type, media_id, episodeId',
+      userData: 'seriesId, media_key, media_type, media_id',
+      kvStore: 'key',
+      seasonCache: '[seriesId+seasonNumber]',
+      episodeMetadataCache: '[seriesId+seasonNumber], cachedAt',
     });
   }
 }

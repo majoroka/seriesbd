@@ -3823,7 +3823,20 @@ function createSeasonElement(seriesData: Series, seasonData: TMDbSeason, traktEp
     ]);
     const episodeListContainer = detailsElement.querySelector<HTMLDivElement>('.episode-list');
     if (episodeListContainer) renderEpisodeList(seasonData.episodes, episodeListContainer, seriesData.id, seriesData.poster_path, traktSeasonPosters, traktEpisodes);
+    detailsElement.addEventListener('toggle', () => {
+        if (!detailsElement.open) return;
+        document.dispatchEvent(new CustomEvent('mediadex:season-opened', {
+            detail: { seriesId: seriesData.id, seasonNumber },
+        }));
+    });
     return detailsElement;
+}
+
+export function refreshSeasonEpisodeMetadata(seriesData: Series, seasonData: TMDbSeason): void {
+    const selector = `.season-details[data-series-id="${seriesData.id}"][data-season-number="${seasonData.season_number}"] .episode-list`;
+    const episodeListContainer = DOM.seriesViewSection.querySelector<HTMLElement>(selector);
+    if (!episodeListContainer) return;
+    renderEpisodeList(seasonData.episodes, episodeListContainer, seriesData.id, seriesData.poster_path, {}, []);
 }
 
 function renderEpisodeList(episodes: Episode[], container: HTMLElement, seriesId: number, seriesPosterPath: string | null, traktSeasonPosters: { [key: number]: { thumb?: string, full?: string } }, traktEpisodes: { number: number; overview: string | null }[]) {

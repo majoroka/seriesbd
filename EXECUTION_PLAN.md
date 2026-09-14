@@ -24,6 +24,7 @@ Objetivo:
 - Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
 - Partilha pública `S1-S5` concluída e integrada em `main` pelo PR `#83`, com rotas públicas, Open Graph e rollout validado
 - Integração Simkl concluída e ativa como provider opcional de enriquecimento para séries e filmes
+- U4 implementado localmente: fallback lazy e cacheado de sinopses de episódios por temporada, pendente de validação em `staging`
 
 ## Resumo executivo
 
@@ -102,6 +103,7 @@ O foco atual é manutenção evolutiva controlada:
 2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
 3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
 4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
+5. **U4 sinopses de episódios:** validar em `staging` os fallbacks por temporada antes do rollout para `main`.
 
 ### U1 | Atualização pontual UX/UI
 
@@ -205,6 +207,70 @@ Validação manual concluída:
 
 Estado:
 - validado em `staging`; pronto para rollout conjunto com `U2` no fluxo normal.
+
+### U4 | Sinopses de episódios com fallbacks por temporada
+
+Prioridade:
+- melhoria de qualidade de dados para séries, implementada e pendente de validação controlada em `staging`.
+
+Problema confirmado:
+- o proxy TMDb usa `pt-PT` por predefinição;
+- há temporadas com episódios já lançados cuja resposta PT-PT devolve títulos genéricos e sinopses vazias;
+- exemplo validado: `FROM` (TMDb `124364`), temporada `4`, sem sinopses em PT-PT mas com os dez episódios completos em inglês no TMDb e no TVMaze;
+- a integração atual usa TMDb por episódio e Trakt como único fallback; TVMaze e Simkl enriquecem apenas o detalhe global da série;
+- o Trakt responde atualmente `403`, pelo que não pode ser tratado como fonte fiável principal.
+
+Objetivo:
+- maximizar a cobertura de sinopses de episódios já lançados sem alterar IDs TMDb, progresso, estado visto, datas, imagens ou a origem dos dados pessoais;
+- não prometer cobertura absoluta quando nenhum provider publicou uma sinopse.
+
+Hierarquia de fontes por episódio:
+1. TMDb `pt-PT`, sempre a fonte principal de episódios;
+2. TMDb `en-US`, apenas para preencher título ou sinopse ausentes no registo PT-PT;
+3. TVMaze, apenas quando os dois dados TMDb não tiverem uma sinopse útil e existir match confiável da série;
+4. Trakt, último fallback e apenas se voltar a responder com sucesso e houver match confiável;
+5. Simkl fica fora desta primeira versão: a integração atual não expõe episódios e só será avaliado como fallback após confirmar um endpoint público adequado, cobertura e limites.
+
+Regras de segurança e qualidade:
+- tratar como lacuna apenas texto vazio, placeholder ou título genérico; nunca substituir uma sinopse PT-PT existente;
+- associar fallbacks estritamente por `season_number` e `episode_number`, confirmando a data de exibição quando estiver disponível;
+- rejeitar candidatos com season/episódio/data incompatíveis, em vez de mostrar uma sinopse errada;
+- carregar fallbacks apenas quando o utilizador expandir uma temporada que contém lacunas, nunca por episódio nem antecipadamente para todas as temporadas;
+- guardar em cache o resultado enriquecido e a origem de cada campo, sem confundir a resposta PT-PT com a variante `en-US`;
+- não executar retries automáticos em `429`; em `403` do Trakt, aplicar cooldown e seguir silenciosamente para as fontes restantes;
+- episódios futuros sem conteúdo publicado devem indicar `Sinopse ainda não divulgada`; episódios já lançados sem fontes úteis indicam `Sinopse não disponível nas fontes consultadas`.
+
+Implementado:
+- versão Dexie `5` com cache local separado por série/temporada para resultados já enriquecidos; a cache base PT-PT não é misturada com a variante `en-US`;
+- deteção de lacunas apenas em episódios já lançados, sem pedir dados externos para episódios futuros ou temporadas completas;
+- carregamento lazy ao expandir cada temporada: TMDb `en-US`, seguido de TVMaze apenas se ainda houver lacunas, e Trakt apenas como último fallback;
+- fusão estrita por número de episódio e data de exibição quando ambos os providers a fornecem; dados PT-PT existentes nunca são substituídos;
+- a lista de episódios é atualizada sem recarregar todo o detalhe, preservando a temporada aberta, o progresso e o estado visto;
+- o proxy TVMaze aceita apenas o resolver existente e o endpoint de episódios necessário;
+- respostas `401`, `403` e `429` do Trakt ativam cooldown de 15 minutos, evitando tentativas repetidas enquanto a fonte está indisponível.
+
+Validação automática concluída:
+- testes unitários para episódios já lançados/futuros, fusão sem substituir PT-PT e rejeição de datas incompatíveis;
+- testes de cliente para a sequência TMDb `en-US` -> TVMaze;
+- `npm run test:run` passou com `125` testes;
+- `npm run build` passou, incluindo geração PWA;
+- `git diff --check` passou.
+
+Validação manual pendente:
+- em `staging`, abrir `FROM`, temporada `4`, e confirmar que as sinopses disponíveis aparecem após expandir a temporada;
+- confirmar uma temporada com sinopse PT-PT existente: não deve ser feito pedido adicional de fallback;
+- confirmar uma temporada futura: deve manter o estado normal sem pedido de fallback;
+- marcar/desmarcar um episódio e confirmar que progresso, lifecycle e interface mobile/desktop não regressaram.
+
+Critério de fecho:
+- FROM temporada 4 apresenta as sinopses disponíveis sem depender do Trakt;
+- uma série com sinopse PT-PT mantém o texto PT-PT sem pedidos adicionais;
+- nenhuma sinopse é associada ao episódio errado;
+- falhas, limites ou indisponibilidade de um provider não impedem o detalhe de abrir;
+- progresso, marcações vistas e lifecycle das séries permanecem inalterados.
+
+Estado:
+- implementado localmente em `2026-09-14`; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 

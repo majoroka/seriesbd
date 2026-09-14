@@ -16,7 +16,7 @@ import {
 import { db } from './db';
 import { registerSW } from 'virtual:pwa-register';
 import type { AuthChangeEvent, User } from '@supabase/supabase-js';
-import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, KVStoreItem, MediaType } from './types';
+import { Series, Episode, TMDbPerson, WatchedStateItem, UserDataItem, TMDbSeriesDetails, TMDbSeason, KVStoreItem, MediaType } from './types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookId, toScopedMovieId } from './media';
 import { createPublicShareMedia, isPublicSharePath, parsePublicShareRoute, type PublicShareRoute } from './publicShare';
@@ -119,6 +119,12 @@ type AppNotification = {
     isRead: boolean;
 };
 type NotificationReadState = Record<string, string[]>;
+type EpisodeMetadataFallbackContext = {
+    seriesData: TMDbSeriesDetails;
+    seasonsByNumber: Map<number, TMDbSeason>;
+    tvmazeShowId?: number;
+    traktId?: number;
+};
 
 const sectionFailureMetrics: Record<string, FailureMetric> = {};
 const sectionPerformanceMetrics: Record<string, PerformanceMetric> = {};
@@ -130,6 +136,8 @@ let passwordRecoveryCallbackDetected = false;
 let profileFormBusy = false;
 let currentAuthenticatedUserId: string | null = null;
 let currentDetailedSeriesData: TMDbSeriesDetails | null = null;
+let currentEpisodeMetadataFallbackContext: EpisodeMetadataFallbackContext | null = null;
+const episodeMetadataFallbackLoading = new Set<string>();
 let publicShareRoute: PublicShareRoute | null = null;
 let isPublicShareEntry = false;
 let librarySyncTimer: number | null = null;
@@ -2240,13 +2248,14 @@ async function clearLocalDeviceData() {
             setAuthenticatedUi(null);
         }
 
-        await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData, db.kvStore, db.seasonCache], async () => {
+        await db.transaction('rw', [db.watchlist, db.archive, db.watchedState, db.userData, db.kvStore, db.seasonCache, db.episodeMetadataCache], async () => {
             await db.watchlist.clear();
             await db.archive.clear();
             await db.watchedState.clear();
             await db.userData.clear();
             await db.kvStore.clear();
             await db.seasonCache.clear();
+            await db.episodeMetadataCache.clear();
         });
 
         clearSeriesDbWebStorage();
@@ -2914,12 +2923,47 @@ async function handleContentShare(button: HTMLElement): Promise<void> {
     setContentShareMenuOpen(menu?.hidden !== false);
 }
 
+async function hydrateOpenedSeasonEpisodeMetadata(seriesId: number, seasonNumber: number): Promise<void> {
+    const context = currentEpisodeMetadataFallbackContext;
+    if (!context || context.seriesData.id !== seriesId || currentDetailedSeriesData?.id !== seriesId) return;
+
+    const seasonData = context.seasonsByNumber.get(seasonNumber);
+    if (!seasonData) return;
+
+    const key = `${seriesId}:${seasonNumber}`;
+    if (episodeMetadataFallbackLoading.has(key)) return;
+    episodeMetadataFallbackLoading.add(key);
+
+    try {
+        const enrichedEpisodes = await API.enrichSeasonEpisodesWithFallbacks(
+            seriesId,
+            seasonNumber,
+            seasonData.episodes,
+            {
+                tvmazeShowId: context.tvmazeShowId,
+                traktId: context.traktId,
+                signal: S.detailViewAbortController.signal,
+            },
+        );
+        if (currentDetailedSeriesData?.id !== seriesId) return;
+
+        seasonData.episodes = enrichedEpisodes;
+        UI.refreshSeasonEpisodeMetadata(context.seriesData as unknown as Series, seasonData);
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        console.warn('[episodes] Não foi possível enriquecer os metadados da temporada.', { seriesId, seasonNumber, error });
+    } finally {
+        episodeMetadataFallbackLoading.delete(key);
+    }
+}
+
 
 
 async function displaySeriesDetails(seriesId: number, options: { isPublicView?: boolean } = {}) {
     const isPublicView = options.isPublicView === true;
     S.resetDetailViewAbortController();
     currentDetailedSeriesData = null;
+    currentEpisodeMetadataFallbackContext = null;
     const signal = S.detailViewAbortController.signal;
 
     try {
@@ -3035,16 +3079,14 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                 });
                 const seasonsToFetch = isPublicView ? [] : seriesData.seasons.filter(s => s.season_number !== 0);
                 const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
-                const traktSeasonPromise = isPublicView ? Promise.resolve(null) : API.fetchTraktSeasonsData(traktId, signal);
                 const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
                     if (error instanceof Error && error.name === 'AbortError') throw error;
                     console.warn('Falha ao carregar reviews externas da série.', error);
                     return [];
                 });
 
-                const [seasonResults, traktSeasonsData, aggregatedSeriesData, externalReviews] = await Promise.all([
+                const [seasonResults, aggregatedSeriesData, externalReviews] = await Promise.all([
                     Promise.allSettled(seasonPromises),
-                    traktSeasonPromise,
                     aggregatedMetadataPromise,
                     externalReviewsPromise,
                 ]);
@@ -3064,6 +3106,15 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                 const allTMDbSeasonsData = seasonResults
                     .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
                     .map(res => res.value);
+
+                if (!isPublicView) {
+                    currentEpisodeMetadataFallbackContext = {
+                        seriesData,
+                        seasonsByNumber: new Map(allTMDbSeasonsData.map((season) => [season.season_number, season])),
+                        tvmazeShowId: aggregatedSeriesData?.tvmazeData?.show?.id,
+                        traktId,
+                    };
+                }
                 const authoritativeTotalEpisodes = allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || season.episode_count || 0), 0);
                 if (!isPublicView && authoritativeTotalEpisodes > 0) {
                     seriesData.total_episodes = authoritativeTotalEpisodes;
@@ -3097,7 +3148,7 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                     });
                 }
 
-                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, simklSeriesData, traktSeasonsData, aggregatedSeriesData, externalReviews, { isPublicView });
+                UI.renderSeriesDetails(seriesData, allTMDbSeasonsData, creditsData, traktSeriesData, simklSeriesData, null, aggregatedSeriesData, externalReviews, { isPublicView });
                 if (!isPublicView) await setupDetailViewActions(seriesData);
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') return;
@@ -4737,6 +4788,13 @@ async function loadPremieresSeries(loadMore = false, mediaType: SubmenuMediaTarg
 document.addEventListener('DOMContentLoaded', () => {
     setPendingConfirmationEmail(window.localStorage.getItem(PENDING_CONFIRMATION_EMAIL_STORAGE_KEY));
     UI.initModalAccessibility();
+    document.addEventListener('mediadex:season-opened', (event) => {
+        const detail = (event as CustomEvent<{ seriesId?: number; seasonNumber?: number }>).detail;
+        const seriesId = Number(detail?.seriesId);
+        const seasonNumber = Number(detail?.seasonNumber);
+        if (!Number.isInteger(seriesId) || !Number.isInteger(seasonNumber)) return;
+        void hydrateOpenedSeasonEpisodeMetadata(seriesId, seasonNumber);
+    });
     document.addEventListener(S.STATE_MUTATION_EVENT_NAME, () => {
         scheduleLibrarySnapshotSyncFromLocalMutation();
         UI.renderMediaDashboard();
