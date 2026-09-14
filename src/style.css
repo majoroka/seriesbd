@@ -5196,12 +5196,23 @@ body.light-theme .network-logo {
         display: none;
     }
 
-    .mobile-topbar-controls > .notifications-menu-wrapper .notifications-menu,
     .mobile-topbar-panel .settings-menu {
         position: absolute;
         top: calc(100% + 0.5rem);
         right: 0;
         left: auto;
+    }
+
+    /* The bell sits at the right edge on mobile, so an absolute wide panel can
+       extend past the left viewport edge. Anchor notifications to the viewport. */
+    .mobile-topbar-controls > .notifications-menu-wrapper .notifications-menu {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
+        right: max(0.75rem, env(safe-area-inset-right, 0px));
+        left: max(0.75rem, env(safe-area-inset-left, 0px));
+        width: auto;
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 5.5rem);
+        box-sizing: border-box;
     }
 
     .mobile-topbar-panel .settings-menu {
