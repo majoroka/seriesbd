@@ -206,6 +206,55 @@ Validação manual concluída:
 Estado:
 - validado em `staging`; pronto para rollout conjunto com `U2` no fluxo normal.
 
+### U4 | Sinopses de episódios com fallbacks por temporada
+
+Prioridade:
+- próxima melhoria de qualidade de dados para séries, após fechar o rollout pendente de `U2` e `U3`.
+
+Problema confirmado:
+- o proxy TMDb usa `pt-PT` por predefinição;
+- há temporadas com episódios já lançados cuja resposta PT-PT devolve títulos genéricos e sinopses vazias;
+- exemplo validado: `FROM` (TMDb `124364`), temporada `4`, sem sinopses em PT-PT mas com os dez episódios completos em inglês no TMDb e no TVMaze;
+- a integração atual usa TMDb por episódio e Trakt como único fallback; TVMaze e Simkl enriquecem apenas o detalhe global da série;
+- o Trakt responde atualmente `403`, pelo que não pode ser tratado como fonte fiável principal.
+
+Objetivo:
+- maximizar a cobertura de sinopses de episódios já lançados sem alterar IDs TMDb, progresso, estado visto, datas, imagens ou a origem dos dados pessoais;
+- não prometer cobertura absoluta quando nenhum provider publicou uma sinopse.
+
+Hierarquia de fontes por episódio:
+1. TMDb `pt-PT`, sempre a fonte principal de episódios;
+2. TMDb `en-US`, apenas para preencher título ou sinopse ausentes no registo PT-PT;
+3. TVMaze, apenas quando os dois dados TMDb não tiverem uma sinopse útil e existir match confiável da série;
+4. Trakt, último fallback e apenas se voltar a responder com sucesso e houver match confiável;
+5. Simkl fica fora desta primeira versão: a integração atual não expõe episódios e só será avaliado como fallback após confirmar um endpoint público adequado, cobertura e limites.
+
+Regras de segurança e qualidade:
+- tratar como lacuna apenas texto vazio, placeholder ou título genérico; nunca substituir uma sinopse PT-PT existente;
+- associar fallbacks estritamente por `season_number` e `episode_number`, confirmando a data de exibição quando estiver disponível;
+- rejeitar candidatos com season/episódio/data incompatíveis, em vez de mostrar uma sinopse errada;
+- carregar fallbacks apenas quando o utilizador expandir uma temporada que contém lacunas, nunca por episódio nem antecipadamente para todas as temporadas;
+- guardar em cache o resultado enriquecido e a origem de cada campo, sem confundir a resposta PT-PT com a variante `en-US`;
+- não executar retries automáticos em `429`; em `403` do Trakt, aplicar cooldown e seguir silenciosamente para as fontes restantes;
+- episódios futuros sem conteúdo publicado devem indicar `Sinopse ainda não divulgada`; episódios já lançados sem fontes úteis indicam `Sinopse não disponível nas fontes consultadas`.
+
+Sprints propostos:
+1. **U4.1 Contrato e cache:** criar o modelo normalizado de sinopse de episódio, deteção de lacunas, mapeamento seguro e cache de fallback por temporada/idioma.
+2. **U4.2 TMDb EN lazy:** ao expandir uma temporada incompleta, pedir uma única vez a versão `en-US`, fundir apenas campos vazios e atualizar essa temporada sem recarregar todo o detalhe.
+3. **U4.3 TVMaze seletivo:** expor no proxy somente o endpoint de episódios necessário, usar o `tvmazeId` já resolvido e preencher apenas lacunas restantes após validação estrita.
+4. **U4.4 Trakt degradado:** mover Trakt para último fallback, com cooldown para `403` e sem bloquear a renderização nem gerar ruído repetido na consola.
+5. **U4.5 Testes e rollout:** fixtures para PT vazio/EN disponível, TMDb vazio/TVMaze disponível, match incompatível, episódio futuro e indisponibilidade de providers; validação em `staging`, PR, checks obrigatórios e merge.
+
+Critério de fecho:
+- FROM temporada 4 apresenta as sinopses disponíveis sem depender do Trakt;
+- uma série com sinopse PT-PT mantém o texto PT-PT sem pedidos adicionais;
+- nenhuma sinopse é associada ao episódio errado;
+- falhas, limites ou indisponibilidade de um provider não impedem o detalhe de abrir;
+- progresso, marcações vistas e lifecycle das séries permanecem inalterados.
+
+Estado:
+- planeado, sem implementação de código.
+
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 
 Objetivo:
