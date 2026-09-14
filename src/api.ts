@@ -2,6 +2,12 @@ import { db } from "./db";
 import { SEASON_CACHE_DURATION } from "./constants";
 import { fetchWithRetry } from "./utils";
 import {
+    hasMissingAiredEpisodeSynopsis,
+    mergeEpisodeMetadataFallback,
+    normalizeEpisodeText,
+    type EpisodeMetadataCandidate,
+} from './episodeMetadata';
+import {
     Series,
     ExternalReview,
     DashboardNewsItem,
@@ -16,6 +22,8 @@ import {
     AggregatedSeriesMetadata,
     AggregatedOverviewCandidate,
     ProviderSource,
+    Episode,
+    EpisodeMetadataSource,
 } from "./types";
 import { fromScopedMovieId, normalizeSeries, normalizeSeriesCollection, toScopedBookId, toScopedMovieId } from "./media";
 
@@ -26,6 +34,8 @@ const API_BASE_TVMAZE = '/api/tvmaze';
 const API_BASE_NEWS = '/api/news';
 const RETRY_FAST = { retries: 2, backoff: 250 };
 const RETRY_STANDARD = { retries: 2, backoff: 500 };
+const TRAKT_UNAVAILABLE_COOLDOWN_MS = 15 * 60 * 1000;
+let traktUnavailableUntil = 0;
 type DiscoverPremieresOptions = {
     fromDate?: string;
     sortBy?: string;
@@ -852,6 +862,8 @@ export async function fetchTraktData(
         }
     };
 
+    if (Date.now() < traktUnavailableUntil) return null;
+
     try {
         let selectedShow: any = null;
         let selectedMethod: 'imdb' | 'tmdb' | 'name-year' | null = null;
@@ -870,6 +882,7 @@ export async function fetchTraktData(
                         selectedScore = 2;
                     }
                 } else if (imdbResponse.status !== 404) {
+                    noteTraktUnavailable(imdbResponse.status);
                     console.warn(`[match][trakt] IMDb lookup returned status ${imdbResponse.status}`, { tmdbId, fallbackImdbId });
                 }
             } catch (error) {
@@ -891,6 +904,7 @@ export async function fetchTraktData(
                         selectedScore = matchByTmdb ? 1.8 : 1.1;
                     }
                 } else if (tmdbResponse.status !== 404) {
+                    noteTraktUnavailable(tmdbResponse.status);
                     console.warn(`[match][trakt] TMDb lookup returned status ${tmdbResponse.status}`, { tmdbId });
                 }
             } catch (error) {
@@ -906,7 +920,10 @@ export async function fetchTraktData(
                 try {
                     const queryUrl = `${API_BASE_TRAKT}/search/show?query=${encodeURIComponent(query)}&extended=full`;
                     const queryResponse = await fetch(queryUrl, { signal });
-                    if (!queryResponse.ok) continue;
+                    if (!queryResponse.ok) {
+                        noteTraktUnavailable(queryResponse.status);
+                        continue;
+                    }
                     const queryResults = await queryResponse.json() as any[];
                     if (!Array.isArray(queryResults) || queryResults.length === 0) continue;
 
@@ -982,6 +999,7 @@ export async function fetchTraktData(
             if (showDetailsResponse.ok) {
                 fullShowData = await showDetailsResponse.json();
             } else {
+                noteTraktUnavailable(showDetailsResponse.status);
                 console.warn(`Trakt show details returned status ${showDetailsResponse.status}. Using fallback show data.`, {
                     tmdbId,
                     traktId,
@@ -999,6 +1017,7 @@ export async function fetchTraktData(
             try {
                 const ratingsUrl = `${API_BASE_TRAKT}/shows/${traktId}/ratings`;
                 const ratingsResponse = await fetch(ratingsUrl, { signal });
+                if (!ratingsResponse.ok) noteTraktUnavailable(ratingsResponse.status);
                 ratings = ratingsResponse.ok ? await ratingsResponse.json() : null;
             } catch (e) {
                 console.warn('Could not fetch Trakt ratings endpoint, using show details fallback if available.');
@@ -1394,11 +1413,14 @@ export async function fetchAggregatedSeriesMetadata({
  * @returns {Promise<Array|null>} A promise that resolves to an array of season objects or null.
  */
 export async function fetchTraktSeasonsData(traktId: number | undefined, signal: AbortSignal | null): Promise<TraktSeason[] | null> {
-    if (!traktId) return null;
+    if (!traktId || Date.now() < traktUnavailableUntil) return null;
     try { 
         const url = `${API_BASE_TRAKT}/shows/${traktId}/seasons?extended=full,episodes,images`;
         const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
-        if (!response.ok) return null;
+        if (!response.ok) {
+            noteTraktUnavailable(response.status);
+            return null;
+        }
         return await response.json();
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -1439,6 +1461,132 @@ export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: 
     });
 
     return seasonData;
+}
+
+function noteTraktUnavailable(status: number): void {
+    if (![401, 403, 429].includes(status)) return;
+    const wasAvailable = Date.now() >= traktUnavailableUntil;
+    traktUnavailableUntil = Date.now() + TRAKT_UNAVAILABLE_COOLDOWN_MS;
+    if (wasAvailable) {
+        console.warn('[trakt] Fonte temporariamente indisponível; a app continuará com TMDb, Simkl e TVMaze.', { status });
+    }
+}
+
+async function fetchTMDbSeasonByLanguage(
+    seriesId: number,
+    seasonNumber: number,
+    language: string,
+    signal: AbortSignal | null,
+): Promise<Episode[]> {
+    const url = `${API_BASE_TMDB}/tv/${seriesId}/season/${seasonNumber}?language=${encodeURIComponent(language)}`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) return [];
+    const data = await response.json() as TMDbSeason;
+    return Array.isArray(data.episodes) ? data.episodes : [];
+}
+
+type TVMazeEpisodeResponse = {
+    season?: number;
+    number?: number;
+    airdate?: string | null;
+    name?: string | null;
+    summary?: string | null;
+};
+
+async function fetchTVMazeSeasonEpisodeMetadata(
+    tvmazeShowId: number,
+    seasonNumber: number,
+    signal: AbortSignal | null,
+): Promise<EpisodeMetadataCandidate[]> {
+    const url = `${API_BASE_TVMAZE}/shows/${tvmazeShowId}/episodes?specials=1`;
+    const response = await fetchWithRetry(url, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
+    if (!response.ok) return [];
+    const data = await response.json() as TVMazeEpisodeResponse[];
+    if (!Array.isArray(data)) return [];
+    return data
+        .filter((episode) => episode.season === seasonNumber && Number.isInteger(episode.number) && Number(episode.number) > 0)
+        .map((episode) => ({
+            episode_number: Number(episode.number),
+            air_date: String(episode.airdate || ''),
+            name: normalizeEpisodeText(episode.name),
+            overview: normalizeEpisodeText(episode.summary),
+        }));
+}
+
+function toEpisodeMetadataCandidates(episodes: Episode[]): EpisodeMetadataCandidate[] {
+    return episodes.map((episode) => ({
+        episode_number: episode.episode_number,
+        air_date: episode.air_date,
+        name: normalizeEpisodeText(episode.name),
+        overview: normalizeEpisodeText(episode.overview),
+    }));
+}
+
+/**
+ * Enriches one already-open season only. PT-PT TMDb remains canonical; sources
+ * below only fill missing generic titles and absent synopses.
+ */
+export async function enrichSeasonEpisodesWithFallbacks(
+    seriesId: number,
+    seasonNumber: number,
+    baseEpisodes: Episode[],
+    options: { tvmazeShowId?: number; traktId?: number; signal: AbortSignal | null },
+): Promise<Episode[]> {
+    if (!hasMissingAiredEpisodeSynopsis(baseEpisodes)) return baseEpisodes;
+
+    const cacheKey: [number, number] = [seriesId, seasonNumber];
+    const cached = await db.episodeMetadataCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < SEASON_CACHE_DURATION) {
+        return cached.data;
+    }
+
+    let enrichedEpisodes = baseEpisodes.map((episode) => ({ ...episode }));
+    const attemptedSources: EpisodeMetadataSource[] = [];
+
+    try {
+        attemptedSources.push('tmdb-en');
+        const tmdbEnglishEpisodes = await fetchTMDbSeasonByLanguage(seriesId, seasonNumber, 'en-US', options.signal);
+        enrichedEpisodes = mergeEpisodeMetadataFallback(enrichedEpisodes, toEpisodeMetadataCandidates(tmdbEnglishEpisodes));
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.warn('[episodes] Fallback TMDb en-US indisponível.', { seriesId, seasonNumber, error });
+    }
+
+    if (hasMissingAiredEpisodeSynopsis(enrichedEpisodes) && options.tvmazeShowId) {
+        try {
+            attemptedSources.push('tvmaze');
+            const tvmazeEpisodes = await fetchTVMazeSeasonEpisodeMetadata(options.tvmazeShowId, seasonNumber, options.signal);
+            enrichedEpisodes = mergeEpisodeMetadataFallback(enrichedEpisodes, tvmazeEpisodes);
+        } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('[episodes] Fallback TVMaze indisponível.', { seriesId, seasonNumber, error });
+        }
+    }
+
+    if (hasMissingAiredEpisodeSynopsis(enrichedEpisodes) && options.traktId) {
+        try {
+            attemptedSources.push('trakt');
+            const traktSeasons = await fetchTraktSeasonsData(options.traktId, options.signal);
+            const traktEpisodes = traktSeasons?.find((season) => season.number === seasonNumber)?.episodes || [];
+            enrichedEpisodes = mergeEpisodeMetadataFallback(enrichedEpisodes, traktEpisodes.map((episode) => ({
+                episode_number: episode.number,
+                air_date: '',
+                overview: normalizeEpisodeText(episode.overview),
+            })));
+        } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('[episodes] Fallback Trakt indisponível.', { seriesId, seasonNumber, error });
+        }
+    }
+
+    await db.episodeMetadataCache.put({
+        seriesId,
+        seasonNumber,
+        data: enrichedEpisodes,
+        cachedAt: Date.now(),
+        attemptedSources,
+    });
+    return enrichedEpisodes;
 }
 
 /**

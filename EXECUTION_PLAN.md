@@ -24,6 +24,7 @@ Objetivo:
 - Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
 - Partilha pública `S1-S5` concluída e integrada em `main` pelo PR `#83`, com rotas públicas, Open Graph e rollout validado
 - Integração Simkl concluída e ativa como provider opcional de enriquecimento para séries e filmes
+- U4 implementado localmente: fallback lazy e cacheado de sinopses de episódios por temporada, pendente de validação em `staging`
 
 ## Resumo executivo
 
@@ -102,6 +103,7 @@ O foco atual é manutenção evolutiva controlada:
 2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
 3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
 4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
+5. **U4 sinopses de episódios:** validar em `staging` os fallbacks por temporada antes do rollout para `main`.
 
 ### U1 | Atualização pontual UX/UI
 
@@ -209,7 +211,7 @@ Estado:
 ### U4 | Sinopses de episódios com fallbacks por temporada
 
 Prioridade:
-- próxima melhoria de qualidade de dados para séries, após fechar o rollout pendente de `U2` e `U3`.
+- melhoria de qualidade de dados para séries, implementada e pendente de validação controlada em `staging`.
 
 Problema confirmado:
 - o proxy TMDb usa `pt-PT` por predefinição;
@@ -238,12 +240,27 @@ Regras de segurança e qualidade:
 - não executar retries automáticos em `429`; em `403` do Trakt, aplicar cooldown e seguir silenciosamente para as fontes restantes;
 - episódios futuros sem conteúdo publicado devem indicar `Sinopse ainda não divulgada`; episódios já lançados sem fontes úteis indicam `Sinopse não disponível nas fontes consultadas`.
 
-Sprints propostos:
-1. **U4.1 Contrato e cache:** criar o modelo normalizado de sinopse de episódio, deteção de lacunas, mapeamento seguro e cache de fallback por temporada/idioma.
-2. **U4.2 TMDb EN lazy:** ao expandir uma temporada incompleta, pedir uma única vez a versão `en-US`, fundir apenas campos vazios e atualizar essa temporada sem recarregar todo o detalhe.
-3. **U4.3 TVMaze seletivo:** expor no proxy somente o endpoint de episódios necessário, usar o `tvmazeId` já resolvido e preencher apenas lacunas restantes após validação estrita.
-4. **U4.4 Trakt degradado:** mover Trakt para último fallback, com cooldown para `403` e sem bloquear a renderização nem gerar ruído repetido na consola.
-5. **U4.5 Testes e rollout:** fixtures para PT vazio/EN disponível, TMDb vazio/TVMaze disponível, match incompatível, episódio futuro e indisponibilidade de providers; validação em `staging`, PR, checks obrigatórios e merge.
+Implementado:
+- versão Dexie `5` com cache local separado por série/temporada para resultados já enriquecidos; a cache base PT-PT não é misturada com a variante `en-US`;
+- deteção de lacunas apenas em episódios já lançados, sem pedir dados externos para episódios futuros ou temporadas completas;
+- carregamento lazy ao expandir cada temporada: TMDb `en-US`, seguido de TVMaze apenas se ainda houver lacunas, e Trakt apenas como último fallback;
+- fusão estrita por número de episódio e data de exibição quando ambos os providers a fornecem; dados PT-PT existentes nunca são substituídos;
+- a lista de episódios é atualizada sem recarregar todo o detalhe, preservando a temporada aberta, o progresso e o estado visto;
+- o proxy TVMaze aceita apenas o resolver existente e o endpoint de episódios necessário;
+- respostas `401`, `403` e `429` do Trakt ativam cooldown de 15 minutos, evitando tentativas repetidas enquanto a fonte está indisponível.
+
+Validação automática concluída:
+- testes unitários para episódios já lançados/futuros, fusão sem substituir PT-PT e rejeição de datas incompatíveis;
+- testes de cliente para a sequência TMDb `en-US` -> TVMaze;
+- `npm run test:run` passou com `125` testes;
+- `npm run build` passou, incluindo geração PWA;
+- `git diff --check` passou.
+
+Validação manual pendente:
+- em `staging`, abrir `FROM`, temporada `4`, e confirmar que as sinopses disponíveis aparecem após expandir a temporada;
+- confirmar uma temporada com sinopse PT-PT existente: não deve ser feito pedido adicional de fallback;
+- confirmar uma temporada futura: deve manter o estado normal sem pedido de fallback;
+- marcar/desmarcar um episódio e confirmar que progresso, lifecycle e interface mobile/desktop não regressaram.
 
 Critério de fecho:
 - FROM temporada 4 apresenta as sinopses disponíveis sem depender do Trakt;
@@ -253,7 +270,7 @@ Critério de fecho:
 - progresso, marcações vistas e lifecycle das séries permanecem inalterados.
 
 Estado:
-- planeado, sem implementação de código.
+- implementado localmente em `2026-09-14`; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 

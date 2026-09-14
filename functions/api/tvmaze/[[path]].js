@@ -17,6 +17,9 @@ import {
 const TVMAZE_BASE_URL = 'https://api.tvmaze.com';
 const ROUTE_KEY = 'tvmaze';
 
+const isAllowedEndpoint = (endpointPath) =>
+  endpointPath === '/resolve/show' || /^\/shows\/\d+\/episodes$/.test(endpointPath);
+
 const stripHtml = (value) => {
   if (!value) return '';
   return String(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -248,6 +251,16 @@ export async function onRequest(context) {
         durationMs: Date.now() - startedAt,
       });
       return applyRateLimitHeaders(badPath, rateLimit);
+    }
+
+    if (!isAllowedEndpoint(endpointPath)) {
+      const forbiddenPath = addCorsHeaders(jsonResponse({ ok: false, error: 'Unsupported TVMaze endpoint' }, 400), corsConfig);
+      addProxyHeaders(forbiddenPath, {
+        requestId,
+        upstreamStatus: 400,
+        durationMs: Date.now() - startedAt,
+      });
+      return applyRateLimitHeaders(forbiddenPath, rateLimit);
     }
 
     const safeParams = sanitizeSearchParams(url.searchParams, { maxParams: 20, maxValueLength: 500 });

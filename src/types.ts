@@ -18,6 +18,16 @@ export interface Episode {
     vote_count: number;
 }
 
+export type EpisodeMetadataSource = 'tmdb-en' | 'tvmaze' | 'trakt';
+
+export interface EpisodeMetadataFallbackCacheItem {
+    seriesId: number;
+    seasonNumber: number;
+    data: Episode[];
+    cachedAt: number;
+    attemptedSources: EpisodeMetadataSource[];
+}
+
 export interface Season {
     air_date: string;
     episode_count: number;

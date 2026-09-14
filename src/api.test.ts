@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Episode } from './types';
 
 vi.mock('./db', () => ({
   db: {
@@ -6,10 +7,15 @@ vi.mock('./db', () => ({
       get: vi.fn(),
       put: vi.fn(),
     },
+    episodeMetadataCache: {
+      get: vi.fn(),
+      put: vi.fn(),
+    },
   },
 }));
 
-import { fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchSimklData, fetchTmdbExternalReviews, fetchTraktData } from './api';
+import { enrichSeasonEpisodesWithFallbacks, fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchSimklData, fetchTmdbExternalReviews, fetchTraktData } from './api';
+import { db } from './db';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -17,6 +23,70 @@ function jsonResponse(data: unknown, status = 200): Response {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+function episode(overrides: Partial<Episode> = {}): Episode {
+  return {
+    air_date: '2020-01-01',
+    episode_number: 1,
+    id: 1,
+    name: 'Episódio 1',
+    overview: '',
+    production_code: '',
+    runtime: null,
+    season_number: 1,
+    show_id: 10,
+    still_path: null,
+    vote_average: 0,
+    vote_count: 0,
+    ...overrides,
+  };
+}
+
+describe('enrichSeasonEpisodesWithFallbacks', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.mocked(db.episodeMetadataCache.get).mockResolvedValue(undefined);
+    vi.mocked(db.episodeMetadataCache.put).mockResolvedValue('' as never);
+  });
+
+  it('uses a single TMDb English season request before external providers', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/tmdb/tv/10/season/1?language=en-US')) {
+        return jsonResponse({ episodes: [episode({ name: 'Pilot', overview: 'English summary.' })] });
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const result = await enrichSeasonEpisodesWithFallbacks(10, 1, [episode()], {
+      tvmazeShowId: 20,
+      signal: null,
+    });
+
+    expect(result[0]).toMatchObject({ name: 'Pilot', overview: 'English summary.' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses TVMaze only if TMDb English still has no usable synopsis', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/tmdb/tv/10/season/1?language=en-US')) {
+        return jsonResponse({ episodes: [episode()] });
+      }
+      if (url.includes('/api/tvmaze/shows/20/episodes?specials=1')) {
+        return jsonResponse([{ season: 1, number: 1, airdate: '2020-01-01', name: 'Pilot', summary: '<p>TVMaze summary.</p>' }]);
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const result = await enrichSeasonEpisodesWithFallbacks(10, 1, [episode()], {
+      tvmazeShowId: 20,
+      signal: null,
+    });
+
+    expect(result[0]).toMatchObject({ name: 'Pilot', overview: 'TVMaze summary.' });
+  });
+});
 
 describe('fetchTraktData', () => {
   beforeEach(() => {
