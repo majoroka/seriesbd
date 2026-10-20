@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getSeriesArchiveRecommendation,
   getSeriesLibraryStatus,
+  getNonProgressEpisodeIds,
   getSeriesUnwatchedBadgeCount,
   getSeriesReleasedEpisodesFromDetails,
   getSeriesTotalEpisodesFromDetails,
@@ -61,6 +62,12 @@ describe('series lifecycle helpers', () => {
     );
 
     expect(reconciled[0].episode_count).toBe(10);
+  });
+
+  it('excludes special and orphaned watched IDs from regular progress without deleting history', () => {
+    const regularEpisodeIds = new Set([1001, 1002]);
+
+    expect(getNonProgressEpisodeIds([1001, 1002, 1003, 1004], regularEpisodeIds)).toEqual([1003, 1004]);
   });
 
   it('derives released episodes from last aired metadata', () => {

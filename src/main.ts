@@ -24,6 +24,7 @@ import { copyContentShareUrl, shouldUseNativeContentShare } from './contentShare
 import { getSearchQuickCompletion } from './searchQuickCompletion';
 import {
     getSeriesArchiveRecommendation,
+    getNonProgressEpisodeIds,
     getSeriesReleasedEpisodesFromDetails,
     getSeriesTotalEpisodesFromDetails,
     reconcileSeriesSeasonEpisodeCounts,
@@ -3141,33 +3142,13 @@ async function displaySeriesDetails(
                             allTMDbSeasonsData.flatMap((season) => season.episodes.map((episode: Episode) => episode.id)),
                         );
                         const watchedEpisodeIds = S.watchedState[seriesId] || [];
-                        const unmatchedWatchedEpisodeIds = watchedEpisodeIds.filter(
-                            (episodeId) => !regularEpisodeIds.has(episodeId),
-                        );
                         let nonProgressEpisodeIds = localSeries._details?.non_progress_episode_ids || [];
-                        let didResolveSpecialEpisodes = false;
-
-                        if (unmatchedWatchedEpisodeIds.length === 0) {
-                            nonProgressEpisodeIds = [];
-                            didResolveSpecialEpisodes = true;
-                        } else {
-                            try {
-                                const specialsSeason = await API.getSeasonDetailsWithCache(
-                                    seriesId,
-                                    0,
-                                    signal,
-                                    { forceRefresh: options.forceSeasonRefresh === true },
-                                );
-                                const specialEpisodeIds = new Set(specialsSeason.episodes.map((episode) => episode.id));
-                                nonProgressEpisodeIds = unmatchedWatchedEpisodeIds.filter((episodeId) => specialEpisodeIds.has(episodeId));
-                                didResolveSpecialEpisodes = true;
-                            } catch (error) {
-                                if (error instanceof Error && error.name === 'AbortError') throw error;
-                                console.warn('Falha ao confirmar episódios especiais para o progresso regular.', { seriesId, error });
-                            }
+                        const regularSeasonsResolved = seasonResults.every((result) => result.status === 'fulfilled');
+                        if (regularSeasonsResolved) {
+                            nonProgressEpisodeIds = getNonProgressEpisodeIds(watchedEpisodeIds, regularEpisodeIds);
                         }
 
-                        const exclusionsChanged = didResolveSpecialEpisodes
+                        const exclusionsChanged = regularSeasonsResolved
                             && (nonProgressEpisodeIds.length !== (localSeries._details?.non_progress_episode_ids || []).length
                                 || nonProgressEpisodeIds.some((episodeId, index) => episodeId !== localSeries._details?.non_progress_episode_ids?.[index]));
                         if (localSeries.total_episodes !== authoritativeTotalEpisodes || exclusionsChanged) {

@@ -107,6 +107,17 @@ export function reconcileSeriesSeasonEpisodeCounts(
   }));
 }
 
+/**
+ * Keep watched history intact while excluding IDs that no longer belong to a
+ * regular season. This covers specials and metadata IDs replaced by TMDb.
+ */
+export function getNonProgressEpisodeIds(
+  watchedEpisodeIds: number[],
+  regularEpisodeIds: ReadonlySet<number>,
+): number[] {
+  return watchedEpisodeIds.filter((episodeId) => !regularEpisodeIds.has(episodeId));
+}
+
 export function getSeriesReleasedEpisodesFromDetails(
   details: Pick<TMDbSeriesDetails, 'seasons' | 'last_episode_to_air' | 'status' | 'first_air_date'>,
 ): number {

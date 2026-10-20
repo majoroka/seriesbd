@@ -276,12 +276,12 @@ Problemas confirmados:
 - a ficha geral da TMDb pode anunciar menos episódios do que a resposta detalhada de uma temporada;
 - exemplo observado: `House of the Dragon`, temporada `3`, com oito entradas no detalhe mas apenas sete consideradas no badge da capa;
 - o último episódio pode ainda não ter título ou sinopse, mas deve continuar a contar como episódio conhecido quando a temporada o devolve.
-- o histórico pode conter episódios especiais da temporada `0`; esses episódios devem permanecer registados como vistos, mas não podem aumentar o progresso ou reduzir o badge dos episódios regulares.
+- o histórico pode conter especiais ou IDs antigos que já não pertencem às temporadas regulares atuais; esses registos devem permanecer guardados, mas não podem aumentar o progresso ou reduzir o badge dos episódios regulares.
 
 Objetivo:
 - usar a maior contagem confirmada entre a ficha geral e o detalhe de cada temporada;
 - impedir que badges, progresso e ações de temporada usem um total inferior ao já conhecido;
-- preservar a regra de não contar especiais (`season_number = 0`).
+- preservar a regra de não contar registos fora das temporadas regulares atuais.
 
 Implementado:
 - reconciliação imutável por temporada entre `episode_count` e o número real de episódios carregados;
@@ -290,14 +290,14 @@ Implementado:
 - episódios sem título continuam a ser contados; título e sinopse não participam no cálculo;
 - os dados usados pelas ações de temporadas passam a usar a mesma contagem reconciliada.
 - `Atualizar metadados` ignora explicitamente a cache local de temporadas de sete dias e substitui-a pela resposta atual; a navegação normal mantém a cache.
-- episódios vistos sem correspondência numa temporada regular são confrontados com a temporada `0`; apenas os especiais confirmados ficam excluídos das contagens de progresso, badges, lifecycle, estatísticas e notificações;
-- o histórico do episódio especial não é apagado nem alterado;
+- episódios vistos sem correspondência nas temporadas regulares carregadas ficam excluídos das contagens de progresso, badges, lifecycle, estatísticas e notificações; isto cobre especiais e IDs históricos substituídos pela TMDb;
+- o histórico desses episódios não é apagado nem alterado;
 - o aviso modal `A atualizar metadados...` deixa de bloquear visualmente a ficha durante a atualização; a própria ficha passa a mostrar o carregamento.
 
 Validação automática concluída localmente:
-- testes para episódio planeado sem título, exclusão de especiais e preservação de totais superiores;
-- teste de estado que preserva o histórico de especiais mas exclui-o do progresso regular;
-- `npm run test:run` passou com `20` ficheiros e `130` testes;
+- testes para episódio planeado sem título, exclusão de IDs fora das temporadas regulares e preservação de totais superiores;
+- teste de estado que preserva o histórico desses IDs mas exclui-os do progresso regular;
+- `npm run test:run` passou com `20` ficheiros e `131` testes;
 - `npm run build` passou, incluindo geração PWA;
 - `git diff --check` passou.
 
@@ -306,16 +306,16 @@ Validação manual pendente:
 - voltar à biblioteca e confirmar badge `8` se as duas temporadas anteriores estiverem vistas;
 - abrir uma série estável e confirmar que a respetiva contagem não se altera;
 - marcar/desmarcar um episódio e confirmar que o progresso e a classificação da série permanecem corretos.
-- para `House of the Dragon`, confirmar `18 / 26 episódios`, badge `8`, e temporada 3 em `0 / 8`, sem apagar o especial já marcado no histórico.
+- para `House of the Dragon`, confirmar `18 / 26 episódios`, badge `8`, e temporada 3 em `0 / 8`, sem apagar o registo histórico órfão.
 
 Critério de fecho:
 - a capa e o detalhe usam a mesma contagem de episódios conhecidos;
 - metadados incompletos de um episódio não excluem esse episódio da contagem;
-- especiais vistos não contam como episódios regulares, mas continuam no histórico;
+- especiais e IDs históricos órfãos não contam como episódios regulares, mas continuam no histórico;
 - não há regressão de progresso, marcações vistas ou lifecycle.
 
 Estado:
-- implementado localmente em `2026-10-20`; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
+- reforçado localmente em `2026-10-20` para excluir também IDs históricos órfãos; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 

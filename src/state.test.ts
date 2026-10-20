@@ -151,9 +151,9 @@ describe('state transitions', () => {
     expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([[42, 1002]]);
   });
 
-  it('keeps watched specials in history but excludes them from regular episode progress', () => {
+  it('keeps watched IDs outside regular metadata in history but excludes them from progress', () => {
     const series = {
-      ...makeSeries(42, 'Series with a special'),
+      ...makeSeries(42, 'Series with historical episode data'),
       _details: {
         status: 'Ended',
         next_episode_to_air: null,
