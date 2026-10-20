@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   getSeriesArchiveRecommendation,
   getSeriesLibraryStatus,
+  getNonProgressEpisodeIds,
   getSeriesUnwatchedBadgeCount,
   getSeriesReleasedEpisodesFromDetails,
   getSeriesTotalEpisodesFromDetails,
   isSeriesStatusTerminal,
+  reconcileSeriesSeasonEpisodeCounts,
 } from './seriesLifecycle';
 
 describe('series lifecycle helpers', () => {
@@ -26,6 +28,46 @@ describe('series lifecycle helpers', () => {
         ] as any,
       }),
     ).toBe(18);
+  });
+
+  it('keeps the higher season count returned by detailed episodes, including untitled planned episodes', () => {
+    const reconciled = reconcileSeriesSeasonEpisodeCounts(
+      [
+        { season_number: 0, episode_count: 2 },
+        { season_number: 1, episode_count: 10 },
+        { season_number: 2, episode_count: 8 },
+        { season_number: 3, episode_count: 7 },
+      ] as any,
+      [
+        {
+          season_number: 3,
+          episode_count: 7,
+          episodes: Array.from({ length: 8 }, (_, index) => ({
+            episode_number: index + 1,
+            name: index === 7 ? '' : `Episode ${index + 1}`,
+          })),
+        },
+      ] as any,
+    );
+
+    expect(reconciled.find((season) => season.season_number === 3)?.episode_count).toBe(8);
+    expect(reconciled.find((season) => season.season_number === 0)?.episode_count).toBe(2);
+    expect(getSeriesTotalEpisodesFromDetails({ seasons: reconciled as any })).toBe(26);
+  });
+
+  it('never lowers a valid show-level season count when a detailed request is incomplete', () => {
+    const reconciled = reconcileSeriesSeasonEpisodeCounts(
+      [{ season_number: 1, episode_count: 10 }] as any,
+      [{ season_number: 1, episode_count: 7, episodes: Array.from({ length: 7 }) }] as any,
+    );
+
+    expect(reconciled[0].episode_count).toBe(10);
+  });
+
+  it('excludes special and orphaned watched IDs from regular progress without deleting history', () => {
+    const regularEpisodeIds = new Set([1001, 1002]);
+
+    expect(getNonProgressEpisodeIds([1001, 1002, 1003, 1004], regularEpisodeIds)).toEqual([1003, 1004]);
   });
 
   it('derives released episodes from last aired metadata', () => {

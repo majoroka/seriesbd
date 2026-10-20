@@ -115,6 +115,8 @@ export interface Series {
         next_episode_to_air: Episode | null;
         last_episode_to_air?: Episode | null;
         released_episode_count?: number;
+        // Watched IDs outside current regular metadata remain in history but do not affect progress.
+        non_progress_episode_ids?: number[];
         status: string;
     };
     videos?: {

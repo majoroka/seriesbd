@@ -263,7 +263,7 @@ function getMediaStateKey(series: Series): string {
 function getMediaProgressPercent(series: Series): number {
     const mediaType = series.media_type || 'series';
     if (mediaType === 'series') {
-        const watchedCount = S.watchedState[series.id]?.length || 0;
+        const watchedCount = S.getProgressWatchedEpisodeCount(series);
         const totalEpisodes = series.total_episodes || 0;
         if (totalEpisodes <= 0) return 0;
         return Math.max(0, Math.min(100, (watchedCount / totalEpisodes) * 100));
@@ -1034,7 +1034,7 @@ function resolveLibraryStatus(series: Series): LibraryStatusFilter {
 
     if (mediaType === 'series') {
         return getSeriesLifecycleStatus({
-            watchedCount: S.watchedState[series.id]?.length || 0,
+            watchedCount: S.getProgressWatchedEpisodeCount(series),
             totalEpisodes: series.total_episodes || 0,
             releasedEpisodes: series._details?.released_episode_count,
             status: series._details?.status,
@@ -1053,7 +1053,7 @@ function resolveDashboardProgress(series: Series): number {
         return getMediaProgressPercent(series);
     }
 
-    const watchedCount = S.watchedState[series.id]?.length || 0;
+    const watchedCount = S.getProgressWatchedEpisodeCount(series);
     const releasedEpisodes = getEffectiveReleasedEpisodeCount({
         watchedCount,
         totalEpisodes: series.total_episodes || 0,
@@ -2989,7 +2989,7 @@ function createSeriesItemElement(series: Series, showStatus = false, viewMode = 
     const releaseYear = series.first_air_date ? `(${new Date(series.first_air_date).getFullYear()})` : '';
     const mediaType = series.media_type || 'series';
     const mediaTypeLabel = getMediaTypeLabel(mediaType);
-    const watchedCount = S.watchedState[series.id]?.length || 0;
+    const watchedCount = mediaType === 'series' ? S.getProgressWatchedEpisodeCount(series) : 0;
     const totalEpisodes = series.total_episodes || 0;
     const releasedEpisodes = mediaType === 'series'
         ? getEffectiveReleasedEpisodeCount({
@@ -3517,7 +3517,10 @@ export function renderSeriesDetails(
         return [{ label: 'Status', value: statusText }, { label: 'Transmissão', value: networksElements }, { label: 'Estúdios', value: studiosText }, { label: 'País', value: countries }, { label: 'Idioma Original', value: languages }, { label: 'Duração Total', value: totalRuntime }];
     })();
     const totalEpisodes = seriesData.total_episodes || allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || 0), 0);
-    const watchedCount = S.watchedState[seriesData.id]?.length || 0;
+    const localSeries = S.getSeries(seriesData.id);
+    const watchedCount = localSeries
+        ? S.getProgressWatchedEpisodeCount(localSeries)
+        : (S.watchedState[seriesData.id]?.length || 0);
     const overallProgress = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
     const progressElement = createOverviewProgress(overallProgress, `${watchedCount} / ${totalEpisodes} episódios`);
     const tmdbRating = seriesData.vote_average || 0;
@@ -3902,9 +3905,9 @@ export function markEpisodeAsUnseen(element: HTMLElement) {
 
 export function updateOverallProgressBar(seriesId: number) {
     if (DOM.seriesViewSection.style.display === 'none' || DOM.seriesViewSection.dataset.seriesId != String(seriesId)) return;
-    const watchedCount = S.watchedState[seriesId]?.length || 0;
     const series = S.getSeries(seriesId)!;
     if (!series) return;
+    const watchedCount = S.getProgressWatchedEpisodeCount(series);
     const totalEpisodes = series.total_episodes || 0;
     const overallProgress = totalEpisodes > 0 ? (watchedCount / totalEpisodes) * 100 : 0;
     const progressBar = DOM.seriesViewSection.querySelector<HTMLElement>('.v2-progress-bar');
@@ -4189,7 +4192,7 @@ function buildStatsSummaryForContext(context: StatsMediaContext, cache?: StatsCo
         const isArchived = archiveKeys.has(createMediaKey(mediaType, item.id));
 
         if (mediaType === 'series') {
-            const watchedCount = S.watchedState[item.id]?.length || 0;
+            const watchedCount = S.getProgressWatchedEpisodeCount(item);
             const totalEpisodes = item.total_episodes || 0;
             const releasedEpisodes = getEffectiveReleasedEpisodeCount({
                 watchedCount,

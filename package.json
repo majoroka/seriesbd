@@ -28,5 +28,23 @@
     "@supabase/supabase-js": "^2.98.0",
     "chart.js": "^4.4.2",
     "dexie": "^4.0.4"
+  },
+  "overrides": {
+    "ajv": {
+      "fast-uri": "3.1.8"
+    },
+    "filelist": {
+      "minimatch": {
+        "brace-expansion": "2.1.7"
+      }
+    },
+    "glob": {
+      "minimatch": {
+        "brace-expansion": "5.0.12"
+      }
+    },
+    "postcss": {
+      "source-map-js": "1.2.2"
+    }
   }
 }

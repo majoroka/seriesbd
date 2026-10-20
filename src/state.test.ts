@@ -151,6 +151,22 @@ describe('state transitions', () => {
     expect(mocked.db.watchedState.bulkDelete).toHaveBeenCalledWith([[42, 1002]]);
   });
 
+  it('keeps watched IDs outside regular metadata in history but excludes them from progress', () => {
+    const series = {
+      ...makeSeries(42, 'Series with historical episode data'),
+      _details: {
+        status: 'Ended',
+        next_episode_to_air: null,
+        non_progress_episode_ids: [1003],
+      },
+    } satisfies Series;
+    S.setWatchedState({ 42: [1001, 1002, 1003] });
+
+    expect(S.getProgressWatchedEpisodeIds(series)).toEqual([1001, 1002]);
+    expect(S.getProgressWatchedEpisodeCount(series)).toBe(2);
+    expect(S.watchedState[42]).toEqual([1001, 1002, 1003]);
+  });
+
   it('does not call bulkDelete when series has no watched episodes', async () => {
     await S.unmarkEpisodesAsWatched(999, [1, 2]);
     expect(mocked.db.watchedState.bulkDelete).not.toHaveBeenCalled();

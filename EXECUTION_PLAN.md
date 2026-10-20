@@ -24,7 +24,8 @@ Objetivo:
 - Lógica transversal de lifecycle das séries alinhada por episódios lançados, com correção de reclassificação automática entre `Quero Ver`, `A Ver` e `Concluídos`
 - Partilha pública `S1-S5` concluída e integrada em `main` pelo PR `#83`, com rotas públicas, Open Graph e rollout validado
 - Integração Simkl concluída e ativa como provider opcional de enriquecimento para séries e filmes
-- U4 implementado localmente: fallback lazy e cacheado de sinopses de episódios por temporada, pendente de validação em `staging`
+- U4 concluído e em produção: fallback lazy e cacheado de sinopses de episódios por temporada
+- Manutenção ativa: reconciliação de contagens e de progresso de episódios quando a ficha geral, temporadas e histórico divergem
 
 ## Resumo executivo
 
@@ -103,7 +104,7 @@ O foco atual é manutenção evolutiva controlada:
 2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
 3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
 4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
-5. **U4 sinopses de episódios:** validar em `staging` os fallbacks por temporada antes do rollout para `main`.
+5. **Manutenção de metadados:** validar em `staging` a reconciliação de contagens e a exclusão de especiais do progresso regular antes do rollout para `main`.
 
 ### U1 | Atualização pontual UX/UI
 
@@ -256,21 +257,65 @@ Validação automática concluída:
 - `npm run build` passou, incluindo geração PWA;
 - `git diff --check` passou.
 
-Validação manual pendente:
-- em `staging`, abrir `FROM`, temporada `4`, e confirmar que as sinopses disponíveis aparecem após expandir a temporada;
-- confirmar uma temporada com sinopse PT-PT existente: não deve ser feito pedido adicional de fallback;
-- confirmar uma temporada futura: deve manter o estado normal sem pedido de fallback;
-- marcar/desmarcar um episódio e confirmar que progresso, lifecycle e interface mobile/desktop não regressaram.
-
-Critério de fecho:
-- FROM temporada 4 apresenta as sinopses disponíveis sem depender do Trakt;
-- uma série com sinopse PT-PT mantém o texto PT-PT sem pedidos adicionais;
-- nenhuma sinopse é associada ao episódio errado;
-- falhas, limites ou indisponibilidade de um provider não impedem o detalhe de abrir;
-- progresso, marcações vistas e lifecycle das séries permanecem inalterados.
+Validação manual e rollout concluídos:
+- `FROM`, temporada `4`, apresenta as sinopses disponíveis sem depender do Trakt;
+- temporadas com sinopse PT-PT preservam o texto original sem pedidos de fallback desnecessários;
+- episódios futuros mantêm o estado normal e não disparam pedidos de fallback;
+- progresso, marcações vistas e lifecycle mantiveram-se sem regressões;
+- rollout por `staging`, PR, checks obrigatórios e produção concluído.
 
 Estado:
-- implementado localmente em `2026-09-14`; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
+- concluído em produção em `2026-09-23`.
+
+### M1 | Reconciliação de contagens de episódios por temporada
+
+Prioridade:
+- correção de manutenção para metadados de séries em atualização, implementada e pendente de validação controlada em `staging`.
+
+Problemas confirmados:
+- a ficha geral da TMDb pode anunciar menos episódios do que a resposta detalhada de uma temporada;
+- exemplo observado: `House of the Dragon`, temporada `3`, com oito entradas no detalhe mas apenas sete consideradas no badge da capa;
+- o último episódio pode ainda não ter título ou sinopse, mas deve continuar a contar como episódio conhecido quando a temporada o devolve.
+- o histórico pode conter especiais ou IDs antigos que já não pertencem às temporadas regulares atuais; esses registos devem permanecer guardados, mas não podem aumentar o progresso ou reduzir o badge dos episódios regulares.
+
+Objetivo:
+- usar a maior contagem confirmada entre a ficha geral e o detalhe de cada temporada;
+- impedir que badges, progresso e ações de temporada usem um total inferior ao já conhecido;
+- preservar a regra de não contar registos fora das temporadas regulares atuais.
+
+Implementado:
+- reconciliação imutável por temporada entre `episode_count` e o número real de episódios carregados;
+- preservação da maior contagem: uma resposta detalhada incompleta nunca reduz um total já válido;
+- o total reconciliado é persistido na biblioteca e refresca os cartões de `Quero Ver` e `Todas`;
+- episódios sem título continuam a ser contados; título e sinopse não participam no cálculo;
+- os dados usados pelas ações de temporadas passam a usar a mesma contagem reconciliada.
+- `Atualizar metadados` ignora explicitamente a cache local de temporadas de sete dias e substitui-a pela resposta atual; a navegação normal mantém a cache.
+- episódios vistos sem correspondência nas temporadas regulares carregadas ficam excluídos das contagens de progresso, badges, lifecycle, estatísticas e notificações; isto cobre especiais e IDs históricos substituídos pela TMDb;
+- o histórico desses episódios não é apagado nem alterado;
+- o aviso modal `A atualizar metadados...` deixa de bloquear visualmente a ficha durante a atualização; a própria ficha passa a mostrar o carregamento.
+
+Validação automática concluída localmente:
+- testes para episódio planeado sem título, exclusão de IDs fora das temporadas regulares e preservação de totais superiores;
+- teste de estado que preserva o histórico desses IDs mas exclui-os do progresso regular;
+- `npm run test:run` passou com `20` ficheiros e `131` testes;
+- `npm run build` passou, incluindo geração PWA;
+- `git diff --check` passou.
+
+Validação manual pendente:
+- em `staging`, abrir `House of the Dragon`, temporada `3`, e confirmar `0/8`;
+- voltar à biblioteca e confirmar badge `8` se as duas temporadas anteriores estiverem vistas;
+- abrir uma série estável e confirmar que a respetiva contagem não se altera;
+- marcar/desmarcar um episódio e confirmar que o progresso e a classificação da série permanecem corretos.
+- para `House of the Dragon`, confirmar `18 / 26 episódios`, badge `8`, e temporada 3 em `0 / 8`, sem apagar o registo histórico órfão.
+
+Critério de fecho:
+- a capa e o detalhe usam a mesma contagem de episódios conhecidos;
+- metadados incompletos de um episódio não excluem esse episódio da contagem;
+- especiais e IDs históricos órfãos não contam como episódios regulares, mas continuam no histórico;
+- não há regressão de progresso, marcações vistas ou lifecycle.
+
+Estado:
+- reforçado localmente em `2026-10-20` para excluir também IDs históricos órfãos; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.
 
 ## Prioridades concluídas pós-relatório técnico (2026-08)
 

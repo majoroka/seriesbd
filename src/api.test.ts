@@ -14,7 +14,16 @@ vi.mock('./db', () => ({
   },
 }));
 
-import { enrichSeasonEpisodesWithFallbacks, fetchAggregatedSeriesMetadata, fetchSeriesCredits, fetchSeriesDetails, fetchSimklData, fetchTmdbExternalReviews, fetchTraktData } from './api';
+import {
+  enrichSeasonEpisodesWithFallbacks,
+  fetchAggregatedSeriesMetadata,
+  fetchSeriesCredits,
+  fetchSeriesDetails,
+  fetchSimklData,
+  fetchTmdbExternalReviews,
+  fetchTraktData,
+  getSeasonDetailsWithCache,
+} from './api';
 import { db } from './db';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -85,6 +94,44 @@ describe('enrichSeasonEpisodesWithFallbacks', () => {
     });
 
     expect(result[0]).toMatchObject({ name: 'Pilot', overview: 'TVMaze summary.' });
+  });
+});
+
+describe('getSeasonDetailsWithCache', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.mocked(db.seasonCache.get).mockResolvedValue(undefined);
+    vi.mocked(db.seasonCache.put).mockResolvedValue('' as never);
+  });
+
+  it('uses a fresh local season cache during normal navigation', async () => {
+    const cachedData = { season_number: 3, episode_count: 7, episodes: [] };
+    vi.mocked(db.seasonCache.get).mockResolvedValue({ data: cachedData, cachedAt: Date.now() } as never);
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    await expect(getSeasonDetailsWithCache(94997, 3, null)).resolves.toEqual(cachedData);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('bypasses the season cache for an explicit metadata refresh', async () => {
+    vi.mocked(db.seasonCache.get).mockResolvedValue({
+      data: { season_number: 3, episode_count: 7, episodes: [] },
+      cachedAt: Date.now(),
+    } as never);
+    const freshData = {
+      season_number: 3,
+      episode_count: 8,
+      episodes: Array.from({ length: 8 }, (_, index) => ({ episode_number: index + 1 })),
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(freshData));
+
+    await expect(getSeasonDetailsWithCache(94997, 3, null, { forceRefresh: true })).resolves.toEqual(freshData);
+    expect(fetchMock).toHaveBeenCalledWith('/api/tmdb/tv/94997/season/3', expect.any(Object));
+    expect(db.seasonCache.put).toHaveBeenCalledWith(expect.objectContaining({
+      seriesId: 94997,
+      seasonNumber: 3,
+      data: freshData,
+    }));
   });
 });
 

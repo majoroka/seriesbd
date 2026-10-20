@@ -1438,11 +1438,16 @@ export async function fetchTraktSeasonsData(traktId: number | undefined, signal:
  * @param {AbortSignal} signal 
  * @returns {Promise<object>}
  */
-export async function getSeasonDetailsWithCache(seriesId: number, seasonNumber: number, signal: AbortSignal | null): Promise<TMDbSeason> {
+export async function getSeasonDetailsWithCache(
+    seriesId: number,
+    seasonNumber: number,
+    signal: AbortSignal | null,
+    options: { forceRefresh?: boolean } = {},
+): Promise<TMDbSeason> {
     const cacheKey = [seriesId, seasonNumber];
     const cachedSeason = await db.seasonCache.get(cacheKey);
 
-    if (cachedSeason && (Date.now() - cachedSeason.cachedAt < SEASON_CACHE_DURATION)) {
+    if (!options.forceRefresh && cachedSeason && (Date.now() - cachedSeason.cachedAt < SEASON_CACHE_DURATION)) {
         return cachedSeason.data;
     }
 
