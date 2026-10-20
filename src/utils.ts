@@ -153,6 +153,15 @@ export function getTranslatedSeasonName(originalName: string, seasonNumber: numb
     return originalName;
 }
 
+/**
+ * Returns the visual layers supported by the public ratings chart.
+ * Ratings are rendered as independent progress rings, not value proportions.
+ */
+export function getConcentricChartRingClasses(ratingsCount: number): string[] {
+    const ringClasses = ['outer', 'middle', 'inner', 'core'];
+    return ringClasses.slice(0, Math.max(0, ratingsCount));
+}
+
 const GENRE_TRANSLATIONS: Record<string, string> = {
     'action & adventure': 'Ação e Aventura',
     'action': 'Ação',
