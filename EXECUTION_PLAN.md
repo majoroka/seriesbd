@@ -288,10 +288,11 @@ Implementado:
 - o total reconciliado é persistido na biblioteca e refresca os cartões de `Quero Ver` e `Todas`;
 - episódios sem título continuam a ser contados; título e sinopse não participam no cálculo;
 - os dados usados pelas ações de temporadas passam a usar a mesma contagem reconciliada.
+- `Atualizar metadados` ignora explicitamente a cache local de temporadas de sete dias e substitui-a pela resposta atual; a navegação normal mantém a cache.
 
 Validação automática concluída:
 - testes para episódio planeado sem título, exclusão de especiais e preservação de totais superiores;
-- `npm run test:run` passou com `127` testes;
+- `npm run test:run` passou com `129` testes;
 - `npm run build` passou, incluindo geração PWA;
 - `git diff --check` passou.
 

@@ -2964,7 +2964,10 @@ async function hydrateOpenedSeasonEpisodeMetadata(seriesId: number, seasonNumber
 
 
 
-async function displaySeriesDetails(seriesId: number, options: { isPublicView?: boolean } = {}) {
+async function displaySeriesDetails(
+    seriesId: number,
+    options: { isPublicView?: boolean; forceSeasonRefresh?: boolean } = {},
+) {
     const isPublicView = options.isPublicView === true;
     S.resetDetailViewAbortController();
     currentDetailedSeriesData = null;
@@ -3083,7 +3086,12 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                     return null;
                 });
                 const seasonsToFetch = isPublicView ? [] : seriesData.seasons.filter(s => s.season_number !== 0);
-                const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(seriesId, s.season_number, signal));
+                const seasonPromises = seasonsToFetch.map(s => API.getSeasonDetailsWithCache(
+                    seriesId,
+                    s.season_number,
+                    signal,
+                    { forceRefresh: options.forceSeasonRefresh === true },
+                ));
                 const externalReviewsPromise = API.fetchTmdbExternalReviews('series', seriesId, signal).catch((error) => {
                     if (error instanceof Error && error.name === 'AbortError') throw error;
                     console.warn('Falha ao carregar reviews externas da série.', error);
@@ -5305,7 +5313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const seriesId = (DOM.seriesViewSection as HTMLElement).dataset.seriesId;
             if (seriesId) {
                 UI.showNotification('A atualizar metadados...');
-                await displaySeriesDetails(parseInt(seriesId, 10));
+                await displaySeriesDetails(parseInt(seriesId, 10), { forceSeasonRefresh: true });
             }
             return;
         }
