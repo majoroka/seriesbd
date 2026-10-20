@@ -12,6 +12,7 @@ import {
     setElementIconLabel,
     setButtonIconLabel,
     renderFormattedDuration,
+    getConcentricChartRingClasses,
 } from './utils';
 import * as DOM from './dom';
 import * as S from './state';
@@ -3213,9 +3214,7 @@ export function renderMediaDetails(
     const averageRating = ratingEntries.length > 0
         ? ratingEntries.reduce((sum, entry) => sum + entry.value, 0) / ratingEntries.length
         : 0;
-    const mediaRatingRingClasses = ratingEntries.length >= 3
-        ? ['outer', 'middle', 'inner']
-        : ratingEntries.length === 2 ? ['outer', 'middle'] : ['outer'];
+    const mediaRatingRingClasses = getConcentricChartRingClasses(ratingEntries.length);
     const publicRatingsElement = ratingEntries.length > 0 ? el('div', { class: 'v2-public-ratings' }, [
         el('p', { class: 'v2-action-label', text: 'Avaliações' }),
         el('div', { class: 'concentric-chart-wrapper' }, [
@@ -3539,7 +3538,7 @@ export function renderSeriesDetails(
     const averageRating = ratingsCount > 0
         ? ratingEntries.reduce((sum, entry) => sum + entry.value, 0) / ratingsCount
         : 0;
-    const ringClasses = ratingsCount >= 3 ? ['outer', 'middle', 'inner'] : ratingsCount === 2 ? ['outer', 'middle'] : ['outer'];
+    const ringClasses = getConcentricChartRingClasses(ratingsCount);
     const publicRatingsElement = ratingsCount > 0 ? el('div', { class: 'v2-public-ratings' }, [
         el('p', { class: 'v2-action-label', text: 'Avaliações' }),
         el('div', { class: 'concentric-chart-wrapper' }, [

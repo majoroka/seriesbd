@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { el, formatDuration, getTranslatedSeasonName, formatDate } from './utils';
+import { el, formatDuration, getConcentricChartRingClasses, getTranslatedSeasonName, formatDate } from './utils';
 
 describe('el', () => {
   it('rejects raw HTML so callers must use safe DOM nodes or text', () => {
@@ -42,6 +42,15 @@ describe('getTranslatedSeasonName', () => {
 
     it('should return the original name if not a special case', () => {
         expect(getTranslatedSeasonName('The Minisodes', 1)).toBe('The Minisodes');
+    });
+});
+
+describe('getConcentricChartRingClasses', () => {
+    it('assigns a distinct visual ring to every supported rating source', () => {
+        expect(getConcentricChartRingClasses(1)).toEqual(['outer']);
+        expect(getConcentricChartRingClasses(2)).toEqual(['outer', 'middle']);
+        expect(getConcentricChartRingClasses(3)).toEqual(['outer', 'middle', 'inner']);
+        expect(getConcentricChartRingClasses(4)).toEqual(['outer', 'middle', 'inner', 'core']);
     });
 });
 

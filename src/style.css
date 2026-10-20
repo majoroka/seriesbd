@@ -4094,6 +4094,13 @@ body.light-theme .network-logo {
     left: 22%;
 }
 
+.chart-ring.core {
+    width: 38%;
+    height: 38%;
+    top: 31%;
+    left: 31%;
+}
+
 .chart-center {
     position: absolute;
     top: 33%; /* (100% - 34%) / 2 */
@@ -4119,6 +4126,17 @@ body.light-theme .network-logo {
     left: 24%;
     width: 52%;
     height: 52%;
+}
+
+.concentric-chart.rings-4 .chart-center {
+    top: 37%;
+    left: 37%;
+    width: 26%;
+    height: 26%;
+}
+
+.concentric-chart.rings-4 .chart-average {
+    font-size: 0.75rem;
 }
 
 .chart-average {
