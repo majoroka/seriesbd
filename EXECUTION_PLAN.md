@@ -101,10 +101,10 @@ O foco atual é manutenção evolutiva controlada:
 ## Prioridades ativas pós-Simkl
 
 1. **Proteção de dados:** manter exportação recorrente e definir uma cópia de recuperação independente do Supabase.
-2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
+2. **Operação dos providers:** corrigir a resolução Simkl em filmes e, numa intervenção separada, alargar o Trakt recuperado ao catálogo de filmes; Simkl mantém redundância de leitura.
 3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
 4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
-5. **Manutenção de metadados:** validar em `staging` a reconciliação de contagens e a exclusão de especiais do progresso regular antes do rollout para `main`.
+5. **Manutenção de metadados:** manter sob observação a reconciliação de contagens e a exclusão de IDs históricos do progresso regular após o rollout.
 
 ### U1 | Atualização pontual UX/UI
 
@@ -218,8 +218,8 @@ Problema confirmado:
 - o proxy TMDb usa `pt-PT` por predefinição;
 - há temporadas com episódios já lançados cuja resposta PT-PT devolve títulos genéricos e sinopses vazias;
 - exemplo validado: `FROM` (TMDb `124364`), temporada `4`, sem sinopses em PT-PT mas com os dez episódios completos em inglês no TMDb e no TVMaze;
-- a integração atual usa TMDb por episódio e Trakt como único fallback; TVMaze e Simkl enriquecem apenas o detalhe global da série;
-- o Trakt responde atualmente `403`, pelo que não pode ser tratado como fonte fiável principal.
+- a integração atual usa TMDb por episódio e Trakt como último fallback; TVMaze e Simkl enriquecem apenas o detalhe global da série;
+- durante a implementação inicial o Trakt respondeu `403`; a nova aplicação API foi configurada posteriormente, mas o Trakt mantém-se em último lugar nesta hierarquia até nova validação específica.
 
 Objetivo:
 - maximizar a cobertura de sinopses de episódios já lançados sem alterar IDs TMDb, progresso, estado visto, datas, imagens ou a origem dos dados pessoais;
@@ -229,7 +229,7 @@ Hierarquia de fontes por episódio:
 1. TMDb `pt-PT`, sempre a fonte principal de episódios;
 2. TMDb `en-US`, apenas para preencher título ou sinopse ausentes no registo PT-PT;
 3. TVMaze, apenas quando os dois dados TMDb não tiverem uma sinopse útil e existir match confiável da série;
-4. Trakt, último fallback e apenas se voltar a responder com sucesso e houver match confiável;
+4. Trakt, último fallback e apenas quando responder com sucesso através da aplicação API atual e houver match confiável;
 5. Simkl fica fora desta primeira versão: a integração atual não expõe episódios e só será avaliado como fallback após confirmar um endpoint público adequado, cobertura e limites.
 
 Regras de segurança e qualidade:
@@ -720,20 +720,55 @@ Estado:
 - o rollout para produção seguiu o fluxo normal `staging` -> PR -> checks -> `main`;
 - monitorização normal de erros/limites Simkl passa a fazer parte da manutenção operacional.
 
-### T1 | Trakt em observação
+### T1 | Avaliações de filmes: Simkl e retoma do Trakt
 
-Decisão atual:
-- manter a integração Trakt tal como está, sem investimento adicional enquanto não houver mudança na modalidade gratuita ou possibilidade clara de recuperar a aplicação API anterior;
-- aceitar temporariamente a indisponibilidade da avaliação Trakt; Simkl fornece redundância para avaliação, trailer, sinopse e certificação;
-- não adicionar novas dependências nem novos fluxos sobre Trakt enquanto a app API devolver `403`.
+Prioridade:
+- manutenção de providers; executar após a estabilidade da correção visual dos quatro anéis e sempre em dois passos independentes para limitar regressões.
 
-Quando reavaliar:
-- mudança dos termos gratuitos da Trakt;
-- recuperação comprovada da aplicação API;
-- aumento material de latência ou erros que justifique remover as chamadas Trakt da app.
+Contexto confirmado em `2026-10-20`:
+- a nova aplicação Trakt está criada e o respetivo Client ID está configurado como secret `TRAKT_API_KEY` nos ambientes Cloudflare `Preview` e `Production`;
+- as avaliações Trakt voltaram a estar disponíveis nos detalhes de séries;
+- TVMaze não é provider de filmes e, por isso, não deve ser apresentado nem consultado nesses detalhes;
+- o Simkl responde corretamente para filmes no proxy, incluindo `O Padrinho: Parte II` (TMDb `240`, Simkl `8,7`), mas a app não mostra essa avaliação;
+- a causa Simkl é conhecida: o detalhe de filme passa o `source_id` TMDb como texto e `fetchSimklData` exige um número com `Number.isFinite`, pelo que não chega a fazer a pesquisa por TMDb.
+
+#### T1.1 | Corrigir Simkl nos filmes
+
+Âmbito:
+- normalizar o ID TMDb no adaptador partilhado `fetchSimklData`, e não apenas no chamador, para aceitar com segurança IDs numéricos serializados como texto;
+- preservar o comportamento fail-open: sem match, erro ou limite Simkl, o detalhe continua a abrir com TMDb;
+- manter TMDb como fonte principal e Simkl como avaliação complementar, trailer de fallback e metadados editoriais opcionais.
+
+Validação exigida:
+- teste unitário de sucesso para filme com `source_id` textual, match TMDb e avaliação Simkl válida;
+- testes de ausência de match, limite e detalhe indisponível mantêm o fallback atual;
+- em `staging`, confirmar pelo menos um filme conhecido com TMDb + Simkl, incluindo `O Padrinho: Parte II` com `8,6` TMDb e `8,7` Simkl;
+- confirmar que filmes sem match Simkl continuam legíveis apenas com TMDb, sem erro visível;
+- executar `npm run verify:release`, `git diff --check`, deploy em `staging`, PR, checks obrigatórios e merge normal.
+
+#### T1.2 | Alargar Trakt ao catálogo de filmes
+
+Âmbito:
+- criar um adaptador de filmes Trakt separado do adaptador de séries, com correspondência segura pela ordem IMDb, TMDb e, apenas como último recurso, título + ano com limiar conservador;
+- permitir no proxy apenas endpoints públicos estritamente necessários de pesquisa, detalhe e avaliação de filmes;
+- apresentar Trakt como fonte autónoma de avaliação nos detalhes de filmes, ao lado de TMDb e Simkl;
+- reutilizar o gráfico concêntrico até três fontes de filmes, sem converter avaliações em percentagens relativas;
+- manter `TRAKT_API_KEY` como Client ID de catálogo no edge; o Client Secret e OAuth ficam fora deste âmbito.
+
+Fora de âmbito:
+- login, OAuth, listas, histórico, sincronização ou escrita na conta Trakt;
+- substituir TMDb como fonte principal de filmes;
+- introduzir TVMaze em filmes;
+- alterar Supabase, dados pessoais, progresso, notas ou a política de sync.
+
+Validação exigida:
+- testes para match por IMDb/TMDb, rejeição de match ambíguo, ausência de rating, `403`/`429` e fallback sem bloquear o detalhe;
+- validação manual em `staging` com filmes antigos, recentes e sem match, confirmando as legendas e as cores TMDb/Trakt/Simkl;
+- confirmar que as séries mantêm o comportamento atual e que nenhuma chamada Trakt é feita para TVMaze ou livros;
+- rollout normal `staging` -> PR -> checks obrigatórios -> `main`.
 
 Estado:
-- em observação, sem implementação planeada.
+- planeado; não existe ainda alteração de código para T1.1 ou T1.2.
 
 ## Plano de consolidação
 
