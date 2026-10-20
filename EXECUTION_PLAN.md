@@ -25,7 +25,7 @@ Objetivo:
 - Partilha pública `S1-S5` concluída e integrada em `main` pelo PR `#83`, com rotas públicas, Open Graph e rollout validado
 - Integração Simkl concluída e ativa como provider opcional de enriquecimento para séries e filmes
 - U4 concluído e em produção: fallback lazy e cacheado de sinopses de episódios por temporada
-- Manutenção ativa: reconciliação de contagens de episódios quando a ficha geral e o detalhe de uma temporada divergem
+- Manutenção ativa: reconciliação de contagens e de progresso de episódios quando a ficha geral, temporadas e histórico divergem
 
 ## Resumo executivo
 
@@ -104,7 +104,7 @@ O foco atual é manutenção evolutiva controlada:
 2. **Operação dos providers:** manter Trakt em observação, sem nova intervenção enquanto a modalidade gratuita não mudar; Simkl assegura redundância de leitura.
 3. **Disciplina de release:** manter `staging` -> PR -> checks obrigatórios -> `main` em todas as alterações.
 4. **Atualização pontual UX/UI:** corrigir fricção observada em uso real, sem redesenho global nem expansão funcional prematura.
-5. **Manutenção de metadados:** validar em `staging` a reconciliação de contagens de episódios antes do rollout para `main`.
+5. **Manutenção de metadados:** validar em `staging` a reconciliação de contagens e a exclusão de especiais do progresso regular antes do rollout para `main`.
 
 ### U1 | Atualização pontual UX/UI
 
@@ -272,10 +272,11 @@ Estado:
 Prioridade:
 - correção de manutenção para metadados de séries em atualização, implementada e pendente de validação controlada em `staging`.
 
-Problema confirmado:
+Problemas confirmados:
 - a ficha geral da TMDb pode anunciar menos episódios do que a resposta detalhada de uma temporada;
 - exemplo observado: `House of the Dragon`, temporada `3`, com oito entradas no detalhe mas apenas sete consideradas no badge da capa;
 - o último episódio pode ainda não ter título ou sinopse, mas deve continuar a contar como episódio conhecido quando a temporada o devolve.
+- o histórico pode conter episódios especiais da temporada `0`; esses episódios devem permanecer registados como vistos, mas não podem aumentar o progresso ou reduzir o badge dos episódios regulares.
 
 Objetivo:
 - usar a maior contagem confirmada entre a ficha geral e o detalhe de cada temporada;
@@ -289,10 +290,14 @@ Implementado:
 - episódios sem título continuam a ser contados; título e sinopse não participam no cálculo;
 - os dados usados pelas ações de temporadas passam a usar a mesma contagem reconciliada.
 - `Atualizar metadados` ignora explicitamente a cache local de temporadas de sete dias e substitui-a pela resposta atual; a navegação normal mantém a cache.
+- episódios vistos sem correspondência numa temporada regular são confrontados com a temporada `0`; apenas os especiais confirmados ficam excluídos das contagens de progresso, badges, lifecycle, estatísticas e notificações;
+- o histórico do episódio especial não é apagado nem alterado;
+- o aviso modal `A atualizar metadados...` deixa de bloquear visualmente a ficha durante a atualização; a própria ficha passa a mostrar o carregamento.
 
-Validação automática concluída:
+Validação automática concluída localmente:
 - testes para episódio planeado sem título, exclusão de especiais e preservação de totais superiores;
-- `npm run test:run` passou com `129` testes;
+- teste de estado que preserva o histórico de especiais mas exclui-o do progresso regular;
+- `npm run test:run` passou com `20` ficheiros e `130` testes;
 - `npm run build` passou, incluindo geração PWA;
 - `git diff --check` passou.
 
@@ -301,11 +306,13 @@ Validação manual pendente:
 - voltar à biblioteca e confirmar badge `8` se as duas temporadas anteriores estiverem vistas;
 - abrir uma série estável e confirmar que a respetiva contagem não se altera;
 - marcar/desmarcar um episódio e confirmar que o progresso e a classificação da série permanecem corretos.
+- para `House of the Dragon`, confirmar `18 / 26 episódios`, badge `8`, e temporada 3 em `0 / 8`, sem apagar o especial já marcado no histórico.
 
 Critério de fecho:
 - a capa e o detalhe usam a mesma contagem de episódios conhecidos;
 - metadados incompletos de um episódio não excluem esse episódio da contagem;
-- não há regressão de progresso, marcações vistas, especiais ou lifecycle.
+- especiais vistos não contam como episódios regulares, mas continuam no histórico;
+- não há regressão de progresso, marcações vistas ou lifecycle.
 
 Estado:
 - implementado localmente em `2026-10-20`; aguarda validação em `staging`, PR, checks obrigatórios e merge para `main`.

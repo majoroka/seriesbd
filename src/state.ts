@@ -97,6 +97,20 @@ export function getDiscoveryMediaItem(mediaType: MediaType, mediaId: number): Se
 export function getSeries(seriesId: number): Series | undefined {
     return [...myWatchlist, ...myArchive].find(s => s.media_type === 'series' && s.id === seriesId);
 }
+
+export function getProgressWatchedEpisodeIds(series: Series): number[] {
+    const watchedEpisodeIds = watchedState[toSeriesStateKey(series.id)] || [];
+    const excludedEpisodeIds = series._details?.non_progress_episode_ids || [];
+    if (excludedEpisodeIds.length === 0) return watchedEpisodeIds;
+
+    const excluded = new Set(excludedEpisodeIds);
+    return watchedEpisodeIds.filter((episodeId) => !excluded.has(episodeId));
+}
+
+export function getProgressWatchedEpisodeCount(series: Series): number {
+    return getProgressWatchedEpisodeIds(series).length;
+}
+
 export function getMediaItem(mediaType: MediaType, mediaId: number): Series | undefined {
     return [...myWatchlist, ...myArchive].find(s => s.media_type === mediaType && s.id === mediaId);
 }

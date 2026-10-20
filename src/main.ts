@@ -637,7 +637,7 @@ async function getBackupReminderNotification(readSet: Set<string>): Promise<AppN
 function getMediaProgressForNotifications(media: Series): number {
     const mediaType = media.media_type || 'series';
     if (mediaType === 'series') {
-        const watchedEpisodes = S.watchedState[media.id]?.length || 0;
+        const watchedEpisodes = S.getProgressWatchedEpisodeCount(media);
         const totalEpisodes = media.total_episodes || 0;
         if (totalEpisodes <= 0) return watchedEpisodes > 0 ? 100 : 0;
         return Math.max(0, Math.min(100, Math.round((watchedEpisodes / totalEpisodes) * 100)));
@@ -2712,6 +2712,7 @@ async function updateNextAired() {
                     next_episode_to_air: details.next_episode_to_air,
                     last_episode_to_air: details.last_episode_to_air,
                     released_episode_count: getSeriesReleasedEpisodesFromDetails(details),
+                    non_progress_episode_ids: series._details?.non_progress_episode_ids,
                 };
                 series._lastUpdated = new Date().toISOString();
                 nextAiredRetryAt.delete(series.id);
@@ -2761,6 +2762,7 @@ async function updateNextAired() {
                     next_episode_to_air: freshData.next_episode_to_air,
                     last_episode_to_air: freshData.last_episode_to_air,
                     released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                    non_progress_episode_ids: series._details?.non_progress_episode_ids,
                 };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
@@ -2772,7 +2774,7 @@ async function updateNextAired() {
 
     const seriesToMoveBackToWatchlist = allUserSeries
         .filter(series => {
-            const watchedCount = S.watchedState[series.id]?.length || 0;
+            const watchedCount = S.getProgressWatchedEpisodeCount(series);
             return getSeriesArchiveRecommendation({
                 watchedCount,
                 totalEpisodes: series.total_episodes || 0,
@@ -2787,7 +2789,7 @@ async function updateNextAired() {
 
     const seriesToMoveToArchive = allUserSeries
         .filter(series => {
-            const watchedCount = S.watchedState[series.id]?.length || 0;
+            const watchedCount = S.getProgressWatchedEpisodeCount(series);
             return getSeriesArchiveRecommendation({
                 watchedCount,
                 totalEpisodes: series.total_episodes || 0,
@@ -3134,12 +3136,55 @@ async function displaySeriesDetails(
                 if (!isPublicView && authoritativeTotalEpisodes > 0) {
                     seriesData.total_episodes = authoritativeTotalEpisodes;
                     const localSeries = S.getSeries(seriesId);
-                    if (localSeries && localSeries.total_episodes !== authoritativeTotalEpisodes) {
-                        localSeries.total_episodes = authoritativeTotalEpisodes;
-                        localSeries._lastUpdated = new Date().toISOString();
-                        await S.updateSeries(localSeries);
-                        UI.renderWatchlist();
-                        UI.renderAllSeries();
+                    if (localSeries) {
+                        const regularEpisodeIds = new Set(
+                            allTMDbSeasonsData.flatMap((season) => season.episodes.map((episode: Episode) => episode.id)),
+                        );
+                        const watchedEpisodeIds = S.watchedState[seriesId] || [];
+                        const unmatchedWatchedEpisodeIds = watchedEpisodeIds.filter(
+                            (episodeId) => !regularEpisodeIds.has(episodeId),
+                        );
+                        let nonProgressEpisodeIds = localSeries._details?.non_progress_episode_ids || [];
+                        let didResolveSpecialEpisodes = false;
+
+                        if (unmatchedWatchedEpisodeIds.length === 0) {
+                            nonProgressEpisodeIds = [];
+                            didResolveSpecialEpisodes = true;
+                        } else {
+                            try {
+                                const specialsSeason = await API.getSeasonDetailsWithCache(
+                                    seriesId,
+                                    0,
+                                    signal,
+                                    { forceRefresh: options.forceSeasonRefresh === true },
+                                );
+                                const specialEpisodeIds = new Set(specialsSeason.episodes.map((episode) => episode.id));
+                                nonProgressEpisodeIds = unmatchedWatchedEpisodeIds.filter((episodeId) => specialEpisodeIds.has(episodeId));
+                                didResolveSpecialEpisodes = true;
+                            } catch (error) {
+                                if (error instanceof Error && error.name === 'AbortError') throw error;
+                                console.warn('Falha ao confirmar episódios especiais para o progresso regular.', { seriesId, error });
+                            }
+                        }
+
+                        const exclusionsChanged = didResolveSpecialEpisodes
+                            && (nonProgressEpisodeIds.length !== (localSeries._details?.non_progress_episode_ids || []).length
+                                || nonProgressEpisodeIds.some((episodeId, index) => episodeId !== localSeries._details?.non_progress_episode_ids?.[index]));
+                        if (localSeries.total_episodes !== authoritativeTotalEpisodes || exclusionsChanged) {
+                            localSeries.total_episodes = authoritativeTotalEpisodes;
+                            localSeries._details = {
+                                status: localSeries._details?.status || seriesData.status,
+                                next_episode_to_air: localSeries._details?.next_episode_to_air ?? seriesData.next_episode_to_air,
+                                last_episode_to_air: localSeries._details?.last_episode_to_air ?? seriesData.last_episode_to_air,
+                                released_episode_count: localSeries._details?.released_episode_count
+                                    ?? getSeriesReleasedEpisodesFromDetails(seriesData),
+                                non_progress_episode_ids: nonProgressEpisodeIds,
+                            };
+                            localSeries._lastUpdated = new Date().toISOString();
+                            await S.updateSeries(localSeries);
+                            UI.renderWatchlist();
+                            UI.renderAllSeries();
+                        }
                     }
                 }
 
@@ -3630,7 +3675,7 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
         const series = S.getSeries(seriesId);
         if (!series) return false;
 
-        const watchedEpisodesCount = S.watchedState[seriesId]?.length || 0;
+        const watchedEpisodesCount = S.getProgressWatchedEpisodeCount(series);
         let totalEpisodes = series.total_episodes || 0;
 
         if (totalEpisodes <= 0 || watchedEpisodesCount >= totalEpisodes || !series._details?.status) {
@@ -3650,6 +3695,7 @@ async function checkSeriesCompletion(seriesId: number): Promise<boolean> {
                     next_episode_to_air: freshData.next_episode_to_air,
                     last_episode_to_air: freshData.last_episode_to_air,
                     released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
+                    non_progress_episode_ids: series._details?.non_progress_episode_ids,
                 };
                 series._lastUpdated = new Date().toISOString();
                 await S.updateSeries(series);
@@ -3701,7 +3747,7 @@ async function updateGlobalProgress() {
         return;
     }
 
-    const seriesInProgress = S.myWatchlist.filter(series => S.watchedState[series.id] && S.watchedState[series.id].length > 0);
+    const seriesInProgress = S.myWatchlist.filter(series => S.getProgressWatchedEpisodeCount(series) > 0);
     if (seriesInProgress.length === 0) {
         DOM.globalProgressPercentage.textContent = '0%';
         return;
@@ -3753,7 +3799,7 @@ async function updateGlobalProgress() {
         const seriesTotalEpisodes = series.total_episodes;
         if (typeof seriesTotalEpisodes === 'number' && seriesTotalEpisodes > 0) {
             totalEpisodes += seriesTotalEpisodes;
-            totalWatched += S.watchedState[series.id]?.length || 0;
+            totalWatched += S.getProgressWatchedEpisodeCount(series);
         }
     });
 
@@ -4129,6 +4175,7 @@ async function refetchAllMetadata(): Promise<void> {
                         last_episode_to_air: freshData.last_episode_to_air,
                         released_episode_count: getSeriesReleasedEpisodesFromDetails(freshData),
                         status: freshData.status,
+                        non_progress_episode_ids: localSeries._details?.non_progress_episode_ids,
                     },
                     _lastUpdated: new Date().toISOString()
                 });
@@ -5312,7 +5359,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (refreshBtn) {
             const seriesId = (DOM.seriesViewSection as HTMLElement).dataset.seriesId;
             if (seriesId) {
-                UI.showNotification('A atualizar metadados...');
                 await displaySeriesDetails(parseInt(seriesId, 10), { forceSeasonRefresh: true });
             }
             return;
@@ -5409,7 +5455,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.renderUnseen();
                     UI.renderArchive();
 
-                    if ((S.watchedState[seriesId]?.length || 0) === 0) {
+                    const series = S.getSeries(seriesId);
+                    if (!series || S.getProgressWatchedEpisodeCount(series) === 0) {
                         UI.updateActiveNavLink('watchlist-section');
                     } else if (wasInArchive) {
                         UI.updateActiveNavLink('unseen-section');
