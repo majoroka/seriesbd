@@ -22,7 +22,12 @@ import { createMediaKey, normalizeSeriesCollection, parseMediaKey, toScopedBookI
 import { createPublicShareMedia, isPublicSharePath, parsePublicShareRoute, type PublicShareRoute } from './publicShare';
 import { copyContentShareUrl, shouldUseNativeContentShare } from './contentShare';
 import { getSearchQuickCompletion } from './searchQuickCompletion';
-import { getSeriesArchiveRecommendation, getSeriesReleasedEpisodesFromDetails, getSeriesTotalEpisodesFromDetails } from './seriesLifecycle';
+import {
+    getSeriesArchiveRecommendation,
+    getSeriesReleasedEpisodesFromDetails,
+    getSeriesTotalEpisodesFromDetails,
+    reconcileSeriesSeasonEpisodeCounts,
+} from './seriesLifecycle';
 import {
     checkDisplayNameAvailability,
     getCurrentSession,
@@ -3115,7 +3120,9 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                         traktId,
                     };
                 }
-                const authoritativeTotalEpisodes = allTMDbSeasonsData.reduce((acc, season) => acc + (season.episodes?.length || season.episode_count || 0), 0);
+                const reconciledSeasons = reconcileSeriesSeasonEpisodeCounts(seriesData.seasons, allTMDbSeasonsData);
+                seriesData.seasons = reconciledSeasons;
+                const authoritativeTotalEpisodes = getSeriesTotalEpisodesFromDetails({ seasons: reconciledSeasons });
                 if (!isPublicView && authoritativeTotalEpisodes > 0) {
                     seriesData.total_episodes = authoritativeTotalEpisodes;
                     const localSeries = S.getSeries(seriesId);
@@ -3123,6 +3130,8 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                         localSeries.total_episodes = authoritativeTotalEpisodes;
                         localSeries._lastUpdated = new Date().toISOString();
                         await S.updateSeries(localSeries);
+                        UI.renderWatchlist();
+                        UI.renderAllSeries();
                     }
                 }
 
@@ -3140,7 +3149,7 @@ async function displaySeriesDetails(seriesId: number, options: { isPublicView?: 
                             episodeToSeasonMap[episode.id] = season.season_number!;
                         });
                     });
-                    const seasons = seriesData.seasons.filter(season => season.season_number !== 0);
+                    const seasons = reconciledSeasons.filter(season => season.season_number !== 0);
                     S.setDetailViewData({
                         allEpisodes: allEpisodesMeta,
                         episodeMap: episodeToSeasonMap,

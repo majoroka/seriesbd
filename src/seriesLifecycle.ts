@@ -1,4 +1,4 @@
-import type { Episode, TMDbSeriesDetails } from './types';
+import type { Episode, Season, TMDbSeason, TMDbSeriesDetails } from './types';
 
 export type SeriesArchiveRecommendation = 'archive' | 'watchlist' | 'unchanged';
 export type SeriesLibraryLifecycleStatus = 'watchlist' | 'unseen' | 'archive';
@@ -84,6 +84,27 @@ export function getSeriesTotalEpisodesFromDetails(details: Pick<TMDbSeriesDetail
         .filter((season) => season.season_number !== 0)
         .reduce((acc, season) => acc + season.episode_count, 0)
     : 0;
+}
+
+/**
+ * Season endpoints can list planned episodes before the show-level metadata catches up.
+ * Keep the highest count reported for each non-special season without mutating TMDb data.
+ */
+export function reconcileSeriesSeasonEpisodeCounts(
+  seasons: Season[],
+  loadedSeasons: Array<Pick<TMDbSeason, 'season_number' | 'episode_count' | 'episodes'>>,
+): Season[] {
+  const loadedCountBySeason = new Map<number, number>();
+  loadedSeasons.forEach((season) => {
+    if (season.season_number === 0) return;
+    const loadedCount = Math.max(season.episode_count || 0, season.episodes?.length || 0);
+    loadedCountBySeason.set(season.season_number, loadedCount);
+  });
+
+  return seasons.map((season) => ({
+    ...season,
+    episode_count: Math.max(season.episode_count || 0, loadedCountBySeason.get(season.season_number) || 0),
+  }));
 }
 
 export function getSeriesReleasedEpisodesFromDetails(
