@@ -4079,37 +4079,29 @@ body.light-theme .network-logo {
 
 .chart-ring {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    inset: 0;
     border-radius: 50%;
-    background: conic-gradient(var(--color) var(--progress), rgba(255, 255, 255, 0.1) 0);
+    background: conic-gradient(
+        from 0deg at 50% 50%,
+        var(--color) 0 var(--progress),
+        rgba(255, 255, 255, 0.1) var(--progress) 100%
+    );
 }
 
-/* Each source is clipped to its own annulus, preventing layers below from bleeding through. */
+/* Todas as fontes usam o mesmo centro e são recortadas à sua faixa circular. */
 .concentric-chart:not(.rings-1) .chart-ring {
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width)), #000 0);
-    mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width)), #000 0);
-}
-
-.chart-ring.middle {
-    width: 81%;
-    height: 81%;
-    top: 9.5%;
-    left: 9.5%;
-}
-
-.chart-ring.inner {
-    width: 62%;
-    height: 62%;
-    top: 19%;
-    left: 19%;
-}
-
-.chart-ring.core {
-    width: 43%;
-    height: 43%;
-    top: 28.5%;
-    left: 28.5%;
+    -webkit-mask: radial-gradient(
+        circle closest-side at 50% 50%,
+        transparent 0 var(--ring-inner),
+        #000 var(--ring-inner) var(--ring-outer),
+        transparent var(--ring-outer)
+    );
+    mask: radial-gradient(
+        circle closest-side at 50% 50%,
+        transparent 0 var(--ring-inner),
+        #000 var(--ring-inner) var(--ring-outer),
+        transparent var(--ring-outer)
+    );
 }
 
 .chart-center {
@@ -4151,39 +4143,18 @@ body.light-theme .network-logo {
     letter-spacing: -0.5px;
 }
 
-/* Mantém as bandas visíveis com a mesma espessura quando há duas ou três fontes. */
-.concentric-chart.rings-2 .chart-ring {
-    --ring-width: 12px;
-}
+/* Bandas iguais e separadas, ajustadas ao número de fontes disponíveis. */
+.concentric-chart.rings-2 .chart-ring.outer { --ring-inner: 68.42%; --ring-outer: 100%; }
+.concentric-chart.rings-2 .chart-ring.middle { --ring-inner: 30.42%; --ring-outer: 62%; }
 
-.concentric-chart.rings-2 .chart-ring.middle {
-    width: 62%;
-    height: 62%;
-    top: 19%;
-    left: 19%;
-}
+.concentric-chart.rings-3 .chart-ring.outer { --ring-inner: 80%; --ring-outer: 100%; }
+.concentric-chart.rings-3 .chart-ring.middle { --ring-inner: 54.667%; --ring-outer: 74.667%; }
+.concentric-chart.rings-3 .chart-ring.inner { --ring-inner: 29.333%; --ring-outer: 49.333%; }
 
-.concentric-chart.rings-3 .chart-ring {
-    --ring-width: 7.5px;
-}
-
-.concentric-chart.rings-3 .chart-ring.middle {
-    width: 74.667%;
-    height: 74.667%;
-    top: 12.6665%;
-    left: 12.6665%;
-}
-
-.concentric-chart.rings-3 .chart-ring.inner {
-    width: 49.333%;
-    height: 49.333%;
-    top: 25.3335%;
-    left: 25.3335%;
-}
-
-.concentric-chart.rings-4 .chart-ring {
-    --ring-width: 5px;
-}
+.concentric-chart.rings-4 .chart-ring.outer { --ring-inner: 87%; --ring-outer: 100%; }
+.concentric-chart.rings-4 .chart-ring.middle { --ring-inner: 68%; --ring-outer: 81%; }
+.concentric-chart.rings-4 .chart-ring.inner { --ring-inner: 49%; --ring-outer: 62%; }
+.concentric-chart.rings-4 .chart-ring.core { --ring-inner: 30%; --ring-outer: 43%; }
 
 .chart-average {
     font-family: var(--font-mono);
