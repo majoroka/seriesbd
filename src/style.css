@@ -4082,10 +4082,13 @@ body.light-theme .network-logo {
     top: 0; left: 0;
     width: 100%; height: 100%;
     border-radius: 50%;
-    box-sizing: border-box;
-    border: 2px solid var(--rating-ring-separator);
     background: conic-gradient(var(--color) var(--progress), rgba(255, 255, 255, 0.1) 0);
-    background-clip: padding-box;
+}
+
+/* Each source is clipped to its own annulus, preventing layers below from bleeding through. */
+.concentric-chart:not(.rings-1) .chart-ring {
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width)), #000 0);
+    mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width)), #000 0);
 }
 
 .chart-ring.middle {
@@ -4149,11 +4152,19 @@ body.light-theme .network-logo {
 }
 
 /* Mantém as bandas visíveis com a mesma espessura quando há duas ou três fontes. */
+.concentric-chart.rings-2 .chart-ring {
+    --ring-width: 12px;
+}
+
 .concentric-chart.rings-2 .chart-ring.middle {
     width: 62%;
     height: 62%;
     top: 19%;
     left: 19%;
+}
+
+.concentric-chart.rings-3 .chart-ring {
+    --ring-width: 7.5px;
 }
 
 .concentric-chart.rings-3 .chart-ring.middle {
@@ -4168,6 +4179,10 @@ body.light-theme .network-logo {
     height: 49.333%;
     top: 25.3335%;
     left: 25.3335%;
+}
+
+.concentric-chart.rings-4 .chart-ring {
+    --ring-width: 5px;
 }
 
 .chart-average {
