@@ -9,6 +9,11 @@
     --secondary-accent: var(--media-movie);
     --tvmaze-accent: var(--media-book-strong);
     --simkl-accent: #a66dd4;
+    --rating-tmdb-accent: #25c9ff;
+    --rating-trakt-accent: #ff5478;
+    --rating-simkl-accent: #c68cff;
+    --rating-tvmaze-accent: #c6f46b;
+    --rating-ring-separator: rgba(18, 18, 18, 0.9);
     --danger-color: #ff4d4d;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
@@ -4078,35 +4083,36 @@ body.light-theme .network-logo {
     width: 100%; height: 100%;
     border-radius: 50%;
     background: conic-gradient(var(--color) var(--progress), rgba(255, 255, 255, 0.1) 0);
+    box-shadow: 0 0 0 2px var(--rating-ring-separator);
 }
 
 .chart-ring.middle {
-    width: 78%;
-    height: 78%;
-    top: 11%;
-    left: 11%;
+    width: 80%;
+    height: 80%;
+    top: 10%;
+    left: 10%;
 }
 
 .chart-ring.inner {
-    width: 56%;
-    height: 56%;
-    top: 22%;
-    left: 22%;
+    width: 60%;
+    height: 60%;
+    top: 20%;
+    left: 20%;
 }
 
 .chart-ring.core {
-    width: 38%;
-    height: 38%;
-    top: 31%;
-    left: 31%;
+    width: 40%;
+    height: 40%;
+    top: 30%;
+    left: 30%;
 }
 
 .chart-center {
     position: absolute;
-    top: 33%; /* (100% - 34%) / 2 */
-    left: 33%;
-    width: 34%;
-    height: 34%;
+    top: 40%;
+    left: 40%;
+    width: 20%;
+    height: 20%;
     background-color: rgba(25, 25, 25, 0.8);
     border-radius: 50%;
     display: flex;
@@ -4115,10 +4121,10 @@ body.light-theme .network-logo {
 }
 
 .concentric-chart.rings-2 .chart-center {
-    top: 28%;
-    left: 28%;
-    width: 44%;
-    height: 44%;
+    top: 40%;
+    left: 40%;
+    width: 20%;
+    height: 20%;
 }
 
 .concentric-chart.rings-1 .chart-center {
@@ -4129,14 +4135,36 @@ body.light-theme .network-logo {
 }
 
 .concentric-chart.rings-4 .chart-center {
-    top: 37%;
-    left: 37%;
-    width: 26%;
-    height: 26%;
+    top: 40%;
+    left: 40%;
+    width: 20%;
+    height: 20%;
 }
 
 .concentric-chart.rings-4 .chart-average {
     font-size: 0.75rem;
+}
+
+/* Mantém as bandas visíveis com a mesma espessura quando há duas ou três fontes. */
+.concentric-chart.rings-2 .chart-ring.middle {
+    width: 60%;
+    height: 60%;
+    top: 20%;
+    left: 20%;
+}
+
+.concentric-chart.rings-3 .chart-ring.middle {
+    width: 73.333%;
+    height: 73.333%;
+    top: 13.3335%;
+    left: 13.3335%;
+}
+
+.concentric-chart.rings-3 .chart-ring.inner {
+    width: 46.667%;
+    height: 46.667%;
+    top: 26.6665%;
+    left: 26.6665%;
 }
 
 .chart-average {
