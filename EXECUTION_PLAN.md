@@ -768,7 +768,14 @@ Validação exigida:
 - rollout normal `staging` -> PR -> checks obrigatórios -> `main`.
 
 Estado:
-- planeado; não existe ainda alteração de código para T1.1 ou T1.2.
+- implementação local concluída em `2026-10-21`:
+  - `fetchSimklData` normaliza IDs TMDb numéricos recebidos como texto, corrigindo a resolução Simkl dos filmes;
+  - o novo adaptador Trakt de filmes usa a ordem IMDb -> TMDb -> título + ano e rejeita correspondências fracas;
+  - o proxy Trakt foi limitado às rotas públicas de catálogo necessárias para séries e filmes;
+  - os detalhes de filmes apresentam TMDb, Trakt e Simkl quando cada provider devolve uma avaliação válida;
+  - não foram alterados OAuth, conta Trakt, progresso, biblioteca, Supabase, livros ou o fluxo de séries.
+- validação automática local concluída: `npm run verify:release` (`138` testes) e `git diff --check` sem erros.
+- pendente: commit, `Push origin` para `staging`, deploy Preview e validação manual dos cenários definidos acima; só depois abrir PR e fazer merge para `main`.
 
 ## Plano de consolidação
 

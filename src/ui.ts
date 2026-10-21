@@ -3126,7 +3126,8 @@ export function renderMediaDetails(
     options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean; isPublicView?: boolean },
     externalReviews: ExternalReview[] = [],
     creditsData: TMDbCredits | null = null,
-    simklData: SimklData | null = null
+    simklData: SimklData | null = null,
+    traktData: TraktData | null = null
 ) {
     const detailSection = DOM.seriesViewSection;
     clearElementChildren(detailSection);
@@ -3197,18 +3198,25 @@ export function renderMediaDetails(
     };
     const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() || simklData?.trailerKey || null : null;
     const simklRating = simklData?.ratings?.rating || 0;
+    const traktRating = traktData?.ratings?.rating || 0;
     const ratingEntries = [
         ...(publicRatingValue > 0 ? [{
             key: mediaType === 'movie' ? 'tmdb' : 'books',
             label: mediaType === 'movie' ? 'TMDb' : sourceProviderLabel,
             value: publicRatingValue,
-            color: mediaType === 'movie' ? 'var(--primary-accent)' : 'var(--tvmaze-accent)',
+            color: mediaType === 'movie' ? 'var(--rating-tmdb-accent)' : 'var(--tvmaze-accent)',
+        }] : []),
+        ...(mediaType === 'movie' && traktRating > 0 ? [{
+            key: 'trakt',
+            label: 'Trakt',
+            value: traktRating,
+            color: 'var(--rating-trakt-accent)',
         }] : []),
         ...(mediaType === 'movie' && simklRating > 0 ? [{
             key: 'simkl',
             label: 'Simkl',
             value: simklRating,
-            color: 'var(--simkl-accent)',
+            color: 'var(--rating-simkl-accent)',
         }] : []),
     ];
     const averageRating = ratingEntries.length > 0
@@ -3529,10 +3537,10 @@ export function renderSeriesDetails(
         ? aggregatedSeriesData.tvmazeData.show.rating.average
         : 0) || 0;
     const ratingEntries = [
-        { key: 'tmdb', label: 'TMDb', value: tmdbRating, color: 'var(--primary-accent)' },
-        { key: 'trakt', label: 'Trakt', value: traktRating, color: 'var(--secondary-accent)' },
-        { key: 'simkl', label: 'Simkl', value: simklRating, color: 'var(--simkl-accent)' },
-        { key: 'tvmaze', label: 'TVMaze', value: tvmazeRating, color: 'var(--tvmaze-accent)' },
+        { key: 'tmdb', label: 'TMDb', value: tmdbRating, color: 'var(--rating-tmdb-accent)' },
+        { key: 'trakt', label: 'Trakt', value: traktRating, color: 'var(--rating-trakt-accent)' },
+        { key: 'simkl', label: 'Simkl', value: simklRating, color: 'var(--rating-simkl-accent)' },
+        { key: 'tvmaze', label: 'TVMaze', value: tvmazeRating, color: 'var(--rating-tvmaze-accent)' },
     ].filter(entry => entry.value > 0);
     const ratingsCount = ratingEntries.length;
     const averageRating = ratingsCount > 0

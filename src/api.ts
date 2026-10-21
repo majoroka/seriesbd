@@ -349,7 +349,7 @@ export async function fetchMovieDetails(
     const fallbackTmdbId = fromScopedMovieId(scopedMovieId);
     const parsedSourceId = Number(sourceId);
     const tmdbMovieId = Number.isFinite(parsedSourceId) ? Math.trunc(parsedSourceId) : fallbackTmdbId;
-    const detailsUrl = `${API_BASE_TMDB}/movie/${tmdbMovieId}?append_to_response=videos&language=pt-PT`;
+    const detailsUrl = `${API_BASE_TMDB}/movie/${tmdbMovieId}?append_to_response=videos,external_ids&language=pt-PT`;
     const response = await fetchWithRetry(detailsUrl, { signal }, RETRY_STANDARD.retries, RETRY_STANDARD.backoff);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const payload = await response.json() as any;
@@ -394,6 +394,9 @@ export async function fetchMovieDetails(
         production_companies: Array.isArray(payload?.production_companies) ? payload.production_companies : [],
         production_countries: Array.isArray(payload?.production_countries) ? payload.production_countries : [],
         videos: { results: mergedVideos },
+        external_ids: payload?.external_ids && typeof payload.external_ids === 'object'
+            ? { imdb_id: typeof payload.external_ids.imdb_id === 'string' ? payload.external_ids.imdb_id : null }
+            : undefined,
     } as Series);
 }
 
@@ -826,6 +829,58 @@ function scoreTraktNameYearCandidate(
     return Number(score.toFixed(3));
 }
 
+function scoreTraktMovieNameYearCandidate(
+    item: any,
+    query: string,
+    expectedYear: number | undefined,
+    expectedTmdbId: number,
+    expectedImdbId: string | null | undefined
+): number {
+    const movie = item?.movie;
+    if (!movie) return -1;
+
+    const ids = movie?.ids || {};
+    const normalizedQuery = normalizeMatchText(query);
+    const normalizedTitle = normalizeMatchText(movie?.title || movie?.name);
+    const movieYear = typeof movie?.year === 'number' ? movie.year : undefined;
+
+    let score = Math.max(0, Math.min(1, Number(item?.score || 0)));
+
+    if (ids?.tmdb && Number(ids.tmdb) === expectedTmdbId) {
+        score += 0.95;
+    } else if (ids?.tmdb && Number(ids.tmdb) !== expectedTmdbId) {
+        score -= 0.4;
+    }
+
+    const normalizedExpectedImdb = normalizeMatchText(expectedImdbId || '');
+    const normalizedMovieImdb = normalizeMatchText(ids?.imdb || '');
+    if (normalizedExpectedImdb && normalizedMovieImdb) {
+        if (normalizedMovieImdb === normalizedExpectedImdb) score += 1.2;
+        else score -= 0.6;
+    }
+
+    if (normalizedQuery && normalizedTitle === normalizedQuery) score += 0.75;
+    else if (normalizedQuery && normalizedTitle.startsWith(normalizedQuery)) score += 0.45;
+    else if (normalizedQuery && normalizedTitle.includes(normalizedQuery)) score += 0.3;
+    else score -= 0.25;
+
+    if (typeof expectedYear === 'number') {
+        if (typeof movieYear === 'number') {
+            const diff = Math.abs(movieYear - expectedYear);
+            if (diff === 0) score += 0.45;
+            else if (diff === 1) score += 0.2;
+            else if (diff === 2) score += 0.05;
+            else score -= 0.45;
+        } else {
+            score -= 0.05;
+        }
+    }
+
+    if (!ids?.trakt) score -= 0.2;
+
+    return Number(score.toFixed(3));
+}
+
 /**
  * Fetches rich data (ratings, trailer) for a show from Trakt.tv using its TMDb ID.
  * @param {string} tmdbId - The TMDb ID of the series.
@@ -1040,6 +1095,221 @@ export async function fetchTraktData(
     }
 }
 
+/**
+ * Fetches public Trakt ratings for a movie. The match order avoids attaching a
+ * rating from a different title: IMDb, TMDb and finally a strict title/year match.
+ */
+export async function fetchTraktMovieData(
+    tmdbId: number | string,
+    signal: AbortSignal | null,
+    fallbackTitle?: string,
+    fallbackYear?: number,
+    fallbackOriginalTitle?: string,
+    fallbackImdbId?: string | null
+): Promise<TraktData | null> {
+    const normalizedTmdbId = Number(tmdbId);
+    if (!Number.isSafeInteger(normalizedTmdbId) || normalizedTmdbId <= 0 || Date.now() < traktUnavailableUntil) {
+        return null;
+    }
+
+    try {
+        let selectedMovie: any = null;
+        let selectedMethod: 'imdb' | 'tmdb' | 'name-year' | null = null;
+        let selectedScore = 0;
+        let selectedQuery: string | null = null;
+
+        if (fallbackImdbId) {
+            try {
+                const imdbResponse = await fetch(
+                    `${API_BASE_TRAKT}/search/imdb/${encodeURIComponent(fallbackImdbId)}?type=movie&extended=full`,
+                    { signal }
+                );
+                if (imdbResponse.ok) {
+                    const results = await imdbResponse.json() as any[];
+                    if (results[0]?.movie) {
+                        selectedMovie = results[0].movie;
+                        selectedMethod = 'imdb';
+                        selectedScore = 2;
+                    }
+                } else if (imdbResponse.status !== 404) {
+                    noteTraktUnavailable(imdbResponse.status);
+                    console.warn(`[match][trakt][movie] IMDb lookup returned status ${imdbResponse.status}`, {
+                        tmdbId: normalizedTmdbId,
+                        fallbackImdbId,
+                    });
+                }
+            } catch (error) {
+                console.warn('[match][trakt][movie] Fallback por IMDb falhou.', {
+                    tmdbId: normalizedTmdbId,
+                    fallbackImdbId,
+                    error,
+                });
+            }
+        }
+
+        if (!selectedMovie) {
+            try {
+                const tmdbResponse = await fetch(
+                    `${API_BASE_TRAKT}/search/tmdb/${normalizedTmdbId}?type=movie&extended=full`,
+                    { signal }
+                );
+                if (tmdbResponse.ok) {
+                    const results = await tmdbResponse.json() as any[];
+                    const matchByTmdb = results.find((item) => Number(item?.movie?.ids?.tmdb) === normalizedTmdbId);
+                    if (matchByTmdb?.movie) {
+                        selectedMovie = matchByTmdb.movie;
+                        selectedMethod = 'tmdb';
+                        selectedScore = 1.8;
+                    }
+                } else if (tmdbResponse.status !== 404) {
+                    noteTraktUnavailable(tmdbResponse.status);
+                    console.warn(`[match][trakt][movie] TMDb lookup returned status ${tmdbResponse.status}`, {
+                        tmdbId: normalizedTmdbId,
+                    });
+                }
+            } catch (error) {
+                console.warn('[match][trakt][movie] Lookup por TMDb falhou.', { tmdbId: normalizedTmdbId, error });
+            }
+        }
+
+        if (!selectedMovie && (fallbackOriginalTitle || fallbackTitle)) {
+            const candidateQueries = Array.from(new Set([fallbackOriginalTitle, fallbackTitle].filter(Boolean))) as string[];
+            let bestCandidate: { movie: any; score: number; query: string } | null = null;
+
+            for (const query of candidateQueries) {
+                try {
+                    const queryResponse = await fetch(
+                        `${API_BASE_TRAKT}/search/movie?query=${encodeURIComponent(query)}&extended=full`,
+                        { signal }
+                    );
+                    if (!queryResponse.ok) {
+                        noteTraktUnavailable(queryResponse.status);
+                        continue;
+                    }
+                    const results = await queryResponse.json() as any[];
+                    if (!Array.isArray(results) || results.length === 0) continue;
+
+                    const ranked = results
+                        .map((item) => ({
+                            movie: item?.movie,
+                            score: scoreTraktMovieNameYearCandidate(
+                                item,
+                                query,
+                                fallbackYear,
+                                normalizedTmdbId,
+                                fallbackImdbId
+                            ),
+                            query,
+                        }))
+                        .filter((entry) => entry.movie && entry.score >= 0)
+                        .sort((a, b) => b.score - a.score);
+
+                    if (!ranked[0]) continue;
+                    if (!bestCandidate || ranked[0].score > bestCandidate.score) {
+                        bestCandidate = ranked[0];
+                    }
+                } catch (error) {
+                    console.warn('[match][trakt][movie] Fallback por nome/ano falhou.', {
+                        tmdbId: normalizedTmdbId,
+                        query,
+                        error,
+                    });
+                }
+            }
+
+            if (bestCandidate) {
+                if (bestCandidate.score >= TRAKT_NAME_YEAR_MIN_SCORE) {
+                    selectedMovie = bestCandidate.movie;
+                    selectedMethod = 'name-year';
+                    selectedScore = bestCandidate.score;
+                    selectedQuery = bestCandidate.query;
+                } else {
+                    console.warn('[match][trakt][movie] Match por nome/ano descartado por score fraco.', {
+                        tmdbId: normalizedTmdbId,
+                        threshold: TRAKT_NAME_YEAR_MIN_SCORE,
+                        bestScore: bestCandidate.score,
+                        query: bestCandidate.query,
+                        fallbackYear: fallbackYear ?? null,
+                    });
+                    return null;
+                }
+            }
+        }
+
+        if (!selectedMovie) {
+            console.warn('[match][trakt][movie] Sem match confiável após fallbacks.', {
+                tmdbId: normalizedTmdbId,
+                fallbackImdbId: fallbackImdbId || null,
+                fallbackYear: fallbackYear ?? null,
+            });
+            return null;
+        }
+
+        const traktId = Number(selectedMovie?.ids?.trakt);
+        if (!Number.isSafeInteger(traktId) || traktId <= 0) {
+            console.warn('[match][trakt][movie] Match descartado por falta de traktId.', {
+                tmdbId: normalizedTmdbId,
+                method: selectedMethod,
+                score: selectedScore,
+                query: selectedQuery,
+            });
+            return null;
+        }
+
+        console.info('[match][trakt][movie] Match selecionado.', {
+            tmdbId: normalizedTmdbId,
+            traktId,
+            method: selectedMethod,
+            score: Number(selectedScore.toFixed(3)),
+            query: selectedQuery,
+        });
+
+        let sourceData = selectedMovie;
+        try {
+            const detailsResponse = await fetch(`${API_BASE_TRAKT}/movies/${traktId}?extended=full`, { signal });
+            if (detailsResponse.ok) {
+                sourceData = await detailsResponse.json();
+            } else {
+                noteTraktUnavailable(detailsResponse.status);
+                console.warn('[match][trakt][movie] Não foi possível obter os detalhes do filme. A usar dados do match.', {
+                    tmdbId: normalizedTmdbId,
+                    traktId,
+                });
+            }
+        } catch (error) {
+            console.warn('[match][trakt][movie] Falha ao obter detalhes do filme. A usar dados do match.', {
+                tmdbId: normalizedTmdbId,
+                traktId,
+                error,
+            });
+        }
+
+        let ratings: TraktData['ratings'] = null;
+        try {
+            const ratingsResponse = await fetch(`${API_BASE_TRAKT}/movies/${traktId}/ratings`, { signal });
+            if (ratingsResponse.ok) {
+                ratings = await ratingsResponse.json();
+            } else {
+                noteTraktUnavailable(ratingsResponse.status);
+            }
+        } catch (error) {
+            console.warn('[match][trakt][movie] Falha ao obter avaliações do filme.', { tmdbId: normalizedTmdbId, traktId, error });
+        }
+        if (!ratings && typeof sourceData?.rating === 'number') {
+            ratings = {
+                rating: sourceData.rating,
+                votes: typeof sourceData.votes === 'number' ? sourceData.votes : 0,
+            };
+        }
+
+        return { ratings, trailerKey: null, traktId, overview: null, certification: null };
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        console.error('[match][trakt][movie] Erro ao obter dados Trakt:', error);
+        return null;
+    }
+}
+
 type SimklSearchResult = {
     type?: string;
     ids?: { simkl?: number | string };
@@ -1101,18 +1371,19 @@ async function fetchSimklJson<T>(url: string, signal: AbortSignal | null): Promi
  */
 export async function fetchSimklData(
     mediaType: 'series' | 'movie',
-    tmdbId: number,
+    tmdbId: number | string,
     signal: AbortSignal | null,
     fallbackImdbId?: string | null
 ): Promise<SimklData | null> {
     const type = mediaType === 'series' ? 'tv' : 'movie';
+    const normalizedTmdbId = Number(tmdbId);
     const lookupUrls: string[] = [];
 
     if (fallbackImdbId) {
         lookupUrls.push(`${API_BASE_SIMKL}/search/id?imdb=${encodeURIComponent(fallbackImdbId)}`);
     }
-    if (Number.isFinite(tmdbId) && tmdbId > 0) {
-        lookupUrls.push(`${API_BASE_SIMKL}/search/id?tmdb=${encodeURIComponent(String(tmdbId))}&type=${type}`);
+    if (Number.isSafeInteger(normalizedTmdbId) && normalizedTmdbId > 0) {
+        lookupUrls.push(`${API_BASE_SIMKL}/search/id?tmdb=${encodeURIComponent(String(normalizedTmdbId))}&type=${type}`);
     }
     let simklId: number | null = null;
     for (const lookupUrl of lookupUrls) {
