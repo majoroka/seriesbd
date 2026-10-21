@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Series, TMDbCredits, TMDbSeriesDetails } from './types';
+import type { Series, SimklData, TMDbCredits, TMDbSeriesDetails, TraktData } from './types';
 
 const { detailSection } = vi.hoisted(() => ({
     detailSection: document.createElement('section'),
@@ -44,6 +44,20 @@ function createSeries(): TMDbSeriesDetails {
 }
 
 const emptyCredits: TMDbCredits = { cast: [], crew: [] };
+const simklMovieData: SimklData = {
+    simklId: 654,
+    ratings: { rating: 8.1, votes: 64 },
+    trailerKey: null,
+    overview: null,
+    certification: null,
+};
+const traktMovieData: TraktData = {
+    traktId: 238,
+    ratings: { rating: 8.3, votes: 1200 },
+    trailerKey: null,
+    overview: null,
+    certification: null,
+};
 
 function expectShareMenu(path: string): void {
     const shareButton = detailSection.querySelector<HTMLButtonElement>('#content-share-btn');
@@ -75,6 +89,22 @@ describe('share action in content details', () => {
         expect(detailSection.querySelector('#back-to-previous-section-btn')).not.toBeNull();
         expect(detailSection.querySelector('#media-refresh-details-btn')).not.toBeNull();
         expect(detailSection.querySelector('#media-archive-toggle-btn')).not.toBeNull();
+        expect(detailSection.querySelector('#media-remove-from-library-btn')).not.toBeNull();
+    });
+
+    it('renders TMDb, Trakt and Simkl ratings for a movie without changing its actions', () => {
+        renderMediaDetails(createMedia({
+            id: 1_000_000_238,
+            media_type: 'movie',
+            source_provider: 'tmdb_movie',
+            source_id: '238',
+            vote_average: 8.4,
+        }), { progressPercent: 0, isInLibrary: true, isArchived: false }, [], emptyCredits, simklMovieData, traktMovieData);
+
+        const legendText = Array.from(detailSection.querySelectorAll('.legend-text')).map((element) => element.textContent);
+        expect(legendText).toEqual(['TMDb:', 'Trakt:', 'Simkl:']);
+        expect(detailSection.querySelector('#back-to-previous-section-btn')).not.toBeNull();
+        expect(detailSection.querySelector('#media-refresh-details-btn')).not.toBeNull();
         expect(detailSection.querySelector('#media-remove-from-library-btn')).not.toBeNull();
     });
 

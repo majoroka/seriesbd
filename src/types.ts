@@ -122,6 +122,7 @@ export interface Series {
     videos?: {
         results: { key: string; site: string; type: string; official?: boolean }[];
     };
+    external_ids?: { imdb_id: string | null };
     _lastUpdated?: string;
     userRating?: number;
 }

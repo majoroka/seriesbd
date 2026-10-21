@@ -3291,35 +3291,49 @@ async function displayMovieDetails(media: Series, options: { isPublicView?: bool
     const detailOptions = { progressPercent, isInLibrary, isArchived, isPublicView };
     UI.renderMediaDetails(movieDetails, detailOptions, [], null);
 
-    const [movieCredits, externalReviews, simklData] = await Promise.all([
+    const movieTmdbId = movieDetails.source_id || media.source_id || media.id;
+    const movieYear = Number.parseInt(movieDetails.first_air_date?.slice(0, 4) || '', 10);
+    const [movieCredits, externalReviews, simklData, traktData] = await Promise.all([
         runObservedSection(
             'series-details',
-            `/api/tmdb/movie/${movieDetails.source_id || media.source_id || media.id}/credits`,
-            () => API.fetchMovieCredits(movieDetails.source_id || media.source_id || media.id, signal),
+            `/api/tmdb/movie/${movieTmdbId}/credits`,
+            () => API.fetchMovieCredits(movieTmdbId, signal),
             { mediaType: 'movie', mediaId: media.id, optional: 'credits' }
         ).catch((error) => {
             if (error instanceof Error && error.name === 'AbortError') throw error;
             console.warn('Falha ao carregar créditos do filme. A vista de detalhes continuará sem elenco.', error);
             return { cast: [], crew: [] };
         }),
-        API.fetchTmdbExternalReviews('movie', movieDetails.source_id || media.source_id || media.id, signal).catch((error) => {
+        API.fetchTmdbExternalReviews('movie', movieTmdbId, signal).catch((error) => {
             if (error instanceof Error && error.name === 'AbortError') throw error;
             console.warn('Falha ao carregar reviews externas do filme.', error);
             return [];
         }),
         API.fetchSimklData(
             'movie',
-            movieDetails.source_id || media.source_id || media.id,
+            movieTmdbId,
             signal
         ).catch((error) => {
             if (error instanceof Error && error.name === 'AbortError') throw error;
             console.warn('Falha ao carregar dados Simkl do filme.', error);
             return null;
         }),
+        API.fetchTraktMovieData(
+            movieTmdbId,
+            signal,
+            movieDetails.name,
+            Number.isFinite(movieYear) ? movieYear : undefined,
+            movieDetails.original_name,
+            movieDetails.external_ids?.imdb_id
+        ).catch((error) => {
+            if (error instanceof Error && error.name === 'AbortError') throw error;
+            console.warn('Falha ao carregar dados Trakt do filme.', error);
+            return null;
+        }),
     ]);
 
     if (signal.aborted) return;
-    UI.renderMediaDetails(movieDetails, detailOptions, externalReviews, movieCredits, simklData);
+    UI.renderMediaDetails(movieDetails, detailOptions, externalReviews, movieCredits, simklData, traktData);
 }
 
 function getMediaDetailObservabilitySection(mediaType: MediaType): ObservabilitySection {

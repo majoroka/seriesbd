@@ -3126,7 +3126,8 @@ export function renderMediaDetails(
     options: { progressPercent: number; isInLibrary: boolean; isArchived: boolean; isPublicView?: boolean },
     externalReviews: ExternalReview[] = [],
     creditsData: TMDbCredits | null = null,
-    simklData: SimklData | null = null
+    simklData: SimklData | null = null,
+    traktData: TraktData | null = null
 ) {
     const detailSection = DOM.seriesViewSection;
     clearElementChildren(detailSection);
@@ -3197,12 +3198,19 @@ export function renderMediaDetails(
     };
     const mediaTrailerKey = mediaType === 'movie' ? findMediaTrailerKey() || simklData?.trailerKey || null : null;
     const simklRating = simklData?.ratings?.rating || 0;
+    const traktRating = traktData?.ratings?.rating || 0;
     const ratingEntries = [
         ...(publicRatingValue > 0 ? [{
             key: mediaType === 'movie' ? 'tmdb' : 'books',
             label: mediaType === 'movie' ? 'TMDb' : sourceProviderLabel,
             value: publicRatingValue,
             color: mediaType === 'movie' ? 'var(--primary-accent)' : 'var(--tvmaze-accent)',
+        }] : []),
+        ...(mediaType === 'movie' && traktRating > 0 ? [{
+            key: 'trakt',
+            label: 'Trakt',
+            value: traktRating,
+            color: 'var(--secondary-accent)',
         }] : []),
         ...(mediaType === 'movie' && simklRating > 0 ? [{
             key: 'simkl',

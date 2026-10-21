@@ -17,6 +17,19 @@ import {
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 const TRAKT_API_VERSION = '2';
 const ROUTE_KEY = 'trakt';
+const ALLOWED_SEARCH_PARAMS = new Set(['type', 'extended', 'query']);
+
+function isAllowedEndpoint(path) {
+  return /^\/search\/(?:imdb|tmdb)\/[^/]+$/.test(path)
+    || path === '/search/show'
+    || path === '/search/movie'
+    || /^\/shows\/\d+$/.test(path)
+    || /^\/shows\/\d+\/ratings$/.test(path)
+    || /^\/shows\/\d+\/translations\/[a-z]{2}$/.test(path)
+    || /^\/shows\/\d+\/seasons$/.test(path)
+    || /^\/movies\/\d+$/.test(path)
+    || /^\/movies\/\d+\/ratings$/.test(path);
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -59,8 +72,8 @@ export async function onRequest(context) {
     const userAgent = env.TRAKT_USER_AGENT || 'seriesBD/1.0 (+https://mediadex.app)';
     const url = new URL(request.url);
     const endpointPath = resolveEndpointPath(request.url, '/api/trakt');
-    if (!isPathSafe(endpointPath)) {
-      const badPath = addCorsHeaders(jsonResponse({ ok: false, error: 'Invalid endpoint path' }, 400), corsConfig);
+    if (!isPathSafe(endpointPath) || !isAllowedEndpoint(endpointPath)) {
+      const badPath = addCorsHeaders(jsonResponse({ ok: false, error: 'Unsupported Trakt endpoint' }, 400), corsConfig);
       addProxyHeaders(badPath, {
         requestId,
         upstreamStatus: 400,
@@ -70,6 +83,17 @@ export async function onRequest(context) {
     }
 
     const safeParams = sanitizeSearchParams(url.searchParams, { maxParams: 25, maxValueLength: 700 });
+    for (const key of safeParams.keys()) {
+      if (!ALLOWED_SEARCH_PARAMS.has(key)) {
+        const badQuery = addCorsHeaders(jsonResponse({ ok: false, error: 'Unsupported Trakt query parameter' }, 400), corsConfig);
+        addProxyHeaders(badQuery, {
+          requestId,
+          upstreamStatus: 400,
+          durationMs: Date.now() - startedAt,
+        });
+        return applyRateLimitHeaders(badQuery, rateLimit);
+      }
+    }
     const traktUrl = new URL(`${TRAKT_BASE_URL}${endpointPath}`);
     safeParams.forEach((value, key) => {
       traktUrl.searchParams.set(key, value);

@@ -22,6 +22,7 @@ import {
   fetchSimklData,
   fetchTmdbExternalReviews,
   fetchTraktData,
+  fetchTraktMovieData,
   getSeasonDetailsWithCache,
 } from './api';
 import { db } from './db';
@@ -332,6 +333,60 @@ describe('fetchSimklData', () => {
 
     const data = await fetchSimklData('movie', 456, null);
     expect(data).toBeNull();
+  });
+
+  it('normalizes a string TMDb movie ID before resolving Simkl data', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/simkl/search/id?tmdb=456&type=movie')) {
+        return jsonResponse([{ type: 'movie', ids: { simkl: 654 } }]);
+      }
+      if (url.includes('/api/simkl/movies/654')) {
+        return jsonResponse({ ratings: { simkl: { rating: 8.1, votes: 64 } } });
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchSimklData('movie', '456', null);
+    expect(data?.ratings).toEqual({ rating: 8.1, votes: 64 });
+  });
+});
+
+describe('fetchTraktMovieData', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prefers an IMDb movie match and returns its public rating', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/trakt/search/imdb/tt238?type=movie')) {
+        return jsonResponse([{ movie: { ids: { trakt: 238, imdb: 'tt238' } } }]);
+      }
+      if (url.includes('/api/trakt/movies/238?extended=full')) {
+        return jsonResponse({ rating: 9.0, votes: 1000 });
+      }
+      if (url.includes('/api/trakt/movies/238/ratings')) {
+        return jsonResponse({ rating: 9.1, votes: 1200 });
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    const data = await fetchTraktMovieData('238', null, 'The Godfather', 1972, 'The Godfather', 'tt238');
+    expect(data).toMatchObject({ traktId: 238, ratings: { rating: 9.1, votes: 1200 } });
+  });
+
+  it('rejects a weak title and year fallback instead of attaching another movie rating', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/trakt/search/tmdb/123?type=movie')) return jsonResponse([], 404);
+      if (url.includes('/api/trakt/search/movie?query=')) {
+        return jsonResponse([{ score: 0.1, movie: { title: 'Different Movie', year: 1990, ids: { trakt: 8, tmdb: 8 } } }]);
+      }
+      throw new Error(`Unexpected URL in test: ${url}`);
+    });
+
+    await expect(fetchTraktMovieData(123, null, 'Wanted Movie', 2024)).resolves.toBeNull();
   });
 });
 
